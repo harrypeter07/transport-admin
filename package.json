@@ -6,12 +6,21 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate && prisma db push --accept-data-loss && npx ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.40.0",
+    "lucide-react": "^1.16.0",
     "next": "16.2.6",
+    "prisma": "^6.2.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.6.0",
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,6 +30,10 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "npx ts-node prisma/seed.ts"
   }
 }

@@ -1,0 +1,99 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id       String @id @default(uuid())
+  email    String @unique
+  password String // Hashed or clear text for POC
+  name     String
+  role     String // ADMIN, DRIVER, EMPLOYEE
+}
+
+model Shift {
+  id        String     @id @default(uuid())
+  name      String
+  startTime String     // e.g. "09:00"
+  endTime   String     // e.g. "18:00"
+  employees Employee[]
+  routes    Route[]
+}
+
+model Driver {
+  id            String  @id @default(uuid())
+  name          String
+  phone         String
+  licenseNumber String
+  status        String  // AVAILABLE, ACTIVE, OFF_DUTY
+  cab           Cab?
+}
+
+model Cab {
+  id            String  @id @default(uuid())
+  vehicleNumber String  @unique
+  capacity      Int     // e.g. 4, 6
+  vendor        String
+  status        String  // AVAILABLE, ACTIVE, MAINTENANCE
+  driverId      String? @unique
+  driver        Driver? @relation(fields: [driverId], references: [id])
+  routes        Route[]
+}
+
+model Employee {
+  id           String      @id @default(uuid())
+  employeeCode String      @unique
+  name         String
+  gender       String      // MALE, FEMALE
+  phone        String
+  email        String      @unique
+  address      String
+  x            Float       // coordinate X (0-100)
+  y            Float       // coordinate Y (0-100)
+  department   String
+  shiftId      String?
+  shift        Shift?      @relation(fields: [shiftId], references: [id])
+  status       String      // ACTIVE, INACTIVE
+  stops        RouteStop[]
+}
+
+model Route {
+  id                String      @id @default(uuid())
+  cabId             String
+  cab               Cab         @relation(fields: [cabId], references: [id])
+  date              String      // e.g. "2026-05-27"
+  shiftId           String
+  shift             Shift       @relation(fields: [shiftId], references: [id])
+  isPickup          Boolean     @default(true)
+  totalDistance     Float       // computed X/Y units
+  totalDuration     Float       // estimated minutes
+  status            String      // PENDING, IN_PROGRESS, COMPLETED
+  optimizationScore Float       // 0-100 score
+  stops             RouteStop[]
+  violations        Violation[]
+}
+
+model RouteStop {
+  id         String   @id @default(uuid())
+  routeId    String
+  route      Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  stopOrder  Int      // sequence order (1, 2, 3...)
+  etaMinutes Int      // estimated arrival time in minutes from start
+  status     String   // PENDING, PICKED_UP, MISSED, COMPLETED
+}
+
+model Violation {
+  id      String  @id @default(uuid())
+  routeId String
+  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  type    String  // FEMALE_FIRST_PICKUP, FEMALE_LAST_DROP, OVERCAPACITY, ISOLATED_FEMALE
+  severity String // HIGH, MEDIUM
+  resolved Boolean @default(false)
+  notes   String?
+}
