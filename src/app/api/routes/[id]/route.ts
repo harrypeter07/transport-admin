@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { getDistance, checkSafetyViolations, DEPOT, fetchOSRMRoute } from "@/lib/optimization";
-
-const prisma = new PrismaClient();
 
 const AVG_SPEED = 0.5; // units per minute (30 km/h)
 

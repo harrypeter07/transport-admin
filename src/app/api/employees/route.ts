@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { parseExcelRoster } from "@/lib/excelParser";
 import { geocodeNagpurPlace } from "@/lib/optimization";
-
-const prisma = new PrismaClient();
 
 // GET all employees
 export async function GET() {

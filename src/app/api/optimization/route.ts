@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { optimizeRoutes, OptimizeEmployee, OptimizeCab } from "@/lib/optimization";
-
-const prisma = new PrismaClient();
 
 // GET all routes with details
 export async function GET(req: NextRequest) {
