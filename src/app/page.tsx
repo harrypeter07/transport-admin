@@ -60,6 +60,8 @@ export default function TransitAdminSPA() {
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  // Auto-optimize loading overlay state
+  const [autoOptimizingOverlay, setAutoOptimizingOverlay] = useState<"idle" | "uploading" | "optimizing">("idle");
 
   // Forms states
   const [employeeForm, setEmployeeForm] = useState({
@@ -151,6 +153,7 @@ export default function TransitAdminSPA() {
 
     setUploading(true);
     setUploadMsg("");
+    setAutoOptimizingOverlay("uploading");
 
     const formData = new FormData();
     formData.append("file", uploadFile);
@@ -165,11 +168,23 @@ export default function TransitAdminSPA() {
       });
       const data = await res.json();
       if (res.ok) {
-        setUploadMsg(data.message || "Bulk import completed successfully.");
         setUploadFile(null);
         const fileInput = document.getElementById("fileInput") as HTMLInputElement;
         if (fileInput) fileInput.value = "";
         await fetchInitialData();
+        // Switch to optimizer desk immediately
+        setActiveDesk("OPTIMIZER");
+        // Now auto-optimize
+        setAutoOptimizingOverlay("optimizing");
+        setOptimizing(true);
+        try {
+          await runOptimization(isPickup);
+        } catch (optErr) {
+          console.error("Auto-optimization error:", optErr);
+        } finally {
+          setOptimizing(false);
+        }
+        setUploadMsg(data.message || "Bulk import completed. Routes optimized automatically.");
       } else {
         setUploadMsg(`Error: ${data.error}`);
       }
@@ -178,6 +193,7 @@ export default function TransitAdminSPA() {
       setUploadMsg("Upload failed.");
     } finally {
       setUploading(false);
+      setAutoOptimizingOverlay("idle");
     }
   };
 
@@ -219,6 +235,39 @@ export default function TransitAdminSPA() {
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900 selection:bg-slate-900 selection:text-white font-sans antialiased">
+
+      {/* Full-page overlay during upload + auto-optimize flow */}
+      {autoOptimizingOverlay !== "idle" && (
+        <div className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6 animate-fadeIn">
+          <div className="relative flex items-center justify-center">
+            {/* Outer ring spinner */}
+            <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-t-slate-800 animate-spin" />
+            {/* Inner icon */}
+            <div className="absolute w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-sm">
+              TA
+            </div>
+          </div>
+          <div className="text-center flex flex-col gap-1.5">
+            <p className="text-base font-extrabold text-slate-900 tracking-tight">
+              {autoOptimizingOverlay === "uploading" ? "Importing Roster…" : "Optimizing Routes…"}
+            </p>
+            <p className="text-xs text-slate-500 font-medium max-w-xs leading-relaxed">
+              {autoOptimizingOverlay === "uploading"
+                ? "Reading your Excel file and geocoding employee addresses in Nagpur."
+                : "Computing safest & shortest routes for all cab-employee clusters."}
+            </p>
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <span className={`w-2 h-2 rounded-full bg-slate-300 ${autoOptimizingOverlay === "uploading" ? "bg-slate-800" : "bg-slate-300"}`} />
+              <span className={`w-2 h-2 rounded-full ${autoOptimizingOverlay === "optimizing" ? "bg-slate-800" : "bg-slate-300"}`} />
+            </div>
+            <div className="flex gap-2 justify-center mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <span className={autoOptimizingOverlay === "uploading" ? "text-slate-700" : ""}>1 · Import</span>
+              <span>→</span>
+              <span className={autoOptimizingOverlay === "optimizing" ? "text-slate-700" : ""}>2 · Optimize</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header (Renamed to Transit Admin, Strictly Light-Mode) */}
       <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -361,6 +410,23 @@ export default function TransitAdminSPA() {
                 </button>
               </div>
             </div>
+
+            {/* Auto-import success toast */}
+            {uploadMsg && !uploading && activeDesk === "OPTIMIZER" && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-3 animate-fadeIn">
+                <div className="flex items-center gap-2.5 text-xs text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <span className="font-semibold">{uploadMsg}</span>
+                </div>
+                <button
+                  onClick={() => setUploadMsg("")}
+                  className="text-emerald-500 hover:text-emerald-700 text-lg leading-none font-bold"
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
             {/* Cabs Availability & Capacity Edge Cases Alert Banners */}
             {cabs.filter(c => c.status === "AVAILABLE").length === 0 ? (
