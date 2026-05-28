@@ -5,6 +5,8 @@ import * as xlsx from "xlsx";
 import * as path from "path";
 import * as fs from "fs";
 
+export const dynamic = "force-dynamic";
+
 const AVG_SPEED = 0.5; // km per minute
 
 function formatExcelTime(val: any): string {
@@ -152,6 +154,7 @@ export async function POST(req: NextRequest) {
     let importedRoutesCount = 0;
     let importedEmployeesCount = 0;
     let importedCabsCount = 0;
+    let firstShiftId: string | null = null;
 
     // Parse date from sheetName (e.g. 27-5-26 -> 2026-05-27)
     // SheetName is DD-MM-YY or D-M-YY
@@ -261,6 +264,7 @@ export async function POST(req: NextRequest) {
       let shift = await prisma.shift.findFirst({
         where: {
           startTime: formattedShiftTime.replace(/\s*[AP]M/gi, "").trim(),
+          // Match full-day shifts by name to avoid duplicates when same time appears in different routes
         },
       });
 
@@ -287,6 +291,11 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // Track the first shiftId created/found during import
+      if (!firstShiftId) {
+        firstShiftId = shift.id;
+      }
+
       // 3. Create employees and route stops
       const routeStopsToCreate: { employeeId: string; stopOrder: number; etaMinutes: number; status: string }[] = [];
       let stopOrder = 1;
@@ -301,50 +310,86 @@ export async function POST(req: NextRequest) {
         if (!empCode || !empName) continue;
         if (empCode.toLowerCase() === "escort" || empName.toLowerCase() === "escort") continue;
 
-        const finalEmpCode = empCode === "NA" || empCode === "#######" ? `EMP-${empName.replace(/[^a-zA-Z0-9]/g, "")}` : empCode;
+        // Extract row fields
         const phone = String(r[5] || "").trim() || "+91 99000 00000";
-        const email = String(r[6] || "").trim() || `${finalEmpCode.toLowerCase()}@corporate.com`;
+        const email = String(r[6] || "").trim();
         const address = String(r[7] || "").trim() || "Nagpur";
         const pickupPoint = String(r[9] || "").trim() || address;
-        const status = String(r[11] || "YES").trim().toUpperCase() === "YES" ? "PENDING" : "MISSED";
+
+        // Stable generated code for NA / ####### entries:
+        // Use name (sanitized) + last 4 digits of phone to avoid collisions across employees
+        const phoneDigits = phone.replace(/\D/g, "").slice(-4) || "0000";
+        const finalEmpCode =
+          empCode === "NA" || empCode === "#######" || empCode === ""
+            ? `EMP-${empName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10)}-${phoneDigits}`
+            : empCode;
+
+        // Deterministic email fallback — avoids blank string hitting the Prisma @unique email constraint
+        const finalEmail =
+          email && email.includes("@")
+            ? email
+            : `${finalEmpCode.toLowerCase().replace(/[^a-z0-9]/g, "")}.${phoneDigits}@corporate.com`;
+
+        const employeeStatus = String(r[11] || "YES").trim().toUpperCase() === "YES" ? "ACTIVE" : "INACTIVE";
+        const stopStatus = employeeStatus === "ACTIVE" ? "PENDING" : "MISSED";
         const gender = String(r[13] || "M").trim().toUpperCase().startsWith("F") ? "FEMALE" : "MALE";
 
-        // Find or create employee by code OR email
+        // Find or create employee by code OR email (both are now always non-empty/unique)
         let employee = await prisma.employee.findFirst({
           where: {
             OR: [
               { employeeCode: finalEmpCode },
-              { email: email }
+              { email: finalEmail }
             ]
           }
         });
 
+        // Optimization: Reuse existing geocoded coordinates from database to minimize Nominatim API fetches
+        let coords;
+        if (employee && employee.x && employee.y) {
+          coords = { x: employee.x, y: employee.y };
+        } else {
+          // Check if another employee has the exact same address already geocoded in our database
+          const sameAddressEmp = await prisma.employee.findFirst({
+            where: { address: pickupPoint },
+          });
+          if (sameAddressEmp && sameAddressEmp.x && sameAddressEmp.y) {
+            coords = { x: sameAddressEmp.x, y: sameAddressEmp.y };
+          } else {
+            coords = await geocodeNagpurPlace(pickupPoint);
+          }
+        }
+
+        const dbAddress = pickupPoint === address ? address : `${pickupPoint} | ${address}`;
+
         if (!employee) {
-          // Geocode coordinates
-          const coords = await geocodeNagpurPlace(pickupPoint);
           employee = await prisma.employee.create({
             data: {
               employeeCode: finalEmpCode,
               name: empName,
               gender: gender,
               phone: phone,
-              email: email,
-              address: address,
+              email: finalEmail,
+              address: dbAddress,
               x: coords.x,
               y: coords.y,
               department: "Operations",
               shiftId: shift.id,
-              status: "ACTIVE",
+              status: employeeStatus,
             },
           });
         } else {
-          // Link employee to active shift and sync identifiers
+          // Sync shift, status, and identifiers on subsequent imports
           employee = await prisma.employee.update({
             where: { id: employee.id },
             data: { 
               shiftId: shift.id,
               employeeCode: finalEmpCode,
-              email: email
+              email: finalEmail,
+              status: employeeStatus,
+              address: dbAddress,
+              x: coords.x,
+              y: coords.y,
             },
           });
         }
@@ -362,7 +407,7 @@ export async function POST(req: NextRequest) {
             employeeId: employee.id,
             stopOrder: stopOrder++,
             etaMinutes: Math.round(currentDistance / AVG_SPEED) + 10,
-            status: status,
+            status: stopStatus,
           });
         } else {
           // Drop starts at depot
@@ -376,7 +421,7 @@ export async function POST(req: NextRequest) {
             employeeId: employee.id,
             stopOrder: stopOrder++,
             etaMinutes: Math.round(currentDistance / AVG_SPEED),
-            status: status,
+            status: stopStatus,
           });
         }
       }
@@ -437,7 +482,7 @@ export async function POST(req: NextRequest) {
       });
 
       const finalViolations = checkSafetyViolations(
-        stopsData.map((s) => ({ name: s.employee.name, gender: s.employee.gender as "MALE" | "FEMALE" })),
+        stopsData.map((s) => ({ name: s.employee.name, gender: s.employee.gender as "MALE" | "FEMALE", status: s.status })),
         isPickup,
         hasEscort
       );
@@ -469,6 +514,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `Roster import completed for sheet "${sheetName}". Imported ${importedRoutesCount} routes, ${importedEmployeesCount} employee records, and ${importedCabsCount} cab profiles.`,
+      date: dateStr,
+      shiftId: firstShiftId,
     });
   } catch (e) {
     console.error("Failed Excel import:", e);
@@ -476,15 +523,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE: Reset database (clear all imported and registry data)
+// DELETE: Reset database — clears all DB records and deletes the uploaded roster.xlsx file
 export async function DELETE() {
   try {
-    // Delete local roster.xlsx if it exists
-    const filePath = path.join(process.cwd(), "roster.xlsx");
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-
     await prisma.$transaction([
       prisma.violation.deleteMany(),
       prisma.routeStop.deleteMany(),
@@ -495,9 +536,14 @@ export async function DELETE() {
       prisma.shift.deleteMany(),
     ]);
 
+    const filePath = path.join(process.cwd(), "roster.xlsx");
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Database has been reset and Excel sheet has been removed."
+      message: "Database has been reset and the uploaded roster file has been deleted."
     });
   } catch (e) {
     console.error("Failed resetting database:", e);

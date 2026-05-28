@@ -35,6 +35,7 @@ export default function TransitAdminSPA() {
     routes,
     importSheets,
     activeShiftId,
+    selectedDate,
     selectedRouteId,
     loading,
     fetchInitialData,
@@ -63,6 +64,7 @@ export default function TransitAdminSPA() {
 
   // State for commute routing
   const [isPickup, setIsPickup] = useState(true);
+  const [optimizeError, setOptimizeError] = useState<string | null>(null);
   const [optimizing, setOptimizing] = useState(false);
 
   // Excel bulk upload state
@@ -73,9 +75,7 @@ export default function TransitAdminSPA() {
   // Auto-optimize loading overlay state
   const [autoOptimizingOverlay, setAutoOptimizingOverlay] = useState<"idle" | "uploading" | "optimizing">("idle");
 
-  // Google Maps API Key states
-  const [googleMapsKey, setGoogleMapsKey] = useState<string>("");
-  const [tempMapsKey, setTempMapsKey] = useState<string>("");
+  // Settings/Diagnostics states
   const [showSettings, setShowSettings] = useState(false);
 
   // View modes: TABLE (manifest table) vs CARDS (large route cards)
@@ -131,9 +131,6 @@ export default function TransitAdminSPA() {
   useEffect(() => {
     fetchInitialData();
     fetchImportSheets();
-    const savedKey = localStorage.getItem("google_maps_api_key") || "";
-    setGoogleMapsKey(savedKey);
-    setTempMapsKey(savedKey);
   }, []);
 
   useEffect(() => {
@@ -144,14 +141,18 @@ export default function TransitAdminSPA() {
 
   const handleRunOptimization = async () => {
     setOptimizing(true);
+    setOptimizeError(null);
     try {
-      const apiKey = localStorage.getItem("google_maps_api_key") || "";
-      await runOptimization(isPickup, apiKey);
-      // Clear variations cache since routes changed
-      setVariations({});
-      setActiveVarIndices({});
-    } catch (e) {
-      console.error(e);
+      const result = await runOptimization(isPickup);
+      if (!result.success) {
+        setOptimizeError(result.error || "Optimization failed. Please check you have employees and cabs registered.");
+      } else {
+        // Clear variations cache since routes changed
+        setVariations({});
+        setActiveVarIndices({});
+      }
+    } catch (err: any) {
+      setOptimizeError(err.message || "Unexpected error during optimization.");
     } finally {
       setOptimizing(false);
     }
@@ -165,22 +166,29 @@ export default function TransitAdminSPA() {
     setCabForm({ ...cabForm, [e.target.name]: e.target.value });
   };
 
+  const [employeeFormError, setEmployeeFormError] = useState<string | null>(null);
+
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!employeeForm.employeeCode || !employeeForm.name) return;
 
-    await addEmployee(employeeForm);
+    setEmployeeFormError(null);
+    const result = await addEmployee(employeeForm);
 
-    setEmployeeForm({
-      employeeCode: "",
-      name: "",
-      gender: "MALE",
-      phone: "",
-      email: "",
-      address: "Sadar, Nagpur",
-      department: "Engineering",
-      shiftId: shifts[0]?.id || "",
-    });
+    if (result.success) {
+      setEmployeeForm({
+        employeeCode: "",
+        name: "",
+        gender: "MALE",
+        phone: "",
+        email: "",
+        address: "Sadar, Nagpur",
+        department: "Engineering",
+        shiftId: shifts[0]?.id || "",
+      });
+    } else {
+      setEmployeeFormError(result.error || "Failed to register employee.");
+    }
   };
 
   const handleAddCab = async (e: React.FormEvent) => {
@@ -199,11 +207,20 @@ export default function TransitAdminSPA() {
     });
   };
 
-  const handleSaveApiKey = (key: string) => {
-    localStorage.setItem("google_maps_api_key", key.trim());
-    setGoogleMapsKey(key.trim());
-    alert("Google Maps API Key saved successfully! All routing operations will now query real Nagpur road conditions.");
-    setShowSettings(false);
+
+
+  const handleResetGeocodingCircuitBreaker = async () => {
+    try {
+      const res = await fetch("/api/admin/reset-geocoding", { method: "POST" });
+      if (res.ok) {
+        alert("OSM Geocoding circuit breaker reset successfully!");
+      } else {
+        alert("Failed to reset geocoding circuit breaker.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error resetting circuit breaker.");
+    }
   };
 
   const handleImportSheet = async (e: React.FormEvent) => {
@@ -217,20 +234,9 @@ export default function TransitAdminSPA() {
     try {
       const res = await importSheet(selectedImportSheet);
       if (res.success) {
-        // Switch to optimizer desk immediately
+        // Switch to optimizer desk to show the imported routes
         setActiveDesk("OPTIMIZER");
-        // Now auto-optimize
-        setAutoOptimizingOverlay("optimizing");
-        setOptimizing(true);
-        try {
-          const apiKey = localStorage.getItem("google_maps_api_key") || "";
-          await runOptimization(isPickup, apiKey);
-        } catch (optErr) {
-          console.error("Auto-optimization error:", optErr);
-        } finally {
-          setOptimizing(false);
-        }
-        setUploadMsg(res.message || "Roster imported and optimized successfully.");
+        setUploadMsg(res.message || "Roster imported successfully. Routes are loaded from the Excel sheet.");
       } else {
         setUploadMsg(`Error: ${res.error}`);
       }
@@ -242,6 +248,7 @@ export default function TransitAdminSPA() {
       setAutoOptimizingOverlay("idle");
     }
   };
+
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,12 +305,7 @@ export default function TransitAdminSPA() {
   const fetchVariations = async (routeId: string) => {
     setLoadingVariations((prev) => ({ ...prev, [routeId]: true }));
     try {
-      const apiKey = localStorage.getItem("google_maps_api_key") || "";
-      const res = await fetch(`/api/routes/${routeId}/variations`, {
-        headers: {
-          "x-google-maps-key": apiKey,
-        },
-      });
+      const res = await fetch(`/api/routes/${routeId}/variations`);
       if (res.ok) {
         const data = await res.json();
         setVariations((prev) => ({ ...prev, [routeId]: data }));
@@ -319,7 +321,16 @@ export default function TransitAdminSPA() {
   };
 
   const handleToggleStopStatus = async (stop: RouteStop) => {
-    const newStatus = stop.status === "PENDING" ? "MISSED" : "PENDING";
+    let newStatus: "PENDING" | "PICKED_UP" | "COMPLETED" | "MISSED";
+    if (stop.status === "PENDING") {
+      newStatus = "PICKED_UP";
+    } else if (stop.status === "PICKED_UP") {
+      newStatus = "COMPLETED";
+    } else if (stop.status === "COMPLETED") {
+      newStatus = "MISSED";
+    } else {
+      newStatus = "PENDING";
+    }
     await updateStopStatus(stop.routeId, stop.id, newStatus);
   };
 
@@ -336,8 +347,8 @@ export default function TransitAdminSPA() {
     0
   );
 
-  // Calculate unassigned employees for active shift
-  const activeEmployees = employees.filter((emp) => emp.shiftId === activeShiftId && emp.status === "ACTIVE");
+  // Calculate unassigned employees for the day
+  const activeEmployees = employees.filter((emp) => emp.status === "ACTIVE");
   const assignedEmployeeIds = new Set(activeRoutes.flatMap((r) => r.stops.map((s) => s.employeeId)));
   const unassignedEmployees = activeEmployees.filter((emp) => !assignedEmployeeIds.has(emp.id));
 
@@ -480,28 +491,28 @@ export default function TransitAdminSPA() {
               <div>
                 <h1 className="text-lg font-bold text-slate-900">Transit Optimization Workspace</h1>
                 <p className="text-xs text-slate-500">
-                  Select morning incoming or evening outgoing shifts to map routes.
+                  Select the date and direction to map routes for all active employees.
                 </p>
               </div>
 
               {/* Controls bar */}
               <div className="flex flex-wrap items-center gap-3 bg-white p-2 border border-slate-200 rounded-xl shadow-xs">
                 <div className="flex items-center gap-1.5 px-2">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  <select
-                    value={activeShiftId}
-                    onChange={(e) => {
-                      setActiveShiftId(e.target.value);
-                      setSelectedRouteId(null);
-                    }}
-                    className="bg-transparent border-none text-xs font-bold text-slate-800 focus:outline-none cursor-pointer"
+                  <div className="flex items-center gap-1 px-2 py-1 bg-slate-100 rounded-md">
+                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="text-xs font-bold text-slate-700">{selectedDate}</span>
+                  </div>
+                </div>
+
+                <div className="h-4 w-px bg-slate-200"></div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsPickup(!isPickup)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${isPickup ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}
                   >
-                    {shifts.map((s) => (
-                      <option key={s.id} value={s.id} className="bg-white text-slate-800">
-                        {s.name} ({s.startTime})
-                      </option>
-                    ))}
-                  </select>
+                    {isPickup ? "Pickup (To MIHAN)" : "Drop (From MIHAN)"}
+                  </button>
                 </div>
 
                 <div className="h-4 w-px bg-slate-200"></div>
@@ -525,8 +536,14 @@ export default function TransitAdminSPA() {
               </button>
             </div>
           </div>
+          
+          {optimizeError && (
+             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold animate-fadeIn">
+               {optimizeError}
+             </div>
+          )}
 
-          {/* Google Maps Settings Panel */}
+          {/* System Configuration & Diagnostics Panel */}
           <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-3">
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -534,32 +551,31 @@ export default function TransitAdminSPA() {
             >
               <span className="flex items-center gap-2">
                 <Compass className="w-4 h-4 text-slate-500" />
-                Google Maps API Configuration
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">
-                {googleMapsKey ? "✓ Configured (Click to edit)" : "⚠ Not Configured (Click to set)"}
+                System Configuration & Diagnostics
               </span>
             </button>
             {showSettings && (
               <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 animate-fadeIn">
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Provide your Google Maps API Key to fetch real-world coordinates, distance matrix calculations, traffic-aware commute durations, and optimized route variations (Shortest Distance, Shortest Time, and Balanced).
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    placeholder="AIzaSy..."
-                    value={tempMapsKey}
-                    onChange={(e) => setTempMapsKey(e.target.value)}
-                    className="flex-grow bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleSaveApiKey(tempMapsKey)}
-                    className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-800 transition cursor-pointer"
-                  >
-                    Save Key
-                  </button>
+                <div className="flex flex-col gap-1 text-left bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-700 uppercase">Routing API Key Status</span>
+                  <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
+                    The Google Maps API Key is configured securely on the server via <code>.env.local</code>. All optimizations and route comparisons automatically query Google Maps when configured, falling back to OSRM when unavailable.
+                  </p>
+                </div>
+                <div className="border-t border-slate-100 pt-3 flex flex-col gap-2">
+                  <span className="text-[9px] uppercase font-bold text-slate-400">OSM Geocoding Diagnostics</span>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[11px] text-slate-500 leading-normal text-left">
+                      Reset the OpenStreetMap Nominatim geocoding circuit breaker if Nominatim requests were blocked or timed out.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleResetGeocodingCircuitBreaker}
+                      className="whitespace-nowrap px-3.5 py-2 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                    >
+                      Reset Geocoder
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -660,7 +676,6 @@ export default function TransitAdminSPA() {
                   {/* List */}
                   <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto pr-1">
                     {employees
-                      .filter(emp => emp.shiftId === activeShiftId)
                       .filter(emp => 
                         emp.name.toLowerCase().includes(attendanceSearchQuery.toLowerCase()) || 
                         emp.employeeCode.toLowerCase().includes(attendanceSearchQuery.toLowerCase())
@@ -677,6 +692,15 @@ export default function TransitAdminSPA() {
                               onClick={async () => {
                                 const finalStatus = isPresent ? "INACTIVE" : "ACTIVE";
                                 await updateEmployee(emp.id, { status: finalStatus });
+                                // Sync stop status for this employee across today's routes
+                                const today = new Date().toISOString().split("T")[0];
+                                const matchingStops = routes
+                                  .filter(r => r.date === today)
+                                  .flatMap(r => r.stops.filter((s: any) => s.employeeId === emp.id));
+                                for (const stop of matchingStops) {
+                                  const newStopStatus = finalStatus === "INACTIVE" ? "MISSED" : "PENDING";
+                                  await updateStopStatus(stop.routeId, stop.id, newStopStatus as any);
+                                }
                               }}
                               className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer
                                 ${isPresent 
@@ -777,7 +801,7 @@ export default function TransitAdminSPA() {
                             </span>
                             <div className="flex-1 p-2 bg-slate-100/80 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-800">
                               <div className="flex justify-between items-center">
-                                <span>MIHAN Depot Office</span>
+                                <span>MIHAN Depot</span>
                                 <span className="text-[8px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
                                   Depart
                                 </span>
@@ -806,36 +830,63 @@ export default function TransitAdminSPA() {
                                 {stop.stopOrder}
                               </span>
 
-                              <div className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-[11px] transition-all hover:bg-slate-100/50">
+                              <div className={`flex-1 p-2 border rounded-lg flex items-center justify-between text-[11px] transition-all hover:bg-slate-100/50
+                                ${
+                                  stop.status === "MISSED"
+                                    ? "bg-red-50/40 border-red-150 text-slate-400"
+                                    : "bg-slate-50 border-slate-200"
+                                }
+                              `}>
                                 <div className="flex flex-col text-left">
                                   <span className="font-bold text-slate-800 flex items-center gap-1">
                                     {stop.employee.name}
                                     {isFemale && <span className="text-[8px] bg-purple-50 text-purple-600 border border-purple-100 px-1 rounded-full font-bold">F</span>}
                                   </span>
-                                  <span className="text-[9px] text-slate-500 font-medium truncate max-w-[130px]" title={stop.employee.address}>
-                                    {stop.employee.address.split(",")[0]}
+                                  <span className="text-[9px] text-slate-500 font-medium truncate max-w-[120px]" title={stop.employee.address}>
+                                    {stop.employee.address.split(" | ")[0]}
                                   </span>
                                   <span className="text-[8px] text-slate-400 font-mono mt-0.5">
                                     ETA: +{stop.etaMinutes} mins
                                   </span>
                                 </div>
 
-                                {/* Reordering buttons */}
-                                <div className="flex items-center gap-0.5">
+                                {/* Status and Reordering buttons */}
+                                <div className="flex items-center gap-1.5">
                                   <button
-                                    onClick={() => reorderRouteStops(selectedRoute.id, stop.id, "up")}
-                                    disabled={isFirst}
-                                    className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-500 disabled:opacity-30 transition cursor-pointer"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await handleToggleStopStatus(stop);
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border cursor-pointer transition-all
+                                      ${
+                                        stop.status === "PENDING" ? "bg-slate-100 border-slate-350 text-slate-650" :
+                                        stop.status === "PICKED_UP" ? "bg-blue-50 border-blue-200 text-blue-700" :
+                                        stop.status === "COMPLETED" ? "bg-emerald-50 border-emerald-250 text-emerald-700" :
+                                        "bg-red-50 border-red-200 text-red-600"
+                                      }
+                                    `}
                                   >
-                                    <ArrowUp className="w-3 h-3" />
+                                    {stop.status === "PENDING" ? "PENDING" :
+                                     stop.status === "PICKED_UP" ? "PICKED" :
+                                     stop.status === "COMPLETED" ? "DONE" : "MISSED"}
                                   </button>
-                                  <button
-                                    onClick={() => reorderRouteStops(selectedRoute.id, stop.id, "down")}
-                                    disabled={isLast}
-                                    className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-500 disabled:opacity-30 transition cursor-pointer"
-                                  >
-                                    <ArrowDown className="w-3 h-3" />
-                                  </button>
+
+                                  <div className="flex items-center gap-0.5">
+                                    <button
+                                      onClick={() => reorderRouteStops(selectedRoute.id, stop.id, "up")}
+                                      disabled={isFirst || stop.status === "MISSED" || selectedRoute.stops[idx - 1]?.status === "MISSED"}
+                                      className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-500 disabled:opacity-30 transition cursor-pointer"
+                                    >
+                                      <ArrowUp className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={() => reorderRouteStops(selectedRoute.id, stop.id, "down")}
+                                      disabled={isLast || stop.status === "MISSED" || selectedRoute.stops[idx + 1]?.status === "MISSED"}
+                                      className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-500 disabled:opacity-30 transition cursor-pointer"
+                                    >
+                                      <ArrowDown className="w-3 h-3" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -851,7 +902,7 @@ export default function TransitAdminSPA() {
                             </span>
                             <div className="flex-1 p-2 bg-slate-100/80 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-800">
                               <div className="flex justify-between items-center">
-                                <span>MIHAN Depot Office</span>
+                                <span>MIHAN Depot</span>
                                 <span className="text-[8px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
                                   Arrive
                                 </span>
@@ -986,7 +1037,7 @@ export default function TransitAdminSPA() {
                                             }
                                           `}>
                                             <span className={`text-[8px] font-mono ${isFem ? "text-purple-400" : "text-slate-400"}`}>#{idx + 1}</span>
-                                            {s.employee.name.split(" ")[0]} ({s.employee.address.split(",")[0]})
+                                            {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
                                           </span>
                                           <span className="text-slate-400 font-mono text-[9px]">➔</span>
                                         </React.Fragment>
@@ -1014,7 +1065,7 @@ export default function TransitAdminSPA() {
                                             }
                                           `}>
                                             <span className={`text-[8px] font-mono ${isFem ? "text-purple-400" : "text-slate-400"}`}>#{idx + 1}</span>
-                                            {s.employee.name.split(" ")[0]} ({s.employee.address.split(",")[0]})
+                                            {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
                                           </span>
                                           {idx < sortedStops.length - 1 && <span className="text-slate-400 font-mono text-[9px]">➔</span>}
                                         </React.Fragment>
@@ -1235,8 +1286,8 @@ export default function TransitAdminSPA() {
                                 </span>
                                 <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-xl text-left text-[11px] font-bold text-slate-800 flex justify-between items-center">
                                   <div>
-                                    <span className="text-slate-900">Nagpur Depot Depot</span>
-                                    <p className="text-[9px] text-slate-400 font-mono mt-0.5">MIHAN HQ</p>
+                                    <span className="text-slate-900">MIHAN Depot</span>
+                                    <p className="text-[9px] text-slate-400 font-mono mt-0.5">HQ</p>
                                   </div>
                                   <span className="text-[8px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-black uppercase font-mono">
                                     Depart
@@ -1277,7 +1328,7 @@ export default function TransitAdminSPA() {
                                         {isFemale && <span className="text-[8px] bg-purple-50 border border-purple-100 text-purple-600 px-1 rounded font-black uppercase">F</span>}
                                       </div>
                                       <div className="text-[10px] text-slate-500 font-semibold truncate max-w-[160px]" title={empAddress}>
-                                        {empAddress}
+                                        {empAddress.split(" | ")[0]}
                                       </div>
                                       <div className="flex items-center gap-2 mt-1">
                                         <span className="text-[9px] text-slate-400 font-mono">
@@ -1306,15 +1357,18 @@ export default function TransitAdminSPA() {
                                           e.stopPropagation();
                                           await handleToggleStopStatus(stop as any);
                                         }}
-                                        className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer print:hidden
+                                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer print:hidden
                                           ${
-                                            isMissed
-                                              ? "bg-red-50 border-red-200 text-red-650"
-                                              : "bg-emerald-50 border-emerald-250 text-emerald-700"
+                                            stop.status === "PENDING" ? "bg-slate-100 border-slate-300 text-slate-650 hover:bg-slate-200" :
+                                            stop.status === "PICKED_UP" ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100" :
+                                            stop.status === "COMPLETED" ? "bg-emerald-50 border-emerald-250 text-emerald-700 hover:bg-emerald-100" :
+                                            "bg-red-50 border-red-200 text-red-600 hover:bg-red-100"
                                           }
                                         `}
                                       >
-                                        {isMissed ? "ABSENT" : "PRESENT"}
+                                        {stop.status === "PENDING" ? "PENDING" :
+                                         stop.status === "PICKED_UP" ? "PICKED UP" :
+                                         stop.status === "COMPLETED" ? "COMPLETED" : "MISSED"}
                                       </button>
                                     )}
                                   </div>
@@ -1329,8 +1383,8 @@ export default function TransitAdminSPA() {
                                 </span>
                                 <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-xl text-left text-[11px] font-bold text-slate-800 flex justify-between items-center">
                                   <div>
-                                    <span className="text-slate-900">Nagpur Depot Depot</span>
-                                    <p className="text-[9px] text-slate-400 font-mono mt-0.5">MIHAN HQ</p>
+                                    <span className="text-slate-900">MIHAN Depot</span>
+                                    <p className="text-[9px] text-slate-400 font-mono mt-0.5">HQ</p>
                                   </div>
                                   <span className="text-[8px] bg-slate-200 text-slate-650 px-1.5 py-0.5 rounded font-black uppercase font-mono">
                                     Arrive (+{(activeVarIdx !== -1 ? routeVariations[activeVarIdx].totalDuration : route.totalDuration)}m)
@@ -1451,7 +1505,16 @@ export default function TransitAdminSPA() {
                                   {emp.gender}
                                 </span>
                               </td>
-                              <td className="p-3 text-slate-600">{emp.address}</td>
+                              <td className="p-3 text-slate-600">
+                                {emp.address.includes(" | ") ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-bold text-slate-900">{emp.address.split(" | ")[0]}</span>
+                                    <span className="text-[10px] text-slate-400 font-medium">{emp.address.split(" | ")[1]}</span>
+                                  </div>
+                                ) : (
+                                  emp.address
+                                )}
+                              </td>
                               <td className="p-3 text-slate-500">{emp.department}</td>
                               <td className="p-3 text-center">
                                 <button
@@ -1666,6 +1729,11 @@ export default function TransitAdminSPA() {
                       >
                         Register Employee
                       </button>
+                      {employeeFormError && (
+                        <div className="col-span-2 p-2.5 bg-red-50 border border-red-200 rounded-lg text-[10px] text-red-700 font-semibold animate-fadeIn">
+                          {employeeFormError}
+                        </div>
+                      )}
                     </form>
                   </div>
                 </div>
@@ -1747,17 +1815,17 @@ export default function TransitAdminSPA() {
 
                     <div className="flex flex-col gap-1">
                       <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                        Capacity
+                        Capacity (seats)
                       </label>
-                      <select
+                      <input
+                        type="number"
                         name="capacity"
+                        min="1"
+                        max="15"
                         value={cabForm.capacity}
                         onChange={handleCabInputChange}
                         className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                      >
-                        <option value="4">4 seats</option>
-                        <option value="6">6 seats</option>
-                      </select>
+                      />
                     </div>
 
                     <div className="flex flex-col gap-1">
@@ -1826,83 +1894,118 @@ export default function TransitAdminSPA() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              {activeViolationsList.length === 0 ? (
-                <div className="py-16 text-center border border-dashed border-slate-200 rounded-xl bg-white shadow-xs flex flex-col items-center justify-center gap-2">
-                  <CheckCircle2 className="w-8 h-8 text-emerald-500 animate-pulse" />
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">
-                    Compliance Status: Clear
-                  </h3>
-                  <p className="text-xs text-slate-400 max-w-sm leading-relaxed text-center">
-                    All routes satisfy security checks. Female passengers have guards or male passenger overrides.
-                  </p>
-                </div>
-              ) : (
-                activeViolationsList.map((v) => (
-                  <div
-                    key={v.id}
-                    className={`p-5 rounded-xl border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all bg-white border-slate-200 shadow-xs`}
-                  >
-                    <div className="flex-1 flex flex-col gap-1.5 text-left">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`text-[9px] font-bold px-2 py-0.5 rounded font-mono uppercase tracking-wider
-                            ${
-                              v.resolved
-                                ? "bg-slate-100 border border-slate-200 text-slate-500"
-                                : "bg-red-100 text-red-700 border border-red-200"
-                            }
-                          `}
-                        >
-                          {v.type}
-                        </span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-500 font-bold uppercase">
-                          Vehicle: {v.vehicleNumber}
-                        </span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-500 font-bold uppercase">
-                          Severity: {v.severity}
-                        </span>
-                      </div>
+            {/* Active Violations */}
+            {(() => {
+              const activeViolations = activeViolationsList.filter(v => !v.resolved);
+              const resolvedViolations = activeViolationsList.filter(v => v.resolved);
 
-                      <p className="text-xs text-slate-800 leading-relaxed font-semibold mt-1">
-                        {v.notes}
-                      </p>
-
-                      <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                        <span>Driver: {v.driverName} ({v.driverPhone})</span>
-                        <span>•</span>
-                        <span>Stops: {v.totalStops}</span>
-                      </div>
-
-                      {v.resolved && v.notes?.includes("override") && (
-                        <div className="mt-2.5 p-2.5 bg-slate-50 rounded border border-slate-200 text-[10px] text-slate-600 flex items-start gap-2">
-                          <MessageSquare className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
-                          <span>
-                            <strong className="text-slate-800">Audit Trail:</strong> Manual override authorized by Transport Admin.
-                          </span>
-                        </div>
-                      )}
+              const renderViolationCard = (v: any) => (
+                <div
+                  key={v.id}
+                  className={`p-5 rounded-xl border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all ${
+                    v.resolved
+                      ? "bg-slate-50 border-slate-150 opacity-75"
+                      : "bg-white border-slate-200 shadow-xs"
+                  }`}
+                >
+                  <div className="flex-1 flex flex-col gap-1.5 text-left">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`text-[9px] font-bold px-2 py-0.5 rounded font-mono uppercase tracking-wider
+                          ${
+                            v.resolved
+                              ? "bg-slate-100 border border-slate-200 text-slate-500"
+                              : "bg-red-100 text-red-700 border border-red-200"
+                          }
+                        `}
+                      >
+                        {v.type}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-500 font-bold uppercase">
+                        Vehicle: {v.vehicleNumber}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-500 font-bold uppercase">
+                        Severity: {v.severity}
+                      </span>
                     </div>
 
-                    {!v.resolved && (
-                      <div className="flex flex-col gap-1.5 w-full md:w-auto">
-                        <button
-                          onClick={() => overrideViolation(v.id)}
-                          className="whitespace-nowrap bg-slate-900 text-white hover:bg-slate-800 px-4 py-2 rounded-lg text-xs font-semibold shadow-xs transition"
-                        >
-                          Authorize Override
-                        </button>
-                        <span className="text-[9px] text-slate-400 text-center font-mono uppercase tracking-wider block">
-                          Logs Audit Trail
+                    <p className="text-xs text-slate-800 leading-relaxed font-semibold mt-1">
+                      {v.notes}
+                    </p>
+
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                      <span>Driver: {v.driverName} ({v.driverPhone})</span>
+                      <span>•</span>
+                      <span>Stops: {v.totalStops}</span>
+                    </div>
+
+                    {v.resolved && (
+                      <div className="mt-2.5 p-2.5 bg-slate-50 rounded border border-slate-200 text-[10px] text-slate-600 flex items-start gap-2">
+                        <MessageSquare className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
+                        <span>
+                          <strong className="text-slate-800">Audit Trail:</strong> Manual override authorized by Transport Admin.
                         </span>
                       </div>
                     )}
                   </div>
-                ))
-              )}
-            </div>
+
+                  {!v.resolved && (
+                    <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                      <button
+                        onClick={() => overrideViolation(v.id)}
+                        className="whitespace-nowrap bg-slate-900 text-white hover:bg-slate-800 px-4 py-2 rounded-lg text-xs font-semibold shadow-xs transition"
+                      >
+                        Authorize Override
+                      </button>
+                      <span className="text-[9px] text-slate-400 text-center font-mono uppercase tracking-wider block">
+                        Logs Audit Trail
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+
+              return (
+                <>
+                  {activeViolations.length === 0 ? (
+                    <div className="py-16 text-center border border-dashed border-slate-200 rounded-xl bg-white shadow-xs flex flex-col items-center justify-center gap-2">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-500 animate-pulse" />
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">
+                        Compliance Status: Clear
+                      </h3>
+                      <p className="text-xs text-slate-400 max-w-sm leading-relaxed text-center">
+                        All routes satisfy security checks. Female passengers have guards or male passenger overrides.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 text-red-500" />
+                        <span className="text-xs font-bold text-red-700 uppercase tracking-wider">
+                          {activeViolations.length} Active Warning{activeViolations.length !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      {activeViolations.map(renderViolationCard)}
+                    </div>
+                  )}
+
+                  {resolvedViolations.length > 0 && (
+                    <div className="flex flex-col gap-4 mt-2">
+                      <div className="flex items-center gap-2 border-t border-slate-200 pt-4">
+                        <CheckCircle2 className="w-4 h-4 text-slate-400" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Audit History — {resolvedViolations.length} Resolved
+                        </span>
+                      </div>
+                      {resolvedViolations.map(renderViolationCard)}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
+
       </main>
 
       {/* Edit Employee Modal */}

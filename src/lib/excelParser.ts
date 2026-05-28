@@ -23,40 +23,49 @@ export function parseExcelRoster(buffer: Buffer): ParsedEmployeeRow[] {
   const parsedRows: ParsedEmployeeRow[] = [];
 
   for (const row of rawRows) {
-    // Map headers flexibly (supporting multiple capitalization/naming conventions)
-    const employeeCode = String(row["Employee Code"] || row["Code"] || row["ID"] || "").trim();
-    const name = String(row["Name"] || row["Employee Name"] || "").trim();
-    let genderStr = String(row["Gender"] || row["Sex"] || "MALE").toUpperCase().trim();
-    let gender: "MALE" | "FEMALE" = "MALE";
-    if (genderStr.startsWith("F") || genderStr === "FEMALE") {
-      gender = "FEMALE";
-    }
+    // Map headers flexibly — supports real roster.xlsx columns AND generic variants
+    // Use ?? (nullish coalescing) so numeric 0 values are preserved correctly
+    const rawCode = row["Emp ID"] ?? row["Employee Code"] ?? row["Code"] ?? row["ID"] ?? "";
+    const employeeCode = String(rawCode).trim();
 
-    const phone = String(row["Phone"] || row["Mobile"] || row["Contact"] || "").trim();
-    const email = String(row["Email"] || "").trim();
-    const address = String(row["Address"] || row["Location"] || "Unspecified address").trim();
-    
-    // Parse coordinates, default to random if missing
-    let xVal = row["X"] !== undefined ? parseFloat(row["X"]) : undefined;
-    let yVal = row["Y"] !== undefined ? parseFloat(row["Y"]) : undefined;
+    const name = String(row["Name"] ?? row["Employee Name"] ?? "").trim();
 
-    // If coordinates are invalid, auto-generate them randomly in a range
-    if (xVal === undefined || isNaN(xVal)) {
-      xVal = Math.round((10 + Math.random() * 80) * 10) / 10;
-    }
-    if (yVal === undefined || isNaN(yVal)) {
-      yVal = Math.round((10 + Math.random() * 80) * 10) / 10;
-    }
+    // Real roster uses "M/F"; also support "Gender" / "Sex"
+    const genderRaw = String(row["M/F"] ?? row["Gender"] ?? row["Sex"] ?? "M").toUpperCase().trim();
+    const gender: "MALE" | "FEMALE" = genderRaw.startsWith("F") ? "FEMALE" : "MALE";
 
-    const department = String(row["Department"] || row["Dept"] || "Engineering").trim();
+    // Real roster uses "Contact No"; also support "Phone" / "Mobile" / "Contact"
+    const phone = String(row["Contact No"] ?? row["Phone"] ?? row["Mobile"] ?? row["Contact"] ?? "").trim();
+
+    // Real roster uses "E mail ID"; also support "Email"
+    const email = String(row["E mail ID"] ?? row["Email"] ?? "").trim();
+
+    const address = String(row["Address"] ?? row["Location"] ?? "Nagpur").trim();
+
+    // Parse coordinates — real roster has no X/Y columns
+    // x = longitude (~79.xx for Nagpur), y = latitude (~21.xx for Nagpur)
+    const rawX = row["X"] !== undefined ? parseFloat(row["X"]) : NaN;
+    const rawY = row["Y"] !== undefined ? parseFloat(row["Y"]) : NaN;
+
+    // Fallback: random coords within Nagpur bounds (lng 79.00–79.20, lat 21.04–21.22)
+    const xVal = !isNaN(rawX) ? rawX : Math.round((79.00 + Math.random() * 0.20) * 10000) / 10000;
+    const yVal = !isNaN(rawY) ? rawY : Math.round((21.04 + Math.random() * 0.18) * 10000) / 10000;
+
+    // Real roster has no Department column — default to Operations
+    const department = String(row["Department"] ?? row["Dept"] ?? "Operations").trim();
 
     if (employeeCode && name) {
+      const finalPhone = phone || "+91 99000 00000";
+      // Deterministic email fallback: code + last-4 digits of phone to avoid collisions
+      const phoneDigits = finalPhone.replace(/\D/g, "").slice(-4) || "0000";
+      const finalEmail = email || `${employeeCode.toLowerCase().replace(/[^a-z0-9]/g, "")}.${phoneDigits}@corporate.com`;
+
       parsedRows.push({
         employeeCode,
         name,
         gender,
-        phone: phone || "+91 99000 00000",
-        email: email || `${employeeCode.toLowerCase()}@corporate.com`,
+        phone: finalPhone,
+        email: finalEmail,
         address,
         x: xVal,
         y: yVal,
@@ -74,29 +83,29 @@ export function parseExcelRoster(buffer: Buffer): ParsedEmployeeRow[] {
 export function generateExcelTemplate(): Buffer {
   const headers = [
     {
-      "Employee Code": "EMP101",
+      "Emp ID": "EMP101",
       Name: "Aman Sharma",
-      Gender: "MALE",
-      Phone: "+91 99000 22001",
-      Email: "aman.s@corporate.com",
+      "M/F": "MALE",
+      "Contact No": "+91 99000 22001",
+      "E mail ID": "aman.s@corporate.com",
       Address: "Dharampeth, Nagpur",
       Department: "Engineering",
     },
     {
-      "Employee Code": "EMP102",
+      "Emp ID": "EMP102",
       Name: "Neha Patil",
-      Gender: "FEMALE",
-      Phone: "+91 99000 22002",
-      Email: "neha.p@corporate.com",
+      "M/F": "FEMALE",
+      "Contact No": "+91 99000 22002",
+      "E mail ID": "neha.p@corporate.com",
       Address: "Manish Nagar, Nagpur",
       Department: "Operations",
     },
     {
-      "Employee Code": "EMP103",
+      "Emp ID": "EMP103",
       Name: "Priya Deshmukh",
-      Gender: "FEMALE",
-      Phone: "+91 99000 22003",
-      Email: "priya.d@corporate.com",
+      "M/F": "FEMALE",
+      "Contact No": "+91 99000 22003",
+      "E mail ID": "priya.d@corporate.com",
       Address: "Besa, Nagpur",
       Department: "Finance",
     },

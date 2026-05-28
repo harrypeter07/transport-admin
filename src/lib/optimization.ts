@@ -342,48 +342,74 @@ function calculateRouteDistance(route: OptimizeEmployee[], isPickup: boolean): n
  * Rule: Female cannot be first pickup (for pickups) or last drop (for drops) unless escort exists.
  */
 export function checkSafetyViolations(
-  stops: { gender: "MALE" | "FEMALE"; name: string }[],
+  stops: { gender: "MALE" | "FEMALE"; name: string; status?: string }[],
   isPickup: boolean,
   hasEscort: boolean
 ): { type: "FEMALE_FIRST_PICKUP" | "FEMALE_LAST_DROP" | "ISOLATED_FEMALE"; severity: "HIGH" | "MEDIUM"; notes: string }[] {
   if (stops.length === 0 || hasEscort) return [];
   const violations: ReturnType<typeof checkSafetyViolations> = [];
 
+  // Filter out MISSED stops to get active stops
+  const activeStops = stops.filter((s) => s.status !== "MISSED");
+  if (activeStops.length === 0) return [];
+
+  // 1. Check if she is the sole active passenger
+  if (activeStops.length === 1 && activeStops[0].gender === "FEMALE") {
+    violations.push({
+      type: "ISOLATED_FEMALE",
+      severity: "HIGH",
+      notes: `${activeStops[0].name} is the sole active passenger and is female. Escort required.`,
+    });
+    return violations;
+  }
+
+  // 2. Mid-route segment checks
   if (isPickup) {
-    // First pickup check
-    if (stops[0].gender === "FEMALE") {
-      // If there are other passengers, she is alone with driver at start
-      if (stops.length > 1) {
-        violations.push({
-          type: "FEMALE_FIRST_PICKUP",
-          severity: "HIGH",
-          notes: `${stops[0].name} (female) is scheduled as the first pickup. No escort is present, making her alone in the cab.`,
-        });
-      } else {
-        // Only 1 passenger and she is female
-        violations.push({
-          type: "ISOLATED_FEMALE",
-          severity: "HIGH",
-          notes: `${stops[0].name} is the sole passenger and is female. Escort required.`,
-        });
+    for (let j = 0; j < activeStops.length; j++) {
+      const inCab = activeStops.slice(0, j + 1);
+      const females = inCab.filter((p) => p.gender === "FEMALE");
+      const males = inCab.filter((p) => p.gender === "MALE");
+
+      if (females.length === 1 && males.length === 0) {
+        const nextStopName = j === activeStops.length - 1 ? "MIHAN Depot" : activeStops[j + 1].name;
+        if (j === 0) {
+          violations.push({
+            type: "FEMALE_FIRST_PICKUP",
+            severity: "HIGH",
+            notes: `${females[0].name} (female) is scheduled as the first active pickup. No escort is present, making her alone in the cab.`,
+          });
+        } else {
+          violations.push({
+            type: "ISOLATED_FEMALE",
+            severity: "HIGH",
+            notes: `${females[0].name} (female) is left alone in the cab between ${activeStops[j].name} and ${nextStopName}.`,
+          });
+        }
+        break;
       }
     }
   } else {
-    // Last drop check
-    const lastIdx = stops.length - 1;
-    if (stops[lastIdx].gender === "FEMALE") {
-      if (stops.length > 1) {
-        violations.push({
-          type: "FEMALE_LAST_DROP",
-          severity: "HIGH",
-          notes: `${stops[lastIdx].name} (female) is scheduled as the last drop. No escort is present, leaving her alone with driver.`,
-        });
-      } else {
-        violations.push({
-          type: "ISOLATED_FEMALE",
-          severity: "HIGH",
-          notes: `${stops[lastIdx].name} is the sole passenger and is female. Escort required.`,
-        });
+    for (let j = -1; j < activeStops.length - 1; j++) {
+      const inCab = activeStops.slice(j + 1);
+      const females = inCab.filter((p) => p.gender === "FEMALE");
+      const males = inCab.filter((p) => p.gender === "MALE");
+
+      if (females.length === 1 && males.length === 0) {
+        const prevStopName = j === -1 ? "MIHAN Depot" : activeStops[j].name;
+        if (j === activeStops.length - 2) {
+          violations.push({
+            type: "FEMALE_LAST_DROP",
+            severity: "HIGH",
+            notes: `${females[0].name} (female) is scheduled as the last active drop. No escort is present, leaving her alone with driver.`,
+          });
+        } else {
+          violations.push({
+            type: "ISOLATED_FEMALE",
+            severity: "HIGH",
+            notes: `${females[0].name} (female) is left alone in the cab between ${prevStopName} and ${activeStops[j + 1].name}.`,
+          });
+        }
+        break;
       }
     }
   }
@@ -536,6 +562,10 @@ export async function optimizeRoutes(
 
     if (isPickup) {
       // Pickup route stop details: employee pickup order ➔ DEPOT
+      // Start from DEPOT and add distance to first stop so ETA for Stop 1 is non-zero
+      if (safetyCorrectedRoute.length > 0) {
+        currentDistance += getDistance(DEPOT, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
+      }
       for (let j = 0; j < safetyCorrectedRoute.length; j++) {
         const emp = safetyCorrectedRoute[j];
         if (j > 0) {
@@ -693,7 +723,11 @@ export async function optimizeRoutes(
 
   // 3. Recalculate routes sequence, travel times, ETAs, and violations for all modified routes
   for (const route of optimizedRoutes) {
-    const stopsEmps = route.stops.map(s => employees.find(e => e.id === s.employeeId)!);
+    // Filter out any null employees (can happen if a stop's employeeId became stale after a swap)
+    const stopsEmps = route.stops
+      .map(s => employees.find(e => e.id === s.employeeId))
+      .filter((e): e is OptimizeEmployee => e !== undefined);
+    if (stopsEmps.length === 0) continue;
     let bestOrderedRoute = getOptimalPermutation(stopsEmps, isPickup);
     
     let { route: safetyCorrectedRoute } = enforceSafetyRules(
@@ -786,7 +820,7 @@ export async function optimizeRoutes(
     }
 
     const finalViolations = checkSafetyViolations(
-      newStops.map((s) => ({ name: s.employeeName, gender: s.gender })),
+      newStops.map((s) => ({ name: s.employeeName, gender: s.gender, status: s.status })),
       isPickup,
       route.hasEscort
     );
@@ -805,7 +839,10 @@ export async function optimizeRoutes(
 }
 
 export const NAGPUR_PLACES: { [key: string]: Point } = {
+  // Corporate hub
   "mihan": { x: 79.0526, y: 21.0625 },
+  "mihan sez": { x: 79.0526, y: 21.0625 },
+  // Major areas
   "manish nagar": { x: 79.0832, y: 21.0945 },
   "wardha road": { x: 79.0712, y: 21.0822 },
   "besa": { x: 79.1121, y: 21.0872 },
@@ -819,16 +856,51 @@ export const NAGPUR_PLACES: { [key: string]: Point } = {
   "shankar nagar": { x: 79.0655, y: 21.1278 },
   "khamla": { x: 79.0650, y: 21.1012 },
   "trimurti nagar": { x: 79.0535, y: 21.1125 },
+  "trimurthi nagar": { x: 79.0535, y: 21.1125 },
   "sonegaon": { x: 79.0588, y: 21.0845 },
   "koradi": { x: 79.0985, y: 21.2385 },
   "mankapur": { x: 79.0755, y: 21.1925 },
   "mahal": { x: 79.1112, y: 21.1415 },
   "gandhibagh": { x: 79.1085, y: 21.1525 },
+  // Real pickup points from roster.xlsx
+  "ccd it park": { x: 79.0535, y: 21.1125 },
+  "subhash nagar": { x: 79.0540, y: 21.1140 },
+  "shubhash nagar": { x: 79.0540, y: 21.1140 },
+  "vijaya nagar": { x: 79.0528, y: 21.1275 },
+  "vijaya nagar main gate": { x: 79.0528, y: 21.1275 },
+  "vnit": { x: 79.0528, y: 21.1275 },
+  "kanak car center": { x: 79.0712, y: 21.0822 },
+  "moraj apartments": { x: 79.0526, y: 21.0625 },
+  "shiv kailasa": { x: 79.0526, y: 21.0625 },
+  "sondapar": { x: 79.0526, y: 21.0625 },
+  "kalamna": { x: 79.1400, y: 21.1100 },
+  "kalamna market": { x: 79.1400, y: 21.1100 },
+  "nirvana residency": { x: 79.1400, y: 21.1100 },
+  "ayodhya nagar": { x: 79.0775, y: 21.1600 },
+  "hudkeshwar": { x: 79.1150, y: 21.0720 },
+  "bhandara road": { x: 79.1350, y: 21.1450 },
+  "ajni": { x: 79.1000, y: 21.1100 },
+  "surendra nagar": { x: 79.1000, y: 21.1150 },
+  "somalwada": { x: 79.0800, y: 21.0820 },
+  "somalvada": { x: 79.0800, y: 21.0820 },
+  "apollo pharmacy": { x: 79.0800, y: 21.0822 },
+  "neeri": { x: 79.0900, y: 21.1100 },
+  "parsodi": { x: 79.0535, y: 21.1090 },
+  "pardi": { x: 79.1380, y: 21.1080 },
+  "bharat nagar": { x: 79.1380, y: 21.1080 },
+  "it park": { x: 79.0535, y: 21.1125 },
+  "nagpur it park": { x: 79.0535, y: 21.1125 },
 };
 
 const geocodeCache: { [key: string]: Point } = {};
 let osmDisabled = false;
 let osmFailedCount = 0;
+
+export function resetOSMCircuitBreaker() {
+  osmDisabled = false;
+  osmFailedCount = 0;
+  console.log("OSM Circuit Breaker manually reset by admin.");
+}
 
 export async function geocodeNagpurPlace(name: string): Promise<Point> {
   const cleanName = name.toLowerCase().replace(/nagpur/gi, "").trim();
@@ -851,12 +923,16 @@ export async function geocodeNagpurPlace(name: string): Promise<Point> {
   }
 
   if (!osmDisabled) {
-    // Fallback: Query OpenStreetMap Nominatim
+    // Fallback: Query OpenStreetMap Nominatim with an 800ms abort timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 800);
     try {
       const query = encodeURIComponent(`${name}, Nagpur, Maharashtra, India`);
       const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
+        signal: controller.signal,
         headers: { "User-Agent": "TransitAdminPOC/1.0" },
       });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const contentType = res.headers.get("content-type") || "";
         if (contentType.includes("json")) {
@@ -875,6 +951,7 @@ export async function geocodeNagpurPlace(name: string): Promise<Point> {
         throw new Error(`HTTP error ${res.status}`);
       }
     } catch (e) {
+      clearTimeout(timeoutId);
       console.error("OSM Geocoding failed:", e);
       osmFailedCount++;
       if (osmFailedCount >= 3) {
@@ -1018,20 +1095,26 @@ export async function getRouteVariations(
 
   // Generate all permutations of indices 1..n
   const indices = Array.from({ length: n }, (_, i) => i + 1);
-  const permutations: number[][] = [];
+  let permutations: number[][] = [];
 
-  function permute(arr: number[], memo: number[] = []) {
-    if (arr.length === 0) {
-      permutations.push(memo);
-      return;
+  // Limit exact permutations to 8 stops (40,320 perms max) to prevent OOM/timeouts (500 errors) on large buses
+  if (n <= 8) {
+    function permute(arr: number[], memo: number[] = []) {
+      if (arr.length === 0) {
+        permutations.push(memo);
+        return;
+      }
+      for (let i = 0; i < arr.length; i++) {
+        const curr = arr.slice();
+        const next = curr.splice(i, 1);
+        permute(curr, memo.concat(next));
+      }
     }
-    for (let i = 0; i < arr.length; i++) {
-      const curr = arr.slice();
-      const next = curr.splice(i, 1);
-      permute(curr, memo.concat(next));
-    }
+    permute(indices);
+  } else {
+    // For n > 8, fallback to just the original sequence to avoid crashing the server
+    permutations.push(indices);
   }
-  permute(indices);
 
   // Separate safe and unsafe permutations
   const safePerms: number[][] = [];

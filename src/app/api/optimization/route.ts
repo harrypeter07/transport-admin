@@ -7,11 +7,10 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const shiftId = searchParams.get("shiftId");
+    const date = searchParams.get("date");
 
     const whereClause: any = {};
-    if (shiftId) {
-      whereClause.shiftId = shiftId;
-    }
+    whereClause.date = date || new Date().toISOString().split("T")[0];
 
     const routes = await prisma.route.findMany({
       where: whereClause,
@@ -45,20 +44,19 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { shiftId, isPickup } = body;
+    const { shiftId, isPickup, date } = body;
 
-    if (!shiftId) {
-      return NextResponse.json({ error: "shiftId is required" }, { status: 400 });
-    }
-
-    // 1. Fetch Employees for this shift
+    // 1. Fetch Employees for this date (ignoring shift)
     const dbEmployees = await prisma.employee.findMany({
-      where: { shiftId, status: "ACTIVE" },
+      where: { status: "ACTIVE" },
     });
 
     if (dbEmployees.length === 0) {
-      return NextResponse.json({ error: "No active employees found for this shift" }, { status: 400 });
+      return NextResponse.json({ error: "No active employees found" }, { status: 400 });
     }
+    
+    // Fallback shiftId for route creation
+    const fallbackShiftId = dbEmployees[0]?.shiftId || shiftId || "";
 
     // 2. Fetch Available Cabs
     const dbCabs = await prisma.cab.findMany({
@@ -98,13 +96,13 @@ export async function POST(req: NextRequest) {
     const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
     const optimizedRoutes = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey);
 
-    const currentDateStr = new Date().toISOString().split("T")[0];
+    const currentDateStr = date || new Date().toISOString().split("T")[0];
 
-    // 5. Use database transaction to wipe old routes for this shift + date and insert new ones
+    // 5. Use database transaction to wipe old routes for this date and insert new ones
     await prisma.$transaction(async (tx) => {
       // Find old routes
       const oldRoutes = await tx.route.findMany({
-        where: { shiftId, date: currentDateStr },
+        where: { date: currentDateStr },
         select: { id: true },
       });
       const oldRouteIds = oldRoutes.map((r) => r.id);
@@ -123,7 +121,7 @@ export async function POST(req: NextRequest) {
           data: {
             cabId: optRoute.cabId,
             date: currentDateStr,
-            shiftId,
+            shiftId: fallbackShiftId,
             isPickup,
             totalDistance: optRoute.totalDistance,
             totalDuration: optRoute.totalDuration,

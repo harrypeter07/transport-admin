@@ -81,3 +81,31 @@ body {
 .animate-fadeIn {
   animation: fadeIn 0.25s ease-out both;
 }
+
+/* Custom Premium Leaflet Tooltip for MIHAN Landmark */
+.leaflet-tooltip.mihan-tooltip {
+  background-color: #0f172a !important; /* Slate 900 */
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 10px !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  border: 1.5px solid #ffffff !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Tooltip arrow styling */
+.leaflet-tooltip-top.mihan-tooltip::before {
+  border-top-color: #0f172a !important;
+}
+.leaflet-tooltip-bottom.mihan-tooltip::before {
+  border-bottom-color: #0f172a !important;
+}
+.leaflet-tooltip-left.mihan-tooltip::before {
+  border-left-color: #0f172a !important;
+}
+.leaflet-tooltip-right.mihan-tooltip::before {
+  border-right-color: #0f172a !important;
+}

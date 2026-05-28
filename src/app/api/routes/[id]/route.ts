@@ -62,12 +62,25 @@ export async function PATCH(
         return NextResponse.json({ error: "Stop not found" }, { status: 404 });
       }
 
+      const targetStop = stops[targetIdx];
+      if (targetStop.status === "MISSED") {
+        return NextResponse.json({ error: "Cannot reorder a missed stop" }, { status: 400 });
+      }
+
       // Reorder stops in array
       if (direction === "up" && targetIdx > 0) {
+        const siblingStop = stops[targetIdx - 1];
+        if (siblingStop.status === "MISSED") {
+          return NextResponse.json({ error: "Cannot swap with a missed stop" }, { status: 400 });
+        }
         const temp = stops[targetIdx];
         stops[targetIdx] = stops[targetIdx - 1];
         stops[targetIdx - 1] = temp;
       } else if (direction === "down" && targetIdx < stops.length - 1) {
+        const siblingStop = stops[targetIdx + 1];
+        if (siblingStop.status === "MISSED") {
+          return NextResponse.json({ error: "Cannot swap with a missed stop" }, { status: 400 });
+        }
         const temp = stops[targetIdx];
         stops[targetIdx] = stops[targetIdx + 1];
         stops[targetIdx + 1] = temp;
@@ -118,7 +131,7 @@ export async function PATCH(
 
       // Re-evaluate safety violations
       const finalViolations = checkSafetyViolations(
-        stops.map((s) => ({ name: s.employee.name, gender: s.employee.gender as "MALE" | "FEMALE" })),
+        stops.map((s) => ({ name: s.employee.name, gender: s.employee.gender as "MALE" | "FEMALE", status: s.status })),
         isPickup,
         false // escort starts as false on re-evaluation
       );
@@ -201,7 +214,7 @@ export async function PATCH(
 
       // Re-evaluate safety violations
       const finalViolations = checkSafetyViolations(
-        reorderedStops.map((s) => ({ name: s.employee.name, gender: s.employee.gender as "MALE" | "FEMALE" })),
+        reorderedStops.map((s) => ({ name: s.employee.name, gender: s.employee.gender as "MALE" | "FEMALE", status: s.status })),
         isPickup,
         route.hasEscort || false
       );

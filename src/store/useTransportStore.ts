@@ -82,18 +82,20 @@ interface TransportStore {
   routes: Route[];
   importSheets: string[];
   activeShiftId: string;
+  selectedDate: string; // ISO date string: YYYY-MM-DD
   selectedRouteId: string | null;
   loading: boolean;
   
   // Actions
-  fetchInitialData: () => Promise<void>;
+  fetchInitialData: (opts?: { date?: string; shiftId?: string }) => Promise<void>;
   setActiveShiftId: (shiftId: string) => void;
+  setSelectedDate: (date: string) => void;
   setSelectedRouteId: (routeId: string | null) => void;
-  runOptimization: (isPickup: boolean, apiKey?: string) => Promise<void>;
+  runOptimization: (isPickup: boolean, apiKey?: string) => Promise<{ success: boolean; error?: string }>;
   updateStopStatus: (routeId: string, stopId: string, status: "PENDING" | "PICKED_UP" | "MISSED" | "COMPLETED") => Promise<void>;
   reorderRouteStops: (routeId: string, stopId: string, direction: "up" | "down") => Promise<void>;
   overrideViolation: (violationId: string) => Promise<void>;
-  addEmployee: (employee: Partial<Employee>) => Promise<void>;
+  addEmployee: (employee: any) => Promise<{ success: boolean; error?: string }>;
   updateEmployee: (id: string, employee: Partial<Employee>) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
   addCab: (cab: any) => Promise<void>;
@@ -114,11 +116,16 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
   routes: [],
   importSheets: [],
   activeShiftId: "",
+  selectedDate: new Date().toISOString().split("T")[0], // Track which date's routes are shown
   selectedRouteId: null,
   loading: false,
 
-  fetchInitialData: async () => {
+  // Helper: build the routes URL with the given (or stored) date and optional shiftId
+  fetchInitialData: async (opts?: { date?: string; shiftId?: string }) => {
     set({ loading: true });
+    const state = get();
+    const currentShiftId = opts?.shiftId ?? state.activeShiftId;
+    const dateToFetch = opts?.date ?? state.selectedDate ?? new Date().toISOString().split("T")[0];
     try {
       const res = await fetch("/api/employees");
       const employees = await res.json();
@@ -129,7 +136,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       const resShifts = await fetch("/api/shifts");
       const shifts = await resShifts.json();
 
-      const resRoutes = await fetch("/api/optimization");
+      // Prefer caller-supplied shiftId, then stored, then first available
+      const resolvedShiftId = currentShiftId || shifts[0]?.id || "";
+      const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
       const routes = await resRoutes.json();
 
       set({
@@ -137,13 +146,18 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         cabs,
         shifts,
         routes,
-        activeShiftId: shifts[0]?.id || "",
+        activeShiftId: resolvedShiftId,
+        selectedDate: dateToFetch,
         loading: false,
       });
     } catch (e) {
       console.error("Error fetching data:", e);
       set({ loading: false });
     }
+  },
+
+  setSelectedDate: (date) => {
+    set({ selectedDate: date });
   },
 
   setActiveShiftId: (shiftId) => {
@@ -161,24 +175,36 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       if (apiKey) {
         headers["x-google-maps-key"] = apiKey;
       }
+      const dateToFetch = get().selectedDate;
       const res = await fetch("/api/optimization", {
         method: "POST",
         headers,
         body: JSON.stringify({
           shiftId: get().activeShiftId,
           isPickup,
+          date: dateToFetch,
         }),
       });
-      const data = await res.json();
-      
-      // Re-fetch all optimization routes to sync state
-      const resRoutes = await fetch("/api/optimization");
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const msg = errData.error || `Optimization failed (HTTP ${res.status})`;
+        console.error("Optimization API error:", msg);
+        set({ loading: false });
+        return { success: false, error: msg };
+      }
+
+      // Re-fetch routes for the date
+      const shiftId = get().activeShiftId;
+      const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
       const routes = await resRoutes.json();
 
       set({ routes, loading: false });
+      return { success: true };
     } catch (e) {
       console.error("Error optimization:", e);
       set({ loading: false });
+      return { success: false, error: "Network error during optimization" };
     }
   },
 
@@ -219,7 +245,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         body: JSON.stringify({ action: "REORDER", stopId, direction }),
       });
       if (res.ok) {
-        const updatedRoutes = await (await fetch("/api/optimization")).json();
+        const shiftId = get().activeShiftId;
+        const dateToFetch = get().selectedDate;
+        const updatedRoutes = await (await fetch(`/api/optimization?date=${dateToFetch}`)).json();
         set({ routes: updatedRoutes });
       }
     } catch (e) {
@@ -237,7 +265,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         body: JSON.stringify({ violationId }),
       });
       if (res.ok) {
-        const updatedRoutes = await (await fetch("/api/optimization")).json();
+        const shiftId = get().activeShiftId;
+        const dateToFetch = get().selectedDate;
+        const updatedRoutes = await (await fetch(`/api/optimization?date=${dateToFetch}`)).json();
         set({ routes: updatedRoutes });
       }
     } catch (e) {
@@ -257,10 +287,16 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resEmployees = await fetch("/api/employees");
         const employees = await resEmployees.json();
         set({ employees, loading: false });
+        return { success: true };
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        set({ loading: false });
+        return { success: false, error: errData.error || "Failed to add employee. Employee code may already exist." };
       }
     } catch (e) {
       console.error(e);
       set({ loading: false });
+      return { success: false, error: "Network error while adding employee." };
     }
   },
 
@@ -329,8 +365,10 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resEmployees = await fetch("/api/employees");
         const employees = await resEmployees.json();
         
-        // Refresh routes as employee coordinates or active status might change violations/paths
-        const resRoutes = await fetch("/api/optimization");
+        // Refresh routes for the date
+        const shiftId = get().activeShiftId;
+        const dateToFetch = get().selectedDate;
+        const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
         const routes = await resRoutes.json();
 
         set({ employees, routes, loading: false });
@@ -355,8 +393,10 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resCabs = await fetch("/api/cabs");
         const cabs = await resCabs.json();
         
-        // Refresh routes as driver details or vehicle plate details are embedded in routes
-        const resRoutes = await fetch("/api/optimization");
+        // Refresh routes for the date
+        const shiftId = get().activeShiftId;
+        const dateToFetch = get().selectedDate;
+        const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
         const routes = await resRoutes.json();
 
         set({ cabs, routes, loading: false });
@@ -371,7 +411,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 
   fetchImportSheets: async () => {
     try {
-      const res = await fetch("/api/import");
+      const res = await fetch(`/api/import?t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         set({ importSheets: data.sheets || [] });
@@ -391,7 +431,11 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       });
       const data = await res.json();
       if (res.ok) {
-        await get().fetchInitialData();
+        // Use the date and shiftId returned by the import API
+        // so we fetch routes for the correct date, not just today.
+        const importedDate: string = data.date || new Date().toISOString().split("T")[0];
+        const importedShiftId: string = data.shiftId || "";
+        await get().fetchInitialData({ date: importedDate, shiftId: importedShiftId });
         set({ loading: false });
         return { success: true, message: data.message };
       } else {
@@ -465,7 +509,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         }),
       });
       if (res.ok) {
-        const resRoutes = await fetch("/api/optimization");
+        const shiftId = get().activeShiftId;
+        const dateToFetch = get().selectedDate;
+        const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
         const routes = await resRoutes.json();
         set({ routes, loading: false });
       } else {
@@ -489,7 +535,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         }),
       });
       if (res.ok) {
-        const resRoutes = await fetch("/api/optimization");
+        const shiftId = get().activeShiftId;
+        const dateToFetch = get().selectedDate;
+        const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
         const routes = await resRoutes.json();
         set({ routes, loading: false });
       } else {
