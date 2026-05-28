@@ -94,7 +94,9 @@ export async function POST(req: NextRequest) {
     }));
 
     // 4. Run Core Optimizer
-    const optimizedRoutes = await optimizeRoutes(optEmployees, optCabs, isPickup);
+    const apiKeyHeader = req.headers.get("x-google-maps-key") || "";
+    const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
+    const optimizedRoutes = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey);
 
     const currentDateStr = new Date().toISOString().split("T")[0];
 

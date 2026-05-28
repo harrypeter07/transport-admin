@@ -134,3 +134,47 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+// PATCH: Edit employee details
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { id, name, gender, phone, email, address, department, shiftId, status } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Employee ID is required" }, { status: 400 });
+    }
+
+    const currentEmp = await prisma.employee.findUnique({ where: { id } });
+    if (!currentEmp) {
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    }
+
+    // Recalculate coordinates if address is being updated and has changed
+    let coords = { x: currentEmp.x, y: currentEmp.y };
+    if (address && address !== currentEmp.address) {
+      coords = await geocodeNagpurPlace(address);
+    }
+
+    const employee = await prisma.employee.update({
+      where: { id },
+      data: {
+        name: name !== undefined ? name : undefined,
+        gender: gender !== undefined ? gender : undefined,
+        phone: phone !== undefined ? phone : undefined,
+        email: email !== undefined ? email : undefined,
+        address: address !== undefined ? address : undefined,
+        x: coords.x,
+        y: coords.y,
+        department: department !== undefined ? department : undefined,
+        shiftId: shiftId !== undefined ? (shiftId || null) : undefined,
+        status: status !== undefined ? status : undefined,
+      },
+    });
+
+    return NextResponse.json(employee);
+  } catch (e) {
+    console.error("Error updating employee:", e);
+    return NextResponse.json({ error: "Failed to update employee details" }, { status: 500 });
+  }
+}

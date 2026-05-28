@@ -75,6 +75,7 @@ model Route {
   optimizationScore Float       // 0-100 score
   stops             RouteStop[]
   violations        Violation[]
+  hasEscort         Boolean     @default(false)
 }
 
 model RouteStop {

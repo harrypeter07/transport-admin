@@ -81,3 +81,57 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Failed to delete cab record" }, { status: 500 });
   }
 }
+
+// PATCH: Edit Cab and associated Driver details
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, status } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Cab ID is required" }, { status: 400 });
+    }
+
+    const cab = await prisma.cab.findUnique({
+      where: { id },
+      include: { driver: true }
+    });
+
+    if (!cab) {
+      return NextResponse.json({ error: "Cab not found" }, { status: 404 });
+    }
+
+    const updatedCab = await prisma.$transaction(async (tx) => {
+      // Update Driver if exists and driver details are provided
+      if (cab.driverId && (driverName !== undefined || driverPhone !== undefined || licenseNumber !== undefined)) {
+        await tx.driver.update({
+          where: { id: cab.driverId },
+          data: {
+            name: driverName !== undefined ? driverName : undefined,
+            phone: driverPhone !== undefined ? driverPhone : undefined,
+            licenseNumber: licenseNumber !== undefined ? licenseNumber : undefined,
+          },
+        });
+      }
+
+      // Update Cab
+      return await tx.cab.update({
+        where: { id },
+        data: {
+          vehicleNumber: vehicleNumber !== undefined ? vehicleNumber : undefined,
+          capacity: capacity !== undefined ? parseInt(capacity) : undefined,
+          vendor: vendor !== undefined ? vendor : undefined,
+          status: status !== undefined ? status : undefined,
+        },
+        include: {
+          driver: true,
+        },
+      });
+    });
+
+    return NextResponse.json(updatedCab);
+  } catch (e) {
+    console.error("Error updating cab details:", e);
+    return NextResponse.json({ error: "Failed to update cab details" }, { status: 500 });
+  }
+}

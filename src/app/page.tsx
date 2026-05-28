@@ -33,6 +33,7 @@ export default function TransitAdminSPA() {
     cabs,
     shifts,
     routes,
+    importSheets,
     activeShiftId,
     selectedRouteId,
     loading,
@@ -40,12 +41,21 @@ export default function TransitAdminSPA() {
     setActiveShiftId,
     setSelectedRouteId,
     runOptimization,
+    updateStopStatus,
     reorderRouteStops,
     overrideViolation,
     addEmployee,
+    updateEmployee,
     deleteEmployee,
     addCab,
-    deleteCab
+    updateCab,
+    deleteCab,
+    fetchImportSheets,
+    importSheet,
+    uploadRosterFile,
+    resetDatabase,
+    applyRouteSequence,
+    swapRouteCab,
   } = useTransportStore();
 
   const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "REGISTRY" | "COMPLIANCE">("OPTIMIZER");
@@ -62,6 +72,40 @@ export default function TransitAdminSPA() {
   const [searchQuery, setSearchQuery] = useState("");
   // Auto-optimize loading overlay state
   const [autoOptimizingOverlay, setAutoOptimizingOverlay] = useState<"idle" | "uploading" | "optimizing">("idle");
+
+  // Google Maps API Key states
+  const [googleMapsKey, setGoogleMapsKey] = useState<string>("");
+  const [tempMapsKey, setTempMapsKey] = useState<string>("");
+  const [showSettings, setShowSettings] = useState(false);
+
+  // View modes: TABLE (manifest table) vs CARDS (large route cards)
+  const [activeViewMode, setActiveViewMode] = useState<"TABLE" | "CARDS">("CARDS");
+
+  // Local variations caching for Google Maps preview
+  interface RouteVariation {
+    strategy: "DISTANCE" | "TIME" | "BALANCED";
+    stops: any[];
+    totalDistance: number;
+    totalDuration: number;
+    optimizationScore: number;
+    violations: any[];
+    hasEscort: boolean;
+  }
+  const [variations, setVariations] = useState<Record<string, RouteVariation[]>>({});
+  const [loadingVariations, setLoadingVariations] = useState<Record<string, boolean>>({});
+  const [activeVarIndices, setActiveVarIndices] = useState<Record<string, number>>({});
+
+  // Local Excel import selection
+  const [selectedImportSheet, setSelectedImportSheet] = useState<string>("");
+
+  // Modals for editing and swapping
+  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
+  const [editingCab, setEditingCab] = useState<any | null>(null);
+  const [swappingCabRouteId, setSwappingCabRouteId] = useState<string | null>(null);
+
+  // Sidebar attendance checklist toggle
+  const [showAttendanceChecklist, setShowAttendanceChecklist] = useState(false);
+  const [attendanceSearchQuery, setAttendanceSearchQuery] = useState("");
 
   // Forms states
   const [employeeForm, setEmployeeForm] = useState({
@@ -86,6 +130,10 @@ export default function TransitAdminSPA() {
 
   useEffect(() => {
     fetchInitialData();
+    fetchImportSheets();
+    const savedKey = localStorage.getItem("google_maps_api_key") || "";
+    setGoogleMapsKey(savedKey);
+    setTempMapsKey(savedKey);
   }, []);
 
   useEffect(() => {
@@ -97,7 +145,11 @@ export default function TransitAdminSPA() {
   const handleRunOptimization = async () => {
     setOptimizing(true);
     try {
-      await runOptimization(isPickup);
+      const apiKey = localStorage.getItem("google_maps_api_key") || "";
+      await runOptimization(isPickup, apiKey);
+      // Clear variations cache since routes changed
+      setVariations({});
+      setActiveVarIndices({});
     } catch (e) {
       console.error(e);
     } finally {
@@ -147,6 +199,50 @@ export default function TransitAdminSPA() {
     });
   };
 
+  const handleSaveApiKey = (key: string) => {
+    localStorage.setItem("google_maps_api_key", key.trim());
+    setGoogleMapsKey(key.trim());
+    alert("Google Maps API Key saved successfully! All routing operations will now query real Nagpur road conditions.");
+    setShowSettings(false);
+  };
+
+  const handleImportSheet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedImportSheet) return;
+
+    setUploading(true);
+    setUploadMsg("");
+    setAutoOptimizingOverlay("uploading");
+
+    try {
+      const res = await importSheet(selectedImportSheet);
+      if (res.success) {
+        // Switch to optimizer desk immediately
+        setActiveDesk("OPTIMIZER");
+        // Now auto-optimize
+        setAutoOptimizingOverlay("optimizing");
+        setOptimizing(true);
+        try {
+          const apiKey = localStorage.getItem("google_maps_api_key") || "";
+          await runOptimization(isPickup, apiKey);
+        } catch (optErr) {
+          console.error("Auto-optimization error:", optErr);
+        } finally {
+          setOptimizing(false);
+        }
+        setUploadMsg(res.message || "Roster imported and optimized successfully.");
+      } else {
+        setUploadMsg(`Error: ${res.error}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setUploadMsg(`Error: ${err.message || "Excel import failed"}`);
+    } finally {
+      setUploading(false);
+      setAutoOptimizingOverlay("idle");
+    }
+  };
+
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile) return;
@@ -155,38 +251,16 @@ export default function TransitAdminSPA() {
     setUploadMsg("");
     setAutoOptimizingOverlay("uploading");
 
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    if (employeeForm.shiftId) {
-      formData.append("shiftId", employeeForm.shiftId);
-    }
-
     try {
-      const res = await fetch("/api/employees", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (res.ok) {
+      const res = await uploadRosterFile(uploadFile);
+      if (res.success) {
         setUploadFile(null);
         const fileInput = document.getElementById("fileInput") as HTMLInputElement;
         if (fileInput) fileInput.value = "";
-        await fetchInitialData();
-        // Switch to optimizer desk immediately
-        setActiveDesk("OPTIMIZER");
-        // Now auto-optimize
-        setAutoOptimizingOverlay("optimizing");
-        setOptimizing(true);
-        try {
-          await runOptimization(isPickup);
-        } catch (optErr) {
-          console.error("Auto-optimization error:", optErr);
-        } finally {
-          setOptimizing(false);
-        }
-        setUploadMsg(data.message || "Bulk import completed. Routes optimized automatically.");
+        setSelectedImportSheet("");
+        setUploadMsg(res.message || "Roster spreadsheet uploaded successfully. Choose a sheet date to optimize.");
       } else {
-        setUploadMsg(`Error: ${data.error}`);
+        setUploadMsg(`Error: ${res.error}`);
       }
     } catch (err) {
       console.error(err);
@@ -197,8 +271,65 @@ export default function TransitAdminSPA() {
     }
   };
 
+  const handleResetDatabase = async () => {
+    if (!window.confirm("Are you sure you want to clear all data? This will delete all shifts, employees, cabs, drivers, routes, stops, and warnings from the database.")) {
+      return;
+    }
+
+    setUploading(true);
+    setUploadMsg("");
+    try {
+      const res = await resetDatabase();
+      if (res.success) {
+        await fetchImportSheets();
+        setSelectedImportSheet("");
+        setUploadMsg(res.message || "Database cleared successfully.");
+      } else {
+        setUploadMsg(`Error: ${res.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      setUploadMsg("Database reset failed.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const fetchVariations = async (routeId: string) => {
+    setLoadingVariations((prev) => ({ ...prev, [routeId]: true }));
+    try {
+      const apiKey = localStorage.getItem("google_maps_api_key") || "";
+      const res = await fetch(`/api/routes/${routeId}/variations`, {
+        headers: {
+          "x-google-maps-key": apiKey,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVariations((prev) => ({ ...prev, [routeId]: data }));
+        // Select Balanced strategy as active preview index by default (index 2 in result list)
+        const balancedIdx = data.findIndex((v: any) => v.strategy === "BALANCED");
+        setActiveVarIndices((prev) => ({ ...prev, [routeId]: balancedIdx !== -1 ? balancedIdx : 0 }));
+      }
+    } catch (e) {
+      console.error("Failed to load route variations:", e);
+    } finally {
+      setLoadingVariations((prev) => ({ ...prev, [routeId]: false }));
+    }
+  };
+
+  const handleToggleStopStatus = async (stop: RouteStop) => {
+    const newStatus = stop.status === "PENDING" ? "MISSED" : "PENDING";
+    await updateStopStatus(stop.routeId, stop.id, newStatus);
+  };
+
   // Calculations for selected and active items
-  const activeRoutes = routes.filter((r) => r.shiftId === activeShiftId && r.isPickup === isPickup);
+  const activeRoutes = [...routes].sort((a, b) => {
+    const timeA = a.shift?.startTime || "";
+    const timeB = b.shift?.startTime || "";
+    if (timeA !== timeB) return timeA.localeCompare(timeB);
+    return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
+  });
   const selectedRoute = routes.find((r) => r.id === selectedRouteId);
   const totalViolations = routes.reduce(
     (acc, r) => acc + r.violations.filter((v) => !v.resolved).length,
@@ -375,31 +506,6 @@ export default function TransitAdminSPA() {
 
                 <div className="h-4 w-px bg-slate-200"></div>
 
-                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-200">
-                  <button
-                    onClick={() => {
-                      setIsPickup(true);
-                      setSelectedRouteId(null);
-                    }}
-                    className={`px-3 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase transition-all
-                      ${isPickup ? "bg-white text-slate-950 shadow-xs" : "text-slate-500 hover:text-slate-800"}
-                    `}
-                  >
-                    To MIHAN (Pickup)
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsPickup(false);
-                      setSelectedRouteId(null);
-                    }}
-                    className={`px-3 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase transition-all
-                      ${!isPickup ? "bg-white text-slate-950 shadow-xs" : "text-slate-500 hover:text-slate-800"}
-                    `}
-                  >
-                    From MIHAN (Drop)
-                  </button>
-                </div>
-
                 <button
                   onClick={handleRunOptimization}
                   disabled={optimizing || loading}
@@ -408,8 +514,56 @@ export default function TransitAdminSPA() {
                   <RotateCw className={`w-3.5 h-3.5 ${optimizing ? "animate-spin" : ""}`} />
                   {optimizing ? "Solving..." : "Optimize Routing"}
                 </button>
-              </div>
+              <button
+                onClick={() => setShowAttendanceChecklist(!showAttendanceChecklist)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition border border-slate-200 cursor-pointer
+                  ${showAttendanceChecklist ? "bg-slate-900 border-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}
+                `}
+              >
+                <Users className="w-3.5 h-3.5" />
+                Attendance Checklist
+              </button>
             </div>
+          </div>
+
+          {/* Google Maps Settings Panel */}
+          <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-3">
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="flex items-center justify-between text-xs font-bold text-slate-800 uppercase tracking-wider cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <Compass className="w-4 h-4 text-slate-500" />
+                Google Maps API Configuration
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                {googleMapsKey ? "✓ Configured (Click to edit)" : "⚠ Not Configured (Click to set)"}
+              </span>
+            </button>
+            {showSettings && (
+              <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 animate-fadeIn">
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Provide your Google Maps API Key to fetch real-world coordinates, distance matrix calculations, traffic-aware commute durations, and optimized route variations (Shortest Distance, Shortest Time, and Balanced).
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    placeholder="AIzaSy..."
+                    value={tempMapsKey}
+                    onChange={(e) => setTempMapsKey(e.target.value)}
+                    className="flex-grow bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveApiKey(tempMapsKey)}
+                    className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-800 transition cursor-pointer"
+                  >
+                    Save Key
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
             {/* Auto-import success toast */}
             {uploadMsg && !uploading && activeDesk === "OPTIMIZER" && (
@@ -468,13 +622,77 @@ export default function TransitAdminSPA() {
             {/* Split View Map + Sidebar */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
               {/* Map */}
-              <div className="lg:col-span-8 flex flex-col gap-4">
+              <div className={`flex flex-col gap-4 transition-all duration-250
+                ${showAttendanceChecklist ? "lg:col-span-5" : "lg:col-span-8"}
+              `}>
                 <RouteVisualizer
                   routes={activeRoutes}
                   selectedRouteId={selectedRouteId}
                   onSelectRoute={setSelectedRouteId}
                 />
               </div>
+
+              {/* Attendance Checklist Sidebar */}
+              {showAttendanceChecklist && (
+                <div className="lg:col-span-3 p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-4 max-h-[500px] overflow-y-auto animate-fadeIn">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-slate-500" />
+                      Attendance Panel
+                    </h3>
+                    <button
+                      onClick={() => setShowAttendanceChecklist(false)}
+                      className="text-slate-400 hover:text-slate-600 text-xs font-extrabold cursor-pointer"
+                    >
+                      Hide
+                    </button>
+                  </div>
+                  
+                  {/* Search box */}
+                  <input
+                    type="text"
+                    placeholder="Search employee..."
+                    value={attendanceSearchQuery}
+                    onChange={(e) => setAttendanceSearchQuery(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-[11px] py-1.5 px-3 focus:outline-none focus:border-slate-300"
+                  />
+
+                  {/* List */}
+                  <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto pr-1">
+                    {employees
+                      .filter(emp => emp.shiftId === activeShiftId)
+                      .filter(emp => 
+                        emp.name.toLowerCase().includes(attendanceSearchQuery.toLowerCase()) || 
+                        emp.employeeCode.toLowerCase().includes(attendanceSearchQuery.toLowerCase())
+                      )
+                      .map((emp) => {
+                        const isPresent = emp.status === "ACTIVE";
+                        return (
+                          <div key={emp.id} className="flex justify-between items-center p-2 bg-slate-50 border border-slate-150 rounded-lg text-xs">
+                            <div className="flex flex-col text-left gap-0.5 max-w-[120px]">
+                              <span className="font-bold text-slate-800 truncate" title={emp.name}>{emp.name}</span>
+                              <span className="text-[9px] text-slate-400 font-mono">{emp.employeeCode}</span>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                const finalStatus = isPresent ? "INACTIVE" : "ACTIVE";
+                                await updateEmployee(emp.id, { status: finalStatus });
+                              }}
+                              className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer
+                                ${isPresent 
+                                  ? "bg-emerald-50 border-emerald-250 text-emerald-700" 
+                                  : "bg-slate-150 border-slate-200 text-slate-400"
+                                }
+                              `}
+                            >
+                              {isPresent ? "Present" : "Absent"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
 
               {/* Sidebar stops timeline */}
               <div className="lg:col-span-4 p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-5 justify-between">
@@ -653,47 +871,68 @@ export default function TransitAdminSPA() {
             </div>
 
             {/* Print Manifest Section */}
-            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-4 print:p-0 print:border-none print:shadow-none">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-5 print:p-0 print:border-none print:shadow-none">
+              <div className="flex flex-wrap justify-between items-center border-b border-slate-100 pb-3 gap-3">
                 <div className="flex flex-col text-left">
                   <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                     <Truck className="w-4 h-4 text-slate-400" />
-                    Driver Dispatch Manifest Table
+                    Commuter Manifest Scheduler Dashboard
                   </h2>
                   <p className="text-[10px] text-slate-400">
                     Calculated sequence for Nagpur suburbs pickup/drop schedules.
                   </p>
                 </div>
-                <button
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 px-3.5 py-1.5 rounded-lg text-xs font-bold transition print:hidden"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  Print Manifest
-                </button>
+                <div className="flex items-center gap-3">
+                  {/* View Mode Toggle */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 print:hidden">
+                    <button
+                      onClick={() => setActiveViewMode("CARDS")}
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase transition-all cursor-pointer
+                        ${activeViewMode === "CARDS" ? "bg-white text-slate-950 shadow-sm font-black" : "text-slate-500 hover:text-slate-850"}
+                      `}
+                    >
+                      Route Cards View
+                    </button>
+                    <button
+                      onClick={() => setActiveViewMode("TABLE")}
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase transition-all cursor-pointer
+                        ${activeViewMode === "TABLE" ? "bg-white text-slate-950 shadow-sm font-black" : "text-slate-500 hover:text-slate-850"}
+                      `}
+                    >
+                      Manifest Table
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 px-3.5 py-1.5 rounded-lg text-xs font-bold transition print:hidden cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Print Manifest
+                  </button>
+                </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-mono text-[9px] uppercase tracking-wider">
-                      <th className="p-3">Driver Details</th>
-                      <th className="p-3">Vehicle Number</th>
-                      <th className="p-3">Load Info</th>
-                      <th className="p-3">Route Type</th>
-                      <th className="p-3">Itinerary Stop sequence list</th>
-                      <th className="p-3">Alert Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                    {activeRoutes.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-400 bg-slate-50/20">
-                          No active routes optimized. Select shift and click Optimize.
-                        </td>
+              {activeRoutes.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 bg-slate-50/20 border border-dashed border-slate-250 rounded-2xl">
+                  No active routes optimized. Select a shift above and click Optimize, or import a sheet date.
+                </div>
+              ) : activeViewMode === "TABLE" ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-mono text-[9px] uppercase tracking-wider">
+                        <th className="p-3">Shift Time</th>
+                        <th className="p-3">Driver Details</th>
+                        <th className="p-3">Vehicle Number</th>
+                        <th className="p-3">Load Info</th>
+                        <th className="p-3">Route Type</th>
+                        <th className="p-3">Itinerary Stop sequence list</th>
+                        <th className="p-3">Alert Status</th>
                       </tr>
-                    ) : (
-                      activeRoutes.map((route) => {
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                      {activeRoutes.map((route) => {
                         const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
                         const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
                         const isSelected = selectedRouteId === route.id;
@@ -710,6 +949,12 @@ export default function TransitAdminSPA() {
                               }
                             `}
                           >
+                            <td className="p-3">
+                              <div className="flex flex-col text-left">
+                                <span className="text-slate-900 font-bold">{route.shift?.name || "Shift"}</span>
+                                <span className="text-[9px] text-slate-400 font-mono">{route.shift?.startTime || "N/A"} - {route.shift?.endTime || "N/A"}</span>
+                              </div>
+                            </td>
                             <td className="p-3">
                               <div className="flex flex-col text-left">
                                 <span className="text-slate-900 font-bold">{route.cab.driver?.name || "N/A"}</span>
@@ -792,11 +1037,329 @@ export default function TransitAdminSPA() {
                             </td>
                           </tr>
                         );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                /* High-Visibility Route Cards View */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1">
+                  {activeRoutes.map((route) => {
+                    const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+                    const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
+                    const isSelected = selectedRouteId === route.id;
+                    
+                    const routeVariations = variations[route.id] || [];
+                    const isLoadingVars = loadingVariations[route.id] || false;
+                    const activeVarIdx = activeVarIndices[route.id] ?? -1;
+
+                    return (
+                      <div
+                        key={route.id}
+                        onClick={() => setSelectedRouteId(route.id)}
+                        className={`p-6 rounded-2xl bg-white border transition-all duration-200 flex flex-col gap-5 text-left cursor-pointer print:border-slate-300 print:shadow-none
+                          ${
+                            isSelected
+                              ? "border-slate-800 shadow-md ring-1 ring-slate-800/10"
+                              : "border-slate-200 hover:border-slate-350 shadow-xs"
+                          }
+                        `}
+                      >
+                        {/* Header */}
+                        <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                          <div className="flex flex-col gap-0.5 text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] uppercase font-extrabold tracking-widest text-slate-400">
+                                Vehicle Assignment Details
+                              </span>
+                              <span className="bg-slate-950 text-white font-mono text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                {route.shift?.name || "Shift"}
+                              </span>
+                            </div>
+                            <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
+                              <Truck className="w-4 h-4 text-slate-400" />
+                              {route.cab.vehicleNumber}
+                            </h3>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                              Vendor: {route.cab.vendor} · {route.stops.length} / {route.cab.capacity} passengers
+                            </span>
+                          </div>
+                          
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-[8px] uppercase font-bold tracking-widest text-slate-400">Score</span>
+                            <span className="text-sm font-bold text-slate-900 font-mono">{route.optimizationScore}/100</span>
+                          </div>
+                        </div>
+
+                        {/* Driver Profile */}
+                        <div className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-4">
+                          <div className="flex flex-col text-left">
+                            <span className="text-[8px] uppercase font-extrabold tracking-wider text-slate-400">Driver</span>
+                            <span className="text-xs font-bold text-slate-950">{route.cab.driver?.name || "N/A"}</span>
+                            <span className="text-[9px] text-slate-500 font-mono font-medium">{route.cab.driver?.phone || "N/A"}</span>
+                          </div>
+                          <div className="flex gap-1.5 print:hidden">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingCab(route.cab);
+                              }}
+                              className="px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-50 transition cursor-pointer"
+                            >
+                              Edit Cab
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSwappingCabRouteId(route.id);
+                              }}
+                              className="px-2.5 py-1.5 bg-slate-950 text-white rounded-lg text-[10px] font-bold hover:bg-slate-800 transition cursor-pointer"
+                            >
+                              Swap Driver
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Variations Selector */}
+                        <div className="flex flex-col gap-2.5 print:hidden">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] uppercase font-bold tracking-wider text-slate-400">
+                              Real-Road Commute Variations
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                fetchVariations(route.id);
+                              }}
+                              className="text-[9px] font-extrabold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${isLoadingVars ? "animate-spin" : ""}`} />
+                              {routeVariations.length > 0 ? "Recalculate Variations" : "Load Google Matrix"}
+                            </button>
+                          </div>
+
+                          {isLoadingVars ? (
+                            <div className="text-center py-4 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 text-[10px] font-semibold text-slate-400">
+                              Calling Google Maps Distance Matrix API...
+                            </div>
+                          ) : routeVariations.length > 0 ? (
+                            <div className="flex flex-col gap-3">
+                              {/* Variations tabs layout */}
+                              <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
+                                {routeVariations.map((v, index) => {
+                                  const isActive = activeVarIdx === index || (activeVarIdx === -1 && v.strategy === "BALANCED");
+                                  return (
+                                    <button
+                                      key={v.strategy}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveVarIndices(prev => ({ ...prev, [route.id]: index }));
+                                      }}
+                                      className={`py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer
+                                        ${isActive ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}
+                                      `}
+                                    >
+                                      {v.strategy}
+                                      <div className="text-[8px] font-normal text-slate-400 normal-case font-mono mt-0.5">
+                                        {v.totalDistance}km · {v.totalDuration}m
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {activeVarIdx !== -1 && (
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const selectedVar = routeVariations[activeVarIdx];
+                                      const dbStopIds = selectedVar.stops.map(s => {
+                                        const matchingActiveStop = route.stops.find(as => as.employeeId === s.employeeId);
+                                        return matchingActiveStop?.id || "";
+                                      }).filter(Boolean);
+
+                                      await applyRouteSequence(route.id, dbStopIds, selectedVar.totalDistance, selectedVar.totalDuration);
+                                      setActiveVarIndices(prev => {
+                                        const next = { ...prev };
+                                        delete next[route.id];
+                                        return next;
+                                      });
+                                    }}
+                                    className="w-full py-1.5 bg-slate-900 text-white rounded-lg text-[10px] font-extrabold hover:bg-slate-800 transition cursor-pointer"
+                                  >
+                                    Apply selected sequence
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveVarIndices(prev => {
+                                        const next = { ...prev };
+                                        delete next[route.id];
+                                        return next;
+                                      });
+                                    }}
+                                    className="py-1.5 px-3 border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-50 transition cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center py-2 bg-slate-50 rounded-xl border border-slate-150 text-[10px] font-semibold text-slate-500">
+                              Dist: {route.totalDistance} km · Dur: {route.totalDuration} mins (Haversine/OSRM)
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Itinerary timeline stops list */}
+                        <div className="flex flex-col gap-3">
+                          <span className="text-[9px] uppercase font-bold tracking-wider text-slate-400">
+                            Stops Timeline
+                          </span>
+
+                          <div className="relative pl-6 flex flex-col gap-3.5">
+                            <div className="absolute left-[9px] top-2 bottom-2 w-0.5 border-l border-dashed border-slate-200"></div>
+
+                            {!route.isPickup && (
+                              <div className="relative flex items-center gap-3">
+                                <span className="absolute -left-[23px] w-4.5 h-4.5 rounded-full bg-slate-950 border border-slate-850 text-white flex items-center justify-center font-bold text-[8px] z-10">
+                                  🏢
+                                </span>
+                                <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-xl text-left text-[11px] font-bold text-slate-800 flex justify-between items-center">
+                                  <div>
+                                    <span className="text-slate-900">Nagpur Depot Depot</span>
+                                    <p className="text-[9px] text-slate-400 font-mono mt-0.5">MIHAN HQ</p>
+                                  </div>
+                                  <span className="text-[8px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-black uppercase font-mono">
+                                    Depart
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {(activeVarIdx !== -1 ? routeVariations[activeVarIdx].stops : sortedStops).map((stop, idx) => {
+                              const isFemale = stop.employee ? stop.employee.gender === "FEMALE" : (stop as any).gender === "FEMALE";
+                              const empId = stop.employee ? stop.employee.id : (stop as any).employeeId;
+                              const empName = stop.employee ? stop.employee.name : (stop as any).employeeName;
+                              const empAddress = stop.employee ? stop.employee.address : (stop as any).address;
+                              const isMissed = stop.status === "MISSED" || (stop as any).status === "MISSED";
+
+                              return (
+                                <div key={stop.id || empId} className="relative flex items-center gap-3">
+                                  <span className={`absolute -left-[23px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-mono font-black text-[9px] border z-10
+                                    ${
+                                      isFemale
+                                        ? "bg-purple-600 border-purple-500 text-white"
+                                        : "bg-white border-slate-350 text-slate-600"
+                                    }
+                                  `}>
+                                    {idx + 1}
+                                  </span>
+
+                                  <div className={`flex-grow p-3 border rounded-xl flex items-center justify-between gap-3 transition-all
+                                    ${
+                                      isMissed
+                                        ? "bg-red-50/40 border-red-150 text-slate-400"
+                                        : "bg-white border-slate-200 hover:bg-slate-50/50"
+                                    }
+                                  `}>
+                                    <div className="flex flex-col text-left gap-0.5">
+                                      <div className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+                                        {isMissed ? <del>{empName}</del> : empName}
+                                        {isFemale && <span className="text-[8px] bg-purple-50 border border-purple-100 text-purple-600 px-1 rounded font-black uppercase">F</span>}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 font-semibold truncate max-w-[160px]" title={empAddress}>
+                                        {empAddress}
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-[9px] text-slate-400 font-mono">
+                                          ETA: +{stop.etaMinutes} mins
+                                        </span>
+                                        {stop.employee && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEditingEmployee(stop.employee);
+                                            }}
+                                            className="text-[9px] text-blue-600 hover:underline font-bold print:hidden"
+                                          >
+                                            Edit info
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Attendance Toggle */}
+                                    {stop.employee && (
+                                      <button
+                                        type="button"
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          await handleToggleStopStatus(stop as any);
+                                        }}
+                                        className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer print:hidden
+                                          ${
+                                            isMissed
+                                              ? "bg-red-50 border-red-200 text-red-650"
+                                              : "bg-emerald-50 border-emerald-250 text-emerald-700"
+                                          }
+                                        `}
+                                      >
+                                        {isMissed ? "ABSENT" : "PRESENT"}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {route.isPickup && (
+                              <div className="relative flex items-center gap-3">
+                                <span className="absolute -left-[23px] w-4.5 h-4.5 rounded-full bg-slate-950 border border-slate-850 text-white flex items-center justify-center font-bold text-[8px] z-10">
+                                  🏢
+                                </span>
+                                <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-xl text-left text-[11px] font-bold text-slate-800 flex justify-between items-center">
+                                  <div>
+                                    <span className="text-slate-900">Nagpur Depot Depot</span>
+                                    <p className="text-[9px] text-slate-400 font-mono mt-0.5">MIHAN HQ</p>
+                                  </div>
+                                  <span className="text-[8px] bg-slate-200 text-slate-650 px-1.5 py-0.5 rounded font-black uppercase font-mono">
+                                    Arrive (+{(activeVarIdx !== -1 ? routeVariations[activeVarIdx].totalDuration : route.totalDuration)}m)
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Violations alerts inside card */}
+                        {activeViolationsCount > 0 && (
+                          <div className="p-3 bg-red-50 border border-red-150 rounded-xl flex flex-col gap-1 text-left text-[10px] text-red-800 font-semibold animate-pulse">
+                            <div className="flex items-center gap-1 font-bold text-red-950">
+                              <ShieldAlert className="w-4 h-4 text-red-500" />
+                              <span>{activeViolationsCount} Safety Compliance Warnings</span>
+                            </div>
+                            {route.violations.filter(v => !v.resolved).map(v => (
+                              <div key={v.id} className="pl-5 leading-normal text-red-750">
+                                • {v.notes}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -912,50 +1475,89 @@ export default function TransitAdminSPA() {
                   <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-4">
                     <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                       <FileSpreadsheet className="w-4.5 h-4.5 text-slate-500" />
-                      Excel Roster Upload
+                      Roster Spreadsheet Importer
                     </h2>
-                    <form onSubmit={handleFileUpload} className="flex flex-col gap-3">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          Shift Target
-                        </label>
-                        <select
-                          name="shiftId"
-                          value={employeeForm.shiftId}
-                          onChange={handleEmpInputChange}
-                          className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+
+                    {importSheets.length > 0 ? (
+                      <form onSubmit={handleImportSheet} className="flex flex-col gap-3">
+                        <p className="text-[10px] text-slate-500 leading-normal text-left">
+                          We detected <strong>roster.xlsx</strong> in your project root! Select a sheet date to import:
+                        </p>
+                        
+                        <div className="flex flex-col gap-1 text-left">
+                          <label className="text-[8px] font-bold uppercase tracking-wider text-slate-400">
+                            Available Date Sheet
+                          </label>
+                          <select
+                            value={selectedImportSheet}
+                            onChange={(e) => setSelectedImportSheet(e.target.value)}
+                            required
+                            className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                          >
+                            <option value="">-- Choose Date --</option>
+                            {importSheets.map((sheet) => (
+                              <option key={sheet} value={sheet}>
+                                {sheet}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={uploading || !selectedImportSheet}
+                          className="w-full flex items-center justify-center gap-1.5 bg-slate-950 text-white py-2 rounded-lg text-xs font-bold hover:bg-slate-850 transition disabled:opacity-50 cursor-pointer"
                         >
-                          {shifts.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name} ({s.startTime})
-                            </option>
-                          ))}
-                        </select>
+                          {uploading ? "Importing..." : "Import & Auto-Optimize"}
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-150 text-[10px] rounded-lg text-amber-800 leading-normal text-left">
+                        No <strong>roster.xlsx</strong> file found at the root of the project workspace. Please copy your spreadsheet to the project root directory.
                       </div>
+                    )}
 
-                      <div className="flex flex-col items-center justify-center p-4 border border-dashed border-slate-200 bg-slate-50 rounded-lg hover:border-slate-300 transition cursor-pointer relative group">
-                        <input
-                          type="file"
-                          id="fileInput"
-                          required
-                          accept=".xlsx, .xls, .csv"
-                          onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
-                        <Upload className="w-5 h-5 text-slate-400 group-hover:text-slate-600 mb-1" />
-                        <span className="text-[10px] text-slate-500 font-medium">
-                          {uploadFile ? uploadFile.name : "Select Excel File"}
-                        </span>
-                      </div>
+                    <div className="border-t border-slate-100 my-1 pt-3 flex flex-col gap-3">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 text-left">
+                        Or Upload New Roster Excel File
+                      </span>
+                      <form onSubmit={handleFileUpload} className="flex flex-col gap-3">
+                        <div className="flex flex-col items-center justify-center p-3 border border-dashed border-slate-200 bg-slate-50 rounded-lg hover:border-slate-350 transition cursor-pointer relative group">
+                          <input
+                            type="file"
+                            id="fileInput"
+                            accept=".xlsx, .xls, .csv"
+                            onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          />
+                          <Upload className="w-4 h-4 text-slate-400 group-hover:text-slate-650 mb-1" />
+                          <span className="text-[9px] text-slate-500 font-medium truncate max-w-[150px]">
+                            {uploadFile ? uploadFile.name : "Select Excel File"}
+                          </span>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={uploading || !uploadFile}
+                          className="w-full flex items-center justify-center gap-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 py-1.5 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
+                        >
+                          Upload File
+                        </button>
+                      </form>
+                    </div>
 
+                    <div className="border-t border-slate-100 pt-3 flex flex-col gap-2">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 text-left">
+                        Database Administration
+                      </span>
                       <button
-                        type="submit"
-                        disabled={uploading || !uploadFile}
-                        className="w-full flex items-center justify-center gap-1.5 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50"
+                        onClick={handleResetDatabase}
+                        disabled={uploading}
+                        className="w-full flex items-center justify-center gap-1.5 bg-red-50 border border-red-200 hover:bg-red-105 hover:border-red-300 text-red-600 py-1.5 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
                       >
-                        Import File
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Clear All Database Data
                       </button>
-                    </form>
+                    </div>
 
                     <a
                       href="/api/employees/template"
@@ -966,7 +1568,7 @@ export default function TransitAdminSPA() {
                     </a>
 
                     {uploadMsg && (
-                      <div className="p-3 bg-slate-50 border border-slate-200 text-[10px] rounded-lg text-slate-600 flex items-start gap-1.5">
+                      <div className="p-3 bg-slate-50 border border-slate-200 text-[10px] rounded-lg text-slate-600 flex items-start gap-1.5 text-left animate-fadeIn">
                         <AlertCircle className="w-4 h-4 text-slate-400 flex-shrink-0" />
                         <span>{uploadMsg}</span>
                       </div>
@@ -1302,6 +1904,371 @@ export default function TransitAdminSPA() {
           </div>
         )}
       </main>
+
+      {/* Edit Employee Modal */}
+      {editingEmployee && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-lg text-left animate-fadeIn flex flex-col gap-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                Edit Employee Details
+              </h3>
+              <button
+                onClick={() => setEditingEmployee(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.target as any;
+                const updatedData = {
+                  name: form.name.value,
+                  gender: form.gender.value,
+                  phone: form.phone.value,
+                  email: form.email.value,
+                  address: form.address.value,
+                  department: form.department.value,
+                  status: form.status.value,
+                  shiftId: form.shiftId.value || null,
+                };
+                await updateEmployee(editingEmployee.id, updatedData);
+                setEditingEmployee(null);
+              }}
+              className="flex flex-col gap-3.5"
+            >
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-extrabold uppercase text-slate-400">Employee Code</label>
+                <input
+                  type="text"
+                  disabled
+                  value={editingEmployee.employeeCode}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none text-slate-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    required
+                    defaultValue={editingEmployee.name}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Gender</label>
+                  <select
+                    name="gender"
+                    defaultValue={editingEmployee.gender}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  >
+                    <option value="MALE">MALE</option>
+                    <option value="FEMALE">FEMALE</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Phone</label>
+                  <input
+                    type="text"
+                    name="phone"
+                    defaultValue={editingEmployee.phone}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    defaultValue={editingEmployee.email}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-extrabold uppercase text-slate-400">Address / Pickup Area</label>
+                <input
+                  type="text"
+                  name="address"
+                  required
+                  defaultValue={editingEmployee.address}
+                  className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Department</label>
+                  <input
+                    type="text"
+                    name="department"
+                    defaultValue={editingEmployee.department}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Status</label>
+                  <select
+                    name="status"
+                    defaultValue={editingEmployee.status}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  >
+                    <option value="ACTIVE">ACTIVE (Present)</option>
+                    <option value="INACTIVE">INACTIVE (Absent)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-extrabold uppercase text-slate-400">Shift Assignment</label>
+                <select
+                  name="shiftId"
+                  defaultValue={editingEmployee.shiftId || ""}
+                  className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                >
+                  <option value="">No Active Shift</option>
+                  {shifts.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.startTime})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-2 border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingEmployee(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-805 cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Cab / Driver Modal */}
+      {editingCab && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-lg text-left animate-fadeIn flex flex-col gap-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                Edit Cab & Driver Registry
+              </h3>
+              <button
+                onClick={() => setEditingCab(null)}
+                className="text-slate-400 hover:text-slate-650 font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.target as any;
+                const updatedData = {
+                  vehicleNumber: form.vehicleNumber.value,
+                  capacity: form.capacity.value,
+                  vendor: form.vendor.value,
+                  driverName: form.driverName.value,
+                  driverPhone: form.driverPhone.value,
+                  licenseNumber: form.licenseNumber.value,
+                  status: form.status.value,
+                };
+                await updateCab(editingCab.id, updatedData);
+                setEditingCab(null);
+              }}
+              className="flex flex-col gap-3.5"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Vehicle Plate Number</label>
+                  <input
+                    type="text"
+                    name="vehicleNumber"
+                    required
+                    defaultValue={editingCab.vehicleNumber}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Seat Capacity</label>
+                  <select
+                    name="capacity"
+                    defaultValue={editingCab.capacity}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  >
+                    <option value="4">4 Seater</option>
+                    <option value="6">6 Seater</option>
+                    <option value="7">7 Seater</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Vendor</label>
+                  <input
+                    type="text"
+                    name="vendor"
+                    defaultValue={editingCab.vendor}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Cab Status</label>
+                  <select
+                    name="status"
+                    defaultValue={editingCab.status}
+                    className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                  >
+                    <option value="AVAILABLE">AVAILABLE (On Duty)</option>
+                    <option value="MAINTENANCE">MAINTENANCE (Off Duty)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 my-1 pt-3 text-left">
+                <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Driver Assignment</h4>
+                
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-extrabold uppercase text-slate-400">Driver Name</label>
+                    <input
+                      type="text"
+                      name="driverName"
+                      required
+                      defaultValue={editingCab.driver?.name || ""}
+                      className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] font-extrabold uppercase text-slate-400">Driver Contact Mob</label>
+                      <input
+                        type="text"
+                        name="driverPhone"
+                        defaultValue={editingCab.driver?.phone || ""}
+                        className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] font-extrabold uppercase text-slate-400">License ID</label>
+                      <input
+                        type="text"
+                        name="licenseNumber"
+                        defaultValue={editingCab.driver?.licenseNumber || ""}
+                        className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-2 border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingCab(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-805 cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Swap Cab/Driver Modal */}
+      {swappingCabRouteId && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-lg text-left animate-fadeIn flex flex-col gap-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                Reassign Vehicle & Driver
+              </h3>
+              <button
+                onClick={() => setSwappingCabRouteId(null)}
+                className="text-slate-400 hover:text-slate-650 font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <p className="text-[11px] text-slate-500 leading-normal">
+              Select an available cab to swap with the current route's vehicle. This preserves the passenger list but changes the dispatch plate and driver contact details.
+            </p>
+
+            <div className="flex flex-col gap-2 max-h-[250px] overflow-y-auto">
+              {cabs
+                .filter(cab => cab.status === "AVAILABLE")
+                .map((cab) => {
+                  const isAssigned = routes.some(r => r.cabId === cab.id && r.shiftId === activeShiftId);
+                  return (
+                    <div
+                      key={cab.id}
+                      onClick={async () => {
+                        await swapRouteCab(swappingCabRouteId, cab.id);
+                        setSwappingCabRouteId(null);
+                        alert(`Cab swapped! Route successfully assigned to vehicle ${cab.vehicleNumber}`);
+                      }}
+                      className="p-3.5 border border-slate-200 hover:border-slate-350 hover:bg-slate-50 rounded-xl cursor-pointer flex justify-between items-center transition"
+                    >
+                      <div className="flex flex-col text-left">
+                        <span className="text-xs font-bold text-slate-900">{cab.vehicleNumber} ({cab.capacity} seats)</span>
+                        <span className="text-[10px] text-slate-500">Driver: {cab.driver?.name || "N/A"} · {cab.vendor}</span>
+                      </div>
+                      {isAssigned ? (
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-200 uppercase">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded border border-emerald-250 uppercase">
+                          Available
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+              <button
+                onClick={() => setSwappingCabRouteId(null)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-200 bg-white py-8 text-center text-xs text-slate-400">

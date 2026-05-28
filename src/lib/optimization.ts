@@ -466,7 +466,8 @@ export function enforceSafetyRules(
 export async function optimizeRoutes(
   employees: OptimizeEmployee[],
   cabs: OptimizeCab[],
-  isPickup: boolean = true
+  isPickup: boolean = true,
+  apiKey: string = ""
 ): Promise<OptimizedRoute[]> {
   if (employees.length === 0 || cabs.length === 0) return [];
 
@@ -751,11 +752,38 @@ export async function optimizeRoutes(
       }
     }
 
-    // Fetch actual OSRM road distance and duration
-    const osrmResult = await fetchOSRMRoute(
-      safetyCorrectedRoute.map(e => ({ x: e.x, y: e.y })),
-      isPickup
-    );
+    // Fetch road distance and duration (Google Maps or OSRM fallback)
+    let distance = 0;
+    let duration = 0;
+
+    if (apiKey && safetyCorrectedRoute.length > 0) {
+      const pointsList = [DEPOT, ...safetyCorrectedRoute.map(e => ({ x: e.x, y: e.y }))];
+      const matrixResult = await fetchGoogleMapsMatrix(pointsList, apiKey);
+      const n = safetyCorrectedRoute.length;
+      if (isPickup) {
+        for (let j = 1; j < n; j++) {
+          distance += matrixResult.distanceMatrix[j][j + 1];
+          duration += matrixResult.durationMatrix[j][j + 1];
+        }
+        distance += matrixResult.distanceMatrix[n][0];
+        duration += matrixResult.durationMatrix[n][0] + 10;
+      } else {
+        distance += matrixResult.distanceMatrix[0][1];
+        duration += matrixResult.durationMatrix[0][1];
+        for (let j = 1; j < n; j++) {
+          distance += matrixResult.distanceMatrix[j][j + 1];
+          duration += matrixResult.durationMatrix[j][j + 1];
+        }
+      }
+      distance = Math.round(distance * 10) / 10;
+    } else {
+      const osrmResult = await fetchOSRMRoute(
+        safetyCorrectedRoute.map(e => ({ x: e.x, y: e.y })),
+        isPickup
+      );
+      distance = osrmResult.distance;
+      duration = osrmResult.duration;
+    }
 
     const finalViolations = checkSafetyViolations(
       newStops.map((s) => ({ name: s.employeeName, gender: s.gender })),
@@ -764,11 +792,11 @@ export async function optimizeRoutes(
     );
 
     const penalty = (route.hasEscort ? 15 : 0) + (finalViolations.length * 30);
-    const score = Math.max(30, Math.round(100 - (osrmResult.distance * 0.8) - penalty));
+    const score = Math.max(30, Math.round(100 - (distance * 0.8) - penalty));
 
     route.stops = newStops;
-    route.totalDistance = osrmResult.distance;
-    route.totalDuration = osrmResult.duration;
+    route.totalDistance = distance;
+    route.totalDuration = duration;
     route.optimizationScore = score;
     route.violations = finalViolations;
   }
@@ -798,14 +826,19 @@ export const NAGPUR_PLACES: { [key: string]: Point } = {
   "gandhibagh": { x: 79.1085, y: 21.1525 },
 };
 
-/**
- * Geocodes a Nagpur place name to a Point (x, y) in real-world coordinates.
- * Checks local cache first, then calls Nominatim API if connected.
- */
+const geocodeCache: { [key: string]: Point } = {};
+let osmDisabled = false;
+let osmFailedCount = 0;
+
 export async function geocodeNagpurPlace(name: string): Promise<Point> {
   const cleanName = name.toLowerCase().replace(/nagpur/gi, "").trim();
   
-  // Check local cache
+  // Check in-memory cache first
+  if (geocodeCache[cleanName]) {
+    return geocodeCache[cleanName];
+  }
+
+  // Check predefined local cache
   if (NAGPUR_PLACES[cleanName]) {
     return NAGPUR_PLACES[cleanName];
   }
@@ -817,25 +850,318 @@ export async function geocodeNagpurPlace(name: string): Promise<Point> {
     }
   }
 
-  // Fallback: Query OpenStreetMap Nominatim
-  try {
-    const query = encodeURIComponent(`${name}, Nagpur, Maharashtra, India`);
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
-      headers: { "User-Agent": "TransitAdminPOC/1.0" },
-    });
-    const data = await res.json();
-    if (data && data.length > 0) {
-      const lat = parseFloat(data[0].lat);
-      const lng = parseFloat(data[0].lon);
-      return { x: lng, y: lat };
+  if (!osmDisabled) {
+    // Fallback: Query OpenStreetMap Nominatim
+    try {
+      const query = encodeURIComponent(`${name}, Nagpur, Maharashtra, India`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
+        headers: { "User-Agent": "TransitAdminPOC/1.0" },
+      });
+      if (res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("json")) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            const lat = parseFloat(data[0].lat);
+            const lng = parseFloat(data[0].lon);
+            const point = { x: lng, y: lat };
+            geocodeCache[cleanName] = point;
+            return point;
+          }
+        } else {
+          throw new Error("Response is not JSON");
+        }
+      } else {
+        throw new Error(`HTTP error ${res.status}`);
+      }
+    } catch (e) {
+      console.error("OSM Geocoding failed:", e);
+      osmFailedCount++;
+      if (osmFailedCount >= 3) {
+        console.warn("Disabling OSM geocoding API due to repeated failures (circuit breaker activated)");
+        osmDisabled = true;
+      }
     }
-  } catch (e) {
-    console.error("OSM Geocoding failed:", e);
   }
 
   // Final fallback: random coordinates in Nagpur sector bounds (lng 79.00-79.16, lat 21.04-21.19)
-  return {
+  const fallbackPoint = {
     x: Math.round((79.00 + Math.random() * 0.16) * 10000) / 10000,
     y: Math.round((21.04 + Math.random() * 0.15) * 10000) / 10000,
   };
+  geocodeCache[cleanName] = fallbackPoint;
+  return fallbackPoint;
+}
+
+/**
+ * Fetches the pairwise distance (km) and duration (mins) matrix for a list of points from Google Maps Distance Matrix API.
+ * Falls back to Haversine-based matrix if the request fails or no API Key is provided.
+ */
+export async function fetchGoogleMapsMatrix(
+  points: Point[],
+  apiKey: string
+): Promise<{ distanceMatrix: number[][]; durationMatrix: number[][] }> {
+  const n = points.length;
+  if (n === 0) return { distanceMatrix: [], durationMatrix: [] };
+
+  const distanceMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
+  const durationMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
+
+  if (!apiKey) {
+    // Generate fallback matrix
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i === j) continue;
+        const d = getDistance(points[i], points[j]);
+        distanceMatrix[i][j] = Math.round(d * 10) / 10;
+        durationMatrix[i][j] = Math.round(d / AVG_SPEED);
+      }
+    }
+    return { distanceMatrix, durationMatrix };
+  }
+
+  try {
+    const coordsStr = points.map((p) => `${p.y},${p.x}`).join("|");
+    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(
+      coordsStr
+    )}&destinations=${encodeURIComponent(coordsStr)}&key=${apiKey}`;
+
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.status === "OK" && data.rows) {
+        for (let i = 0; i < n; i++) {
+          const row = data.rows[i];
+          if (!row || !row.elements) continue;
+          for (let j = 0; j < n; j++) {
+            const element = row.elements[j];
+            if (element && element.status === "OK") {
+              distanceMatrix[i][j] = Math.round((element.distance.value / 1000) * 10) / 10;
+              durationMatrix[i][j] = Math.round(element.duration.value / 60);
+            } else {
+              const d = getDistance(points[i], points[j]);
+              distanceMatrix[i][j] = Math.round(d * 10) / 10;
+              durationMatrix[i][j] = Math.round(d / AVG_SPEED);
+            }
+          }
+        }
+        return { distanceMatrix, durationMatrix };
+      }
+    }
+  } catch (e) {
+    console.error("Google Maps API failed, falling back to Haversine matrix:", e);
+  }
+
+  // Final fallback
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const d = getDistance(points[i], points[j]);
+      distanceMatrix[i][j] = Math.round(d * 10) / 10;
+      durationMatrix[i][j] = Math.round(d / AVG_SPEED);
+    }
+  }
+  return { distanceMatrix, durationMatrix };
+}
+
+export interface RouteVariation {
+  strategy: "DISTANCE" | "TIME" | "BALANCED";
+  stops: {
+    employeeId: string;
+    employeeName: string;
+    gender: "MALE" | "FEMALE";
+    x: number;
+    y: number;
+    address: string;
+    stopOrder: number;
+    etaMinutes: number;
+  }[];
+  totalDistance: number;
+  totalDuration: number;
+  optimizationScore: number;
+  violations: {
+    type: "FEMALE_FIRST_PICKUP" | "FEMALE_LAST_DROP" | "ISOLATED_FEMALE" | "OVERCAPACITY";
+    severity: "HIGH" | "MEDIUM";
+    notes: string;
+  }[];
+  hasEscort: boolean;
+}
+
+/**
+ * Calculates 3 routing variations (Distance, Time, Balanced) for a set of employees assigned to a cab.
+ */
+export async function getRouteVariations(
+  employees: OptimizeEmployee[],
+  isPickup: boolean,
+  hasEscort: boolean = false,
+  apiKey: string = ""
+): Promise<RouteVariation[]> {
+  const n = employees.length;
+  if (n === 0) return [];
+
+  // Points list: index 0 is DEPOT, indices 1..n are employees
+  const points: Point[] = [DEPOT, ...employees.map((e) => ({ x: e.x, y: e.y }))];
+  const { distanceMatrix, durationMatrix } = await fetchGoogleMapsMatrix(points, apiKey);
+
+  // Helper to check if a permutation of employee indices (1..n) is safe
+  function isPermSafe(perm: number[]): boolean {
+    if (hasEscort || perm.length <= 1) return true;
+    const hasFemales = perm.some((idx) => employees[idx - 1].gender === "FEMALE");
+    if (!hasFemales) return true;
+
+    if (isPickup) {
+      return employees[perm[0] - 1].gender === "MALE";
+    } else {
+      return employees[perm[perm.length - 1] - 1].gender === "MALE";
+    }
+  }
+
+  // Generate all permutations of indices 1..n
+  const indices = Array.from({ length: n }, (_, i) => i + 1);
+  const permutations: number[][] = [];
+
+  function permute(arr: number[], memo: number[] = []) {
+    if (arr.length === 0) {
+      permutations.push(memo);
+      return;
+    }
+    for (let i = 0; i < arr.length; i++) {
+      const curr = arr.slice();
+      const next = curr.splice(i, 1);
+      permute(curr, memo.concat(next));
+    }
+  }
+  permute(indices);
+
+  // Separate safe and unsafe permutations
+  const safePerms: number[][] = [];
+  const unsafePerms: number[][] = [];
+
+  for (const perm of permutations) {
+    if (isPermSafe(perm)) {
+      safePerms.push(perm);
+    } else {
+      unsafePerms.push(perm);
+    }
+  }
+
+  const pool = safePerms.length > 0 ? safePerms : unsafePerms;
+
+  const strategies: ("DISTANCE" | "TIME" | "BALANCED")[] = ["DISTANCE", "TIME", "BALANCED"];
+  const variations: RouteVariation[] = [];
+
+  for (const strategy of strategies) {
+    let bestPerm = pool[0];
+    let minCost = Infinity;
+
+    for (const perm of pool) {
+      let distCost = 0;
+      let durationCost = 0;
+
+      if (isPickup) {
+        // Stop_1 -> Stop_2 -> ... -> Depot
+        for (let i = 0; i < perm.length - 1; i++) {
+          distCost += distanceMatrix[perm[i]][perm[i + 1]];
+          durationCost += durationMatrix[perm[i]][perm[i + 1]];
+        }
+        distCost += distanceMatrix[perm[perm.length - 1]][0];
+        durationCost += durationMatrix[perm[perm.length - 1]][0];
+      } else {
+        // Depot -> Stop_1 -> Stop_2 -> ...
+        distCost += distanceMatrix[0][perm[0]];
+        durationCost += durationMatrix[0][perm[0]];
+        for (let i = 0; i < perm.length - 1; i++) {
+          distCost += distanceMatrix[perm[i]][perm[i + 1]];
+          durationCost += durationMatrix[perm[i]][perm[i + 1]];
+        }
+      }
+
+      let cost = 0;
+      if (strategy === "DISTANCE") {
+        cost = distCost;
+      } else if (strategy === "TIME") {
+        cost = durationCost;
+      } else {
+        cost = distCost + durationCost * 0.5; // Balanced
+      }
+
+      if (cost < minCost) {
+        minCost = cost;
+        bestPerm = perm;
+      }
+    }
+
+    // Build Stops details for the best permutation
+    let currentDistance = 0;
+    let currentDuration = 0;
+    const stops: RouteVariation["stops"] = [];
+
+    if (isPickup) {
+      for (let j = 0; j < bestPerm.length; j++) {
+        const idx = bestPerm[j];
+        const emp = employees[idx - 1];
+        if (j > 0) {
+          const prevIdx = bestPerm[j - 1];
+          currentDistance += distanceMatrix[prevIdx][idx];
+          currentDuration += durationMatrix[prevIdx][idx];
+        }
+        stops.push({
+          employeeId: emp.id,
+          employeeName: emp.name,
+          gender: emp.gender,
+          x: emp.x,
+          y: emp.y,
+          address: emp.address,
+          stopOrder: j + 1,
+          etaMinutes: currentDuration + 10, // 10m buffer for pickup start
+        });
+      }
+      currentDistance += distanceMatrix[bestPerm[bestPerm.length - 1]][0];
+      currentDuration += durationMatrix[bestPerm[bestPerm.length - 1]][0] + 10;
+    } else {
+      currentDistance += distanceMatrix[0][bestPerm[0]];
+      currentDuration += durationMatrix[0][bestPerm[0]];
+      for (let j = 0; j < bestPerm.length; j++) {
+        const idx = bestPerm[j];
+        const emp = employees[idx - 1];
+        if (j > 0) {
+          const prevIdx = bestPerm[j - 1];
+          currentDistance += distanceMatrix[prevIdx][idx];
+          currentDuration += durationMatrix[prevIdx][idx];
+        }
+        stops.push({
+          employeeId: emp.id,
+          employeeName: emp.name,
+          gender: emp.gender,
+          x: emp.x,
+          y: emp.y,
+          address: emp.address,
+          stopOrder: j + 1,
+          etaMinutes: currentDuration,
+        });
+      }
+    }
+
+    // Evaluate violations
+    const finalViolations = checkSafetyViolations(
+      stops.map((s) => ({ name: s.employeeName, gender: s.gender })),
+      isPickup,
+      hasEscort
+    );
+
+    const penalty = (hasEscort ? 15 : 0) + finalViolations.length * 30;
+    const score = Math.max(30, Math.round(100 - currentDistance * 0.8 - penalty));
+
+    variations.push({
+      strategy,
+      stops,
+      totalDistance: Math.round(currentDistance * 10) / 10,
+      totalDuration: currentDuration,
+      optimizationScore: score,
+      violations: finalViolations,
+      hasEscort,
+    });
+  }
+
+  return variations;
 }

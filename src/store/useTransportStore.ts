@@ -80,6 +80,7 @@ interface TransportStore {
   cabs: Cab[];
   shifts: Shift[];
   routes: Route[];
+  importSheets: string[];
   activeShiftId: string;
   selectedRouteId: string | null;
   loading: boolean;
@@ -88,14 +89,22 @@ interface TransportStore {
   fetchInitialData: () => Promise<void>;
   setActiveShiftId: (shiftId: string) => void;
   setSelectedRouteId: (routeId: string | null) => void;
-  runOptimization: (isPickup: boolean) => Promise<void>;
+  runOptimization: (isPickup: boolean, apiKey?: string) => Promise<void>;
   updateStopStatus: (routeId: string, stopId: string, status: "PENDING" | "PICKED_UP" | "MISSED" | "COMPLETED") => Promise<void>;
   reorderRouteStops: (routeId: string, stopId: string, direction: "up" | "down") => Promise<void>;
   overrideViolation: (violationId: string) => Promise<void>;
   addEmployee: (employee: Partial<Employee>) => Promise<void>;
+  updateEmployee: (id: string, employee: Partial<Employee>) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
   addCab: (cab: any) => Promise<void>;
+  updateCab: (id: string, cab: any) => Promise<void>;
   deleteCab: (id: string) => Promise<void>;
+  fetchImportSheets: () => Promise<void>;
+  importSheet: (sheetName: string) => Promise<any>;
+  uploadRosterFile: (file: File) => Promise<any>;
+  resetDatabase: () => Promise<any>;
+  applyRouteSequence: (routeId: string, stopIds: string[], distance: number, duration: number) => Promise<void>;
+  swapRouteCab: (routeId: string, cabId: string) => Promise<void>;
 }
 
 export const useTransportStore = create<TransportStore>((set, get) => ({
@@ -103,6 +112,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
   cabs: [],
   shifts: [],
   routes: [],
+  importSheets: [],
   activeShiftId: "",
   selectedRouteId: null,
   loading: false,
@@ -144,12 +154,16 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     set({ selectedRouteId: routeId });
   },
 
-  runOptimization: async (isPickup) => {
+  runOptimization: async (isPickup, apiKey = "") => {
     set({ loading: true });
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (apiKey) {
+        headers["x-google-maps-key"] = apiKey;
+      }
       const res = await fetch("/api/optimization", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           shiftId: get().activeShiftId,
           isPickup,
@@ -299,6 +313,190 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       }
     } catch (e) {
       console.error(e);
+      set({ loading: false });
+    }
+  },
+
+  updateEmployee: async (id, employee) => {
+    set({ loading: true });
+    try {
+      const res = await fetch("/api/employees", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...employee }),
+      });
+      if (res.ok) {
+        const resEmployees = await fetch("/api/employees");
+        const employees = await resEmployees.json();
+        
+        // Refresh routes as employee coordinates or active status might change violations/paths
+        const resRoutes = await fetch("/api/optimization");
+        const routes = await resRoutes.json();
+
+        set({ employees, routes, loading: false });
+      } else {
+        set({ loading: false });
+      }
+    } catch (e) {
+      console.error("Error updating employee:", e);
+      set({ loading: false });
+    }
+  },
+
+  updateCab: async (id, cab) => {
+    set({ loading: true });
+    try {
+      const res = await fetch("/api/cabs/manage", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...cab }),
+      });
+      if (res.ok) {
+        const resCabs = await fetch("/api/cabs");
+        const cabs = await resCabs.json();
+        
+        // Refresh routes as driver details or vehicle plate details are embedded in routes
+        const resRoutes = await fetch("/api/optimization");
+        const routes = await resRoutes.json();
+
+        set({ cabs, routes, loading: false });
+      } else {
+        set({ loading: false });
+      }
+    } catch (e) {
+      console.error("Error updating cab details:", e);
+      set({ loading: false });
+    }
+  },
+
+  fetchImportSheets: async () => {
+    try {
+      const res = await fetch("/api/import");
+      if (res.ok) {
+        const data = await res.json();
+        set({ importSheets: data.sheets || [] });
+      }
+    } catch (e) {
+      console.error("Failed fetching import sheets:", e);
+    }
+  },
+
+  importSheet: async (sheetName) => {
+    set({ loading: true });
+    try {
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetName }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await get().fetchInitialData();
+        set({ loading: false });
+        return { success: true, message: data.message };
+      } else {
+        set({ loading: false });
+        return { success: false, error: data.error };
+      }
+    } catch (e) {
+      console.error("Excel import action failed:", e);
+      set({ loading: false });
+      return { success: false, error: "Network or Server error" };
+    }
+  },
+
+  uploadRosterFile: async (file) => {
+    set({ loading: true });
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/import", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        set({ importSheets: data.sheets || [], loading: false });
+        return { success: true, message: data.message };
+      } else {
+        set({ loading: false });
+        return { success: false, error: data.error || "Upload failed" };
+      }
+    } catch (e) {
+      console.error("Failed uploading roster file:", e);
+      set({ loading: false });
+      return { success: false, error: "Upload failed due to connection error" };
+    }
+  },
+
+  resetDatabase: async () => {
+    set({ loading: true });
+    try {
+      const res = await fetch("/api/import", {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await get().fetchInitialData();
+        set({ loading: false });
+        return { success: true, message: data.message };
+      } else {
+        set({ loading: false });
+        return { success: false, error: data.error || "Reset failed" };
+      }
+    } catch (e) {
+      console.error("Database reset failed:", e);
+      set({ loading: false });
+      return { success: false, error: "Database reset failed due to connection error" };
+    }
+  },
+
+  applyRouteSequence: async (routeId, stopIds, distance, duration) => {
+    set({ loading: true });
+    try {
+      const res = await fetch(`/api/routes/${routeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "APPLY_SEQUENCE",
+          stopIds,
+          distance,
+          duration
+        }),
+      });
+      if (res.ok) {
+        const resRoutes = await fetch("/api/optimization");
+        const routes = await resRoutes.json();
+        set({ routes, loading: false });
+      } else {
+        set({ loading: false });
+      }
+    } catch (e) {
+      console.error("Failed to apply route sequence:", e);
+      set({ loading: false });
+    }
+  },
+
+  swapRouteCab: async (routeId, cabId) => {
+    set({ loading: true });
+    try {
+      const res = await fetch(`/api/routes/${routeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SWAP_CAB",
+          cabId,
+        }),
+      });
+      if (res.ok) {
+        const resRoutes = await fetch("/api/optimization");
+        const routes = await resRoutes.json();
+        set({ routes, loading: false });
+      } else {
+        set({ loading: false });
+      }
+    } catch (e) {
+      console.error("Failed to swap cab:", e);
       set({ loading: false });
     }
   },
