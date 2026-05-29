@@ -1,6 +1,18 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  AreaChart,
+  Area,
+} from "recharts";
 import { useTransportStore, Route, RouteStop } from "@/store/useTransportStore";
 import RouteVisualizer from "@/components/RouteVisualizer";
 import {
@@ -59,8 +71,48 @@ export default function TransitAdminSPA() {
     swapRouteCab,
   } = useTransportStore();
 
-  const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "REGISTRY" | "COMPLIANCE">("OPTIMIZER");
+  const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "REGISTRY" | "COMPLIANCE" | "ANALYSIS">("OPTIMIZER");
   const [registryTab, setRegistryTab] = useState<"EMPLOYEES" | "CABS">("EMPLOYEES");
+
+  // Analysis Dashboard State
+  const [analysisData, setAnalysisData] = useState<any>(null);
+  const [analysisLoading, setAnalysisLoading] = useState<boolean>(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const [selectedCabsForChart, setSelectedCabsForChart] = useState<string[]>([]);
+  const [projectionPeriod, setProjectionPeriod] = useState<"DAILY" | "MONTHLY" | "YEARLY">("DAILY");
+  const [ledgerCabFilter, setLedgerCabFilter] = useState<string>("ALL");
+
+  const fetchAnalysisData = async () => {
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const res = await fetch("/api/analysis");
+      if (!res.ok) throw new Error("Failed to fetch analysis data");
+      const json = await res.json();
+      setAnalysisData(json);
+      if (json.routeBreakdowns && json.routeBreakdowns.length > 0) {
+        const plates = Array.from(new Set(json.routeBreakdowns.map((r: any) => r.cabPlate))) as string[];
+        setSelectedCabsForChart(plates);
+      } else {
+        setSelectedCabsForChart([]);
+      }
+    } catch (err: any) {
+      setAnalysisError(err.message || "Failed to load analysis data");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (activeDesk === "ANALYSIS") {
+      fetchAnalysisData();
+    }
+  }, [activeDesk]);
 
   // State for commute routing
   const [isPickup, setIsPickup] = useState(true);
@@ -465,6 +517,22 @@ export default function TransitAdminSPA() {
                   {totalViolations}
                 </span>
               )}
+            </button>
+            <div className="w-px h-5 bg-slate-200 mx-1"></div>
+            <button
+              onClick={() => setActiveDesk("ANALYSIS")}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-extrabold tracking-wide transition-all
+                ${
+                  activeDesk === "ANALYSIS"
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 hover:shadow-md"
+                }
+              `}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path fillRule="evenodd" d="M17.753 14.544a.75.75 0 0 0 .153-.82l-3-6a.75.75 0 0 0-1.282-.1l-2.484 3.727-2.673-3.055a.75.75 0 0 0-1.047-.075L2.92 12.221a.75.75 0 0 0 .961 1.157l3.963-3.292 2.766 3.161a.75.75 0 0 0 1.077.065l2.672-4.009 2.527 5.054a.75.75 0 0 0 .867.188Z" clipRule="evenodd" />
+              </svg>
+              Optimization Analytics
             </button>
           </nav>
 
@@ -2000,6 +2068,451 @@ export default function TransitAdminSPA() {
                       {resolvedViolations.map(renderViolationCard)}
                     </div>
                   )}
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* DESK 4: ROI & ANALYTICS */}
+        {activeDesk === "ANALYSIS" && (
+          <div className="flex flex-col gap-6 text-left animate-fadeIn">
+            {/* Header / Top title inside the desk */}
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <div>
+                <h1 className="text-lg font-bold text-slate-900">Route Optimization Analytics</h1>
+                <p className="text-xs text-slate-500">
+                  Analyze vehicle route efficiencies, driver metrics, and cumulative distance projections.
+                </p>
+              </div>
+              <button
+                onClick={fetchAnalysisData}
+                disabled={analysisLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${analysisLoading ? "animate-spin" : ""}`} />
+                {analysisLoading ? "Recalculating..." : "Refresh Report"}
+              </button>
+            </div>
+
+            {(() => {
+              if (analysisLoading) {
+                return (
+                  <div className="py-20 flex flex-col items-center justify-center bg-white border border-slate-200 rounded-2xl">
+                    <div className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="mt-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Compiling Optimization Dataset...</p>
+                  </div>
+                );
+              }
+
+              if (analysisError || !analysisData) {
+                return (
+                  <div className="py-12 flex flex-col items-center justify-center bg-white border border-slate-200 rounded-2xl text-center px-4">
+                    <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+                    <h3 className="text-sm font-bold text-slate-800">Unable to load analytics</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-md">
+                      {analysisError || "No optimized routes exist yet. Go to the Route Optimizer desk and execute optimization first."}
+                    </p>
+                    <button
+                      onClick={() => setActiveDesk("OPTIMIZER")}
+                      className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition cursor-pointer"
+                    >
+                      Go to Route Optimizer
+                    </button>
+                  </div>
+                );
+              }
+
+              const chartFilteredData = analysisData.routeBreakdowns?.filter((r: any) => 
+                selectedCabsForChart.includes(r.cabPlate)
+              ) || [];
+
+              const projectionData = Array.from(
+                { length: projectionPeriod === "DAILY" ? 30 : projectionPeriod === "MONTHLY" ? 12 : 5 },
+                (_, i) => {
+                  const multiplier = i + 1;
+                  const kmVal = projectionPeriod === "DAILY"
+                    ? analysisData.kmSavedPerDay * multiplier
+                    : projectionPeriod === "MONTHLY"
+                      ? (analysisData.kmSavedPerDay * 30) * multiplier
+                      : (analysisData.kmSavedPerDay * 365) * multiplier;
+
+                  return {
+                    label: projectionPeriod === "DAILY" ? `Day ${multiplier}` : projectionPeriod === "MONTHLY" ? `Month ${multiplier}` : `Year ${multiplier}`,
+                    distanceConserved: Math.round(kmVal * 10) / 10,
+                  };
+                }
+              );
+
+              const filteredLedgerRoutes = analysisData.routeBreakdowns?.filter(
+                (r: any) => ledgerCabFilter === "ALL" || r.cabPlate === ledgerCabFilter
+              ) || [];
+
+              return (
+                <>
+                  {/* KPI Summaries */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Card 1: Daily Distance Conserved */}
+                    <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs hover:shadow-xs transition">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Daily Distance Conserved</span>
+                        <span className="bg-emerald-50 text-emerald-700 text-[9px] font-bold px-1.5 py-0.5 rounded border border-emerald-200 uppercase font-mono">
+                          Today
+                        </span>
+                      </div>
+                      <div className="text-2xl font-black text-slate-900">{analysisData.kmSavedPerDay?.toLocaleString()} km</div>
+                      <p className="text-[10px] text-slate-400 mt-1">Reduced from {analysisData.unoptimizedKm?.toLocaleString()} km naive length</p>
+                    </div>
+
+                    {/* Card 2: Monthly Projected Distance Saved */}
+                    <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs hover:shadow-xs transition">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Monthly Projected Conserved</span>
+                        <span className="bg-slate-100 text-slate-700 text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 uppercase font-mono">
+                          30 Days
+                        </span>
+                      </div>
+                      <div className="text-2xl font-black text-slate-900">{(analysisData.kmSavedPerDay * 30)?.toLocaleString()} km</div>
+                      <p className="text-[10px] text-slate-400 mt-1">Extrapolated monthly optimization growth</p>
+                    </div>
+
+                    {/* Card 3: Yearly Projected Distance Saved */}
+                    <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs hover:shadow-xs transition">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Yearly Projected Conserved</span>
+                        <span className="bg-slate-100 text-slate-700 text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 uppercase font-mono">
+                          365 Days
+                        </span>
+                      </div>
+                      <div className="text-2xl font-black text-slate-900">{(analysisData.kmSavedPerDay * 365)?.toLocaleString()} km</div>
+                      <p className="text-[10px] text-slate-400 mt-1">Extrapolated annual optimization growth</p>
+                    </div>
+
+                    {/* Card 4: Overall Efficiency */}
+                    <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 shadow-md">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Overall Efficiency Rate</span>
+                        <span className="bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase font-mono">
+                          Rate
+                        </span>
+                      </div>
+                      <div className="text-2xl font-black text-emerald-400">
+                        {analysisData.unoptimizedKm > 0 ? Math.round((analysisData.kmSavedPerDay / analysisData.unoptimizedKm) * 100) : 0}% Saved
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">Total optimized: {analysisData.optimizedKm?.toLocaleString()} km</p>
+                    </div>
+                  </div>
+
+                  {/* Grid for Visual Charts */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Chart 1: Route Distance Comparison */}
+                    <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs flex flex-col gap-4">
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Distance Comparison per Route</h3>
+                        <p className="text-[10px] text-slate-400">
+                          Compares optimized vs unoptimized (naive passenger alphabetical list) route lengths in kilometers.
+                        </p>
+                      </div>
+
+                      {/* Cab Visibility Selector */}
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[9px] font-extrabold uppercase text-slate-400">Select Cabs for Chart:</span>
+                        <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto border border-slate-100 p-2 rounded-lg bg-slate-50">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allPlates = Array.from(new Set(analysisData.routeBreakdowns?.map((r: any) => r.cabPlate) || [])) as string[];
+                              setSelectedCabsForChart(selectedCabsForChart.length === allPlates.length ? [] : allPlates);
+                            }}
+                            className="px-2 py-0.5 border border-slate-200 rounded text-[9px] font-bold bg-white text-slate-650 hover:bg-slate-50 cursor-pointer"
+                          >
+                            {selectedCabsForChart.length === (Array.from(new Set(analysisData.routeBreakdowns?.map((r: any) => r.cabPlate) || [])).length) ? "Deselect All" : "Select All"}
+                          </button>
+                          {Array.from(new Set(analysisData.routeBreakdowns?.map((r: any) => r.cabPlate) || [])).map((plate: any) => {
+                            const isChecked = selectedCabsForChart.includes(plate);
+                            return (
+                              <label
+                                key={plate}
+                                className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] font-bold cursor-pointer transition select-none
+                                  ${isChecked 
+                                    ? "bg-slate-900 border-slate-900 text-white shadow-xs" 
+                                    : "bg-white border-slate-200 text-slate-655 hover:bg-slate-50"
+                                  }
+                                `}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedCabsForChart([...selectedCabsForChart, plate]);
+                                    } else {
+                                      setSelectedCabsForChart(selectedCabsForChart.filter(p => p !== plate));
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                                {plate}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="h-[260px] w-full text-xs font-bold mt-2">
+                        {isMounted && chartFilteredData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={chartFilteredData}
+                              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis
+                                dataKey="cabPlate"
+                                tickLine={false}
+                                axisLine={false}
+                                stroke="#94a3b8"
+                                tick={{ fontSize: 9 }}
+                              />
+                              <YAxis
+                                tickLine={false}
+                                axisLine={false}
+                                stroke="#94a3b8"
+                                tickFormatter={(value) => `${value} km`}
+                                tick={{ fontSize: 9 }}
+                              />
+                              <Tooltip
+                                contentStyle={{
+                                  background: "#0f172a",
+                                  border: "none",
+                                  borderRadius: "8px",
+                                  color: "#f8fafc",
+                                  fontSize: "11px",
+                                }}
+                                itemStyle={{ color: "#f8fafc" }}
+                              />
+                              <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: "10px" }} />
+                              <Bar name="Naive (Alphabetical)" dataKey="unoptimizedKm" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
+                              <Bar name="Optimized Route" dataKey="optimizedKm" fill="#059669" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                            {chartFilteredData.length === 0 ? "Select one or more cabs above to view route distances" : "Loading visualization..."}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Chart 2: Cumulative Distance Conserved Projection */}
+                    <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs flex flex-col gap-4">
+                      <div className="flex justify-between items-start flex-wrap gap-2 border-b border-slate-50 pb-2">
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                            {projectionPeriod === "DAILY" ? "30-Day Cumulative Distance Conserved" : 
+                             projectionPeriod === "MONTHLY" ? "12-Month Cumulative Distance Conserved" : 
+                             "5-Year Cumulative Distance Conserved"}
+                          </h3>
+                          <p className="text-[10px] text-slate-400">
+                            Tracks cumulative route kilometers conserved by optimization over the selected period.
+                          </p>
+                        </div>
+                        
+                        <select
+                          value={projectionPeriod}
+                          onChange={(e: any) => setProjectionPeriod(e.target.value)}
+                          className="bg-white border border-slate-200 rounded-lg py-1.5 px-2.5 text-[10px] font-bold text-slate-700 outline-none focus:border-slate-350 cursor-pointer shadow-2xs"
+                        >
+                          <option value="DAILY">Daily (30 Days)</option>
+                          <option value="MONTHLY">Monthly (12 Months)</option>
+                          <option value="YEARLY">Yearly (5 Years)</option>
+                        </select>
+                      </div>
+
+                      <div className="h-[260px] w-full text-xs font-bold mt-2">
+                        {isMounted && analysisData.kmSavedPerDay > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart
+                              data={projectionData}
+                              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                            >
+                              <defs>
+                                <linearGradient id="colorConserved" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis
+                                dataKey="label"
+                                tickLine={false}
+                                axisLine={false}
+                                stroke="#94a3b8"
+                                tickFormatter={(val, idx) => {
+                                  if (projectionPeriod === "DAILY") {
+                                    return (idx + 1) % 5 === 0 || idx === 0 ? val : "";
+                                  }
+                                  return val;
+                                }}
+                                tick={{ fontSize: 9 }}
+                              />
+                              <YAxis
+                                tickLine={false}
+                                axisLine={false}
+                                stroke="#94a3b8"
+                                tickFormatter={(value) => `${value >= 1000 ? `${(value/1000).toFixed(0)}k` : value} km`}
+                                tick={{ fontSize: 9 }}
+                              />
+                              <Tooltip
+                                contentStyle={{
+                                  background: "#0f172a",
+                                  border: "none",
+                                  borderRadius: "8px",
+                                  color: "#f8fafc",
+                                  fontSize: "11px",
+                                }}
+                                itemStyle={{ color: "#f8fafc" }}
+                                formatter={(value: any) => value !== undefined && value !== null ? [`${value.toLocaleString()} km`, "Cumulative Conserved"] : ["0 km", "Cumulative Conserved"]}
+                              />
+                              <Area
+                                type="monotone"
+                                dataKey="distanceConserved"
+                                stroke="#10b981"
+                                strokeWidth={2}
+                                fillOpacity={1}
+                                fill="url(#colorConserved)"
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-slate-400 text-xs">
+                            {analysisData.kmSavedPerDay === 0 ? "No optimized distance metrics available yet" : "Loading visualization..."}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Audit & Route breakdown Table */}
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden mt-2">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Detailed Audit Ledger</h3>
+                        <p className="text-[10px] text-slate-400">Granular performance statistics for each dispatch route.</p>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          <span>Filter Cab:</span>
+                          <select
+                            value={ledgerCabFilter}
+                            onChange={(e) => setLedgerCabFilter(e.target.value)}
+                            className="bg-white border border-slate-200 rounded-lg py-1 px-2.5 text-[10px] font-bold text-slate-700 outline-none focus:border-slate-350 cursor-pointer shadow-2xs"
+                          >
+                            <option value="ALL">All Vehicles</option>
+                            {Array.from(new Set(analysisData.routeBreakdowns?.map((r: any) => r.cabPlate) || [])).map((plate: any) => (
+                              <option key={plate} value={plate}>{plate}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded border border-slate-200 font-mono">
+                          {filteredLedgerRoutes.length} / {analysisData.routeBreakdowns?.length || 0} Routes
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs text-slate-500 border-collapse">
+                        <thead className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                          <tr>
+                            <th className="px-5 py-3">Vehicle / Driver</th>
+                            <th className="px-5 py-3 text-center">Passengers</th>
+                            <th className="px-5 py-3 text-right">Naive Route</th>
+                            <th className="px-5 py-3 text-right">Optimized Route</th>
+                            <th className="px-5 py-3 text-center min-w-[150px]">Visual Comparison</th>
+                            <th className="px-5 py-3 text-right text-emerald-655 font-bold">Saved KM</th>
+                            <th className="px-5 py-3 text-center">Efficiency</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          {filteredLedgerRoutes.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="px-5 py-8 text-center text-slate-450">
+                                No routes match the selected vehicle filter.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredLedgerRoutes.map((route: any, idx: number) => {
+                              const effPercent = route.unoptimizedKm > 0 
+                                ? Math.round((route.kmSaved / route.unoptimizedKm) * 100)
+                                : 0;
+                              
+                              let ratingText = "Optimized";
+                              let ratingColor = "bg-blue-50 text-blue-700 border-blue-200";
+                              if (effPercent > 25) {
+                                ratingText = "High Efficiency";
+                                ratingColor = "bg-emerald-50 text-emerald-700 border-emerald-250";
+                              } else if (effPercent <= 0) {
+                                ratingText = "Baseline";
+                                ratingColor = "bg-slate-50 text-slate-650 border-slate-200";
+                              }
+
+                              const optimizedPercentage = route.unoptimizedKm > 0 
+                                ? Math.round((route.optimizedKm / route.unoptimizedKm) * 100)
+                                : 100;
+                              const savedPercentage = Math.max(0, 100 - optimizedPercentage);
+
+                              return (
+                                <tr key={route.routeId || idx} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="px-5 py-3.5">
+                                    <div className="flex flex-col text-left">
+                                      <span className="font-bold text-slate-800">{route.cabPlate}</span>
+                                      <span className="text-[10px] text-slate-400">Driver: {route.driverName}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-5 py-3.5 text-center font-bold text-slate-700">
+                                    {route.passengerCount}
+                                  </td>
+                                  <td className="px-5 py-3.5 text-right text-slate-450">
+                                    {route.unoptimizedKm} km
+                                  </td>
+                                  <td className="px-5 py-3.5 text-right font-semibold text-slate-800 font-mono">
+                                    {route.optimizedKm} km
+                                  </td>
+                                  <td className="px-5 py-3.5 text-center min-w-[150px]">
+                                    <div className="flex flex-col gap-1 w-full max-w-[130px] mx-auto">
+                                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden flex">
+                                        <div 
+                                          className="bg-emerald-650 h-full transition-all duration-500" 
+                                          style={{ width: `${Math.min(100, optimizedPercentage)}%` }} 
+                                          title={`Optimized Length: ${optimizedPercentage}%`} 
+                                        />
+                                        <div 
+                                          className="bg-slate-300 h-full flex-grow transition-all duration-500" 
+                                          title={`Saved Length: ${savedPercentage}%`} 
+                                        />
+                                      </div>
+                                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">
+                                        {optimizedPercentage}% of naive
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-5 py-3.5 text-right font-bold text-emerald-650 font-mono">
+                                    {route.kmSaved > 0 ? `+${route.kmSaved}` : route.kmSaved} km
+                                  </td>
+                                  <td className="px-5 py-3.5 text-center">
+                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wide ${ratingColor}`}>
+                                      {ratingText} ({effPercent}%)
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </>
               );
             })()}
