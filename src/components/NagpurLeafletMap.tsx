@@ -8,6 +8,8 @@ interface NagpurLeafletMapProps {
   routes: Route[];
   selectedRouteId: string | null;
   onSelectRoute: (id: string | null) => void;
+  mode?: "OPTIMIZER" | "ANALYTICS";
+  analysisData?: any;
 }
 
 // MIHAN Depot (Nagpur center landmark)
@@ -19,6 +21,7 @@ const STRATEGY_COLORS = {
   DISTANCE: "#ef4444", // Red
   TIME: "#3b82f6",     // Blue
   BALANCED: "#8b5cf6", // Purple
+  NORMAL: "#64748b",   // Slate-gray
 };
 
 // Bounding box for Nagpur & MIHAN area restriction
@@ -35,6 +38,8 @@ export default function NagpurLeafletMap({
   routes,
   selectedRouteId,
   onSelectRoute,
+  mode = "OPTIMIZER",
+  analysisData,
 }: NagpurLeafletMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -45,9 +50,91 @@ export default function NagpurLeafletMap({
   const [variationGeometries, setVariationGeometries] = useState<Record<string, [number, number][]>>({});
   const [loadingGeometries, setLoadingGeometries] = useState(false);
 
-  // Fetch variations list and their OSRM geometries when selection changes
+  // Analytics mode states for optimized vs normal route comparison
+  const [analyticsOptimizedGeom, setAnalyticsOptimizedGeom] = useState<[number, number][]>([]);
+  const [analyticsNormalGeom, setAnalyticsNormalGeom] = useState<[number, number][]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  // Helper to fetch route geometry from OSRM
+  const fetchOSRMGeometry = async (coords: [number, number][]) => {
+    if (coords.length <= 1) return coords;
+    try {
+      const coordsStr = coords.map((c) => `${c[1]},${c[0]}`).join(";");
+      const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.routes && data.routes[0]) {
+          const geomCoords = data.routes[0].geometry.coordinates;
+          return geomCoords.map((c: any) => [c[1], c[0]]); // convert to [lat, lng]
+        }
+      }
+    } catch (e) {
+      console.error("OSRM fetch failed:", e);
+    }
+    return coords; // fallback to straight lines
+  };
+
+  // Fetch OSRM geometry for Analytics mode
   useEffect(() => {
-    if (!selectedRouteId) {
+    if (mode !== "ANALYTICS" || !selectedRouteId) {
+      setAnalyticsOptimizedGeom([]);
+      setAnalyticsNormalGeom([]);
+      return;
+    }
+
+    const fetchAnalyticsGeometries = async () => {
+      setAnalyticsLoading(true);
+      try {
+        const route = routes.find((r) => r.id === selectedRouteId);
+        if (!route) return;
+
+        // 1. Build actual optimized coordinates
+        const stopsList = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+        const optCoords: [number, number][] = [];
+        if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
+          optCoords.push([route.cab.driver.startY, route.cab.driver.startX]);
+        }
+        if (route.isPickup) {
+          stopsList.forEach((s) => optCoords.push([s.employee.y, s.employee.x]));
+          optCoords.push([DEPOT_LAT, DEPOT_LNG]);
+        } else {
+          optCoords.push([DEPOT_LAT, DEPOT_LNG]);
+          stopsList.forEach((s) => optCoords.push([s.employee.y, s.employee.x]));
+        }
+
+        // 2. Build normal (naive alphabetical) coordinates
+        const normalStopsList = [...route.stops].sort((a, b) => a.employee.name.localeCompare(b.employee.name));
+        const normCoords: [number, number][] = [];
+        if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
+          normCoords.push([route.cab.driver.startY, route.cab.driver.startX]);
+        }
+        if (route.isPickup) {
+          normalStopsList.forEach((s) => normCoords.push([s.employee.y, s.employee.x]));
+          normCoords.push([DEPOT_LAT, DEPOT_LNG]);
+        } else {
+          normCoords.push([DEPOT_LAT, DEPOT_LNG]);
+          normalStopsList.forEach((s) => normCoords.push([s.employee.y, s.employee.x]));
+        }
+
+        const optGeom = await fetchOSRMGeometry(optCoords);
+        const normGeom = await fetchOSRMGeometry(normCoords);
+
+        setAnalyticsOptimizedGeom(optGeom);
+        setAnalyticsNormalGeom(normGeom);
+      } catch (err) {
+        console.error("Error fetching analytics geometries:", err);
+      } finally {
+        setAnalyticsLoading(false);
+      }
+    };
+
+    fetchAnalyticsGeometries();
+  }, [selectedRouteId, routes, mode]);
+
+  // Fetch variations list and their OSRM geometries when selection changes (Optimizer mode)
+  useEffect(() => {
+    if (mode !== "OPTIMIZER" || !selectedRouteId) {
       setVariationsData([]);
       setVariationGeometries({});
       return;
@@ -314,20 +401,48 @@ export default function NagpurLeafletMap({
             .addTo(layerGroup);
         });
 
-        // Plot the 3 variations paths
-        Object.entries(variationGeometries).forEach(([strategy, pathCoords]) => {
-          const color = STRATEGY_COLORS[strategy as keyof typeof STRATEGY_COLORS] || "#94a3b8";
-          
-          // Draw offset or slightly thicker polyline for balanced comparison
-          L.polyline(pathCoords, {
-            color,
-            weight: 4,
-            opacity: 0.85,
-            lineJoin: "round",
-          })
-            .bindPopup(`<strong>${strategy} Route</strong>`)
-            .addTo(layerGroup);
-        });
+        // Plot paths: comparison for ANALYTICS mode, or variations for OPTIMIZER mode
+        if (mode === "ANALYTICS") {
+          // Plot Actual Optimized path in Emerald Green
+          if (analyticsOptimizedGeom.length > 0) {
+            L.polyline(analyticsOptimizedGeom, {
+              color: "#10b981", // Emerald-green
+              weight: 5,
+              opacity: 0.9,
+              lineJoin: "round",
+            })
+              .bindPopup(`<strong>Optimized Route</strong>`)
+              .addTo(layerGroup);
+          }
+
+          // Plot Normal (Naive alphabetical) path in Slate Gray dashed
+          if (analyticsNormalGeom.length > 0) {
+            L.polyline(analyticsNormalGeom, {
+              color: "#64748b", // Slate-gray
+              weight: 4,
+              opacity: 0.75,
+              dashArray: "6, 8",
+              lineJoin: "round",
+            })
+              .bindPopup(`<strong>Normal Route (Naive Alphabetical)</strong>`)
+              .addTo(layerGroup);
+          }
+        } else {
+          // Plot the 3 variations paths
+          Object.entries(variationGeometries).forEach(([strategy, pathCoords]) => {
+            const color = STRATEGY_COLORS[strategy as keyof typeof STRATEGY_COLORS] || "#94a3b8";
+            
+            // Draw offset or slightly thicker polyline for balanced comparison
+            L.polyline(pathCoords, {
+              color,
+              weight: 4,
+              opacity: 0.85,
+              lineJoin: "round",
+            })
+              .bindPopup(`<strong>${strategy} Route</strong>`)
+              .addTo(layerGroup);
+          });
+        }
 
         // Draw Driver Start Marker if exists
         if (selectedRoute.cab?.driver?.startY && selectedRoute.cab?.driver?.startX) {
@@ -429,7 +544,7 @@ export default function NagpurLeafletMap({
         map.setView([DEPOT_LAT, DEPOT_LNG], 13);
       }
     }
-  }, [routes, selectedRouteId, variationGeometries]);
+  }, [routes, selectedRouteId, variationGeometries, analyticsOptimizedGeom, analyticsNormalGeom, mode]);
 
   return (
     <div className="relative w-full h-full">
@@ -437,34 +552,74 @@ export default function NagpurLeafletMap({
       <div ref={mapContainerRef} className="w-full h-full z-0 bg-slate-50" />
 
       {/* Map Legend Overlay */}
-      {selectedRouteId && variationsData.length > 0 && (
-        <div className="absolute top-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-xs border border-slate-200 rounded-xl shadow-md flex flex-col gap-2.5 text-xs text-left animate-fadeIn">
-          <div className="font-bold text-slate-800 border-b border-slate-100 pb-1.5 uppercase tracking-wider text-[10px]">
-            Route Variation Comparison
-          </div>
-          
-          <div className="flex flex-col gap-2">
-            {variationsData.map((v) => {
-              const color = STRATEGY_COLORS[v.strategy as keyof typeof STRATEGY_COLORS];
-              return (
-                <div key={v.strategy} className="flex items-center gap-2 font-semibold">
-                  <span className="w-4 h-1.5 rounded-full" style={{ backgroundColor: color }}></span>
-                  <span className="text-slate-700 capitalize w-16">{v.strategy.toLowerCase()}</span>
-                  <span className="text-slate-500 font-mono text-[10px] ml-auto">
-                    {v.totalDistance} km · {v.totalDuration}m
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {loadingGeometries && (
-            <div className="text-[9px] text-slate-400 italic mt-1 flex items-center gap-1">
-              <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
-              Fetching Nagpur road curves...
+      {selectedRouteId && (
+        mode === "ANALYTICS" ? (
+          <div className="absolute top-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-xs border border-slate-200 rounded-xl shadow-md flex flex-col gap-2.5 text-xs text-left animate-fadeIn">
+            <div className="font-bold text-slate-800 border-b border-slate-100 pb-1.5 uppercase tracking-wider text-[10px]">
+              Optimization Comparison
             </div>
-          )}
-        </div>
+            
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 font-semibold">
+                <span className="w-4 h-1.5 rounded-full bg-emerald-500"></span>
+                <span className="text-slate-700 w-24">Optimized Route</span>
+                <span className="text-slate-500 font-mono text-[10px] ml-auto font-bold text-emerald-700">
+                  {(() => {
+                    const breakdown = analysisData?.routeBreakdowns?.find((rb: any) => rb.routeId === selectedRouteId);
+                    return breakdown ? `${breakdown.optimizedKm} km` : "";
+                  })()}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 font-semibold">
+                <span className="w-4 h-1.5 rounded-full bg-slate-400"></span>
+                <span className="text-slate-700 w-24">Normal (Naive)</span>
+                <span className="text-slate-500 font-mono text-[10px] ml-auto font-bold text-slate-600">
+                  {(() => {
+                    const breakdown = analysisData?.routeBreakdowns?.find((rb: any) => rb.routeId === selectedRouteId);
+                    return breakdown ? `${breakdown.unoptimizedKm} km` : "";
+                  })()}
+                </span>
+              </div>
+            </div>
+
+            {analyticsLoading && (
+              <div className="text-[9px] text-slate-400 italic mt-1 flex items-center gap-1">
+                <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                Fetching Nagpur road curves...
+              </div>
+            )}
+          </div>
+        ) : (
+          variationsData.length > 0 && (
+            <div className="absolute top-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-xs border border-slate-200 rounded-xl shadow-md flex flex-col gap-2.5 text-xs text-left animate-fadeIn">
+              <div className="font-bold text-slate-800 border-b border-slate-100 pb-1.5 uppercase tracking-wider text-[10px]">
+                Route Variation Comparison
+              </div>
+              
+              <div className="flex flex-col gap-2">
+                {variationsData.map((v) => {
+                  const color = STRATEGY_COLORS[v.strategy as keyof typeof STRATEGY_COLORS];
+                  return (
+                    <div key={v.strategy} className="flex items-center gap-2 font-semibold">
+                      <span className="w-4 h-1.5 rounded-full" style={{ backgroundColor: color }}></span>
+                      <span className="text-slate-700 capitalize w-16">{v.strategy.toLowerCase()}</span>
+                      <span className="text-slate-500 font-mono text-[10px] ml-auto">
+                        {v.totalDistance} km · {v.totalDuration}m
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {loadingGeometries && (
+                <div className="text-[9px] text-slate-400 italic mt-1 flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                  Fetching Nagpur road curves...
+                </div>
+              )}
+            </div>
+          )
+        )
       )}
     </div>
   );

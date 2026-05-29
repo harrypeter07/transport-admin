@@ -48,6 +48,7 @@ export default function TransitAdminSPA() {
     importSheets,
     activeShiftId,
     selectedDate,
+    setSelectedDate,
     selectedRouteId,
     loading,
     fetchInitialData,
@@ -87,7 +88,10 @@ export default function TransitAdminSPA() {
     setAnalysisLoading(true);
     setAnalysisError(null);
     try {
-      const res = await fetch("/api/analysis");
+      const params = new URLSearchParams();
+      if (selectedDate) params.append("date", selectedDate);
+      
+      const res = await fetch(`/api/analysis?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch analysis data");
       const json = await res.json();
       setAnalysisData(json);
@@ -135,7 +139,7 @@ export default function TransitAdminSPA() {
 
   // Local variations caching for Google Maps preview
   interface RouteVariation {
-    strategy: "DISTANCE" | "TIME" | "BALANCED";
+    strategy: "DISTANCE" | "TIME" | "BALANCED" | "NORMAL";
     stops: any[];
     totalDistance: number;
     totalDuration: number;
@@ -565,19 +569,68 @@ export default function TransitAdminSPA() {
 
               {/* Controls bar */}
               <div className="flex flex-wrap items-center gap-3 bg-white p-2 border border-slate-200 rounded-xl shadow-xs">
-                <div className="flex items-center gap-1.5 px-2">
-                  <div className="flex items-center gap-1 px-2 py-1 bg-slate-100 rounded-md">
-                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                    <span className="text-xs font-bold text-slate-700">{selectedDate}</span>
+                {/* Date Dropdown */}
+                <div className="flex items-center gap-1.5 px-1">
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg hover:border-slate-350 transition shadow-2xs">
+                    <Calendar className="w-3.5 h-3.5 text-slate-550" />
+                    <select
+                      value={selectedDate}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        setSelectedDate(newDate);
+                        fetchInitialData({ date: newDate });
+                      }}
+                      className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer focus:ring-0"
+                    >
+                      {!importSheets.includes(selectedDate) && (
+                        <option value={selectedDate}>{selectedDate}</option>
+                      )}
+                      {importSheets.map((sheet) => (
+                        <option key={sheet} value={sheet}>
+                          {sheet}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
+
+                <div className="h-4 w-px bg-slate-200"></div>
+
+                {/* Import & Optimize Button */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!selectedDate) return;
+                    setUploading(true);
+                    setOptimizeError(null);
+                    setAutoOptimizingOverlay("uploading");
+                    try {
+                      const res = await importSheet(selectedDate);
+                      if (res.success) {
+                        setUploadMsg(res.message || "Roster imported and optimized successfully!");
+                      } else {
+                        setOptimizeError(`Error: ${res.error}`);
+                      }
+                    } catch (err: any) {
+                      setOptimizeError(`Error: ${err.message || "Import failed"}`);
+                    } finally {
+                      setUploading(false);
+                      setAutoOptimizingOverlay("idle");
+                    }
+                  }}
+                  disabled={uploading || loading}
+                  className="flex items-center gap-1.5 bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-850 transition disabled:opacity-50 cursor-pointer shadow-2xs"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  {uploading ? "Importing..." : "Import & Auto-Optimize"}
+                </button>
 
                 <div className="h-4 w-px bg-slate-200"></div>
                 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setIsPickup(!isPickup)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${isPickup ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-2xs border ${isPickup ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}
                   >
                     {isPickup ? "Pickup (To MIHAN)" : "Drop (From MIHAN)"}
                   </button>
@@ -588,21 +641,22 @@ export default function TransitAdminSPA() {
                 <button
                   onClick={handleRunOptimization}
                   disabled={optimizing || loading}
-                  className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50"
+                  className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50 shadow-2xs"
                 >
                   <RotateCw className={`w-3.5 h-3.5 ${optimizing ? "animate-spin" : ""}`} />
                   {optimizing ? "Solving..." : "Optimize Routing"}
                 </button>
-              <button
-                onClick={() => setShowAttendanceChecklist(!showAttendanceChecklist)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition border border-slate-200 cursor-pointer
-                  ${showAttendanceChecklist ? "bg-slate-900 border-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}
-                `}
-              >
-                <Users className="w-3.5 h-3.5" />
-                Attendance Checklist
-              </button>
-            </div>
+
+                <button
+                  onClick={() => setShowAttendanceChecklist(!showAttendanceChecklist)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition border border-slate-200 cursor-pointer shadow-2xs
+                    ${showAttendanceChecklist ? "bg-slate-900 border-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}
+                  `}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Attendance Checklist
+                </button>
+              </div>
           </div>
           
           {optimizeError && (
@@ -1268,15 +1322,16 @@ export default function TransitAdminSPA() {
                             <div className="flex flex-col gap-3">
                               {/* Variations tabs layout */}
                               <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
-                                {routeVariations.map((v, index) => {
-                                  const isActive = activeVarIdx === index || (activeVarIdx === -1 && v.strategy === "BALANCED");
+                                {routeVariations.filter(v => v.strategy !== "NORMAL").map((v) => {
+                                  const originalIndex = routeVariations.findIndex(orig => orig.strategy === v.strategy);
+                                  const isActive = activeVarIdx === originalIndex || (activeVarIdx === -1 && v.strategy === "BALANCED");
                                   return (
                                     <button
                                       key={v.strategy}
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setActiveVarIndices(prev => ({ ...prev, [route.id]: index }));
+                                        setActiveVarIndices(prev => ({ ...prev, [route.id]: originalIndex }));
                                       }}
                                       className={`py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer
                                         ${isActive ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}
@@ -2127,19 +2182,54 @@ export default function TransitAdminSPA() {
                 selectedCabsForChart.includes(r.cabPlate)
               ) || [];
 
+              let accumulatedNormal = 0;
+              let accumulatedOptimized = 0;
+
               const projectionData = Array.from(
                 { length: projectionPeriod === "DAILY" ? 30 : projectionPeriod === "MONTHLY" ? 12 : 5 },
                 (_, i) => {
                   const multiplier = i + 1;
-                  const kmVal = projectionPeriod === "DAILY"
-                    ? analysisData.kmSavedPerDay * multiplier
-                    : projectionPeriod === "MONTHLY"
-                      ? (analysisData.kmSavedPerDay * 30) * multiplier
-                      : (analysisData.kmSavedPerDay * 365) * multiplier;
+                  let factor = 1.0;
+
+                  if (projectionPeriod === "DAILY") {
+                    // Weekend factor: Sunday (day % 7 === 0) has 20% activity, Saturday (day % 7 === 6) has 45% activity.
+                    // Weekdays fluctuate between 88% and 112%.
+                    const isSunday = multiplier % 7 === 0;
+                    const isSaturday = multiplier % 7 === 6;
+                    if (isSunday) {
+                      factor = 0.2;
+                    } else if (isSaturday) {
+                      factor = 0.45;
+                    } else {
+                      factor = 0.95 + (Math.sin(multiplier) * 0.12);
+                    }
+                    accumulatedNormal += analysisData.unoptimizedKm * factor;
+                    accumulatedOptimized += analysisData.optimizedKm * factor;
+                  } else if (projectionPeriod === "MONTHLY") {
+                    // Seasonal factor: summer break (Month 5) and winter holidays (Month 12) have less activity.
+                    // Other months fluctuate slightly by ±8%.
+                    const isSummer = multiplier === 5;
+                    const isDecember = multiplier === 12;
+                    if (isSummer) {
+                      factor = 0.75;
+                    } else if (isDecember) {
+                      factor = 0.8;
+                    } else {
+                      factor = 0.95 + (Math.cos(multiplier * 0.8) * 0.08);
+                    }
+                    accumulatedNormal += (analysisData.unoptimizedKm * 30) * factor;
+                    accumulatedOptimized += (analysisData.optimizedKm * 30) * factor;
+                  } else {
+                    // Yearly factor: operational year-on-year growth of ~5% compound, plus minor cycle variations
+                    factor = (1.0 + (multiplier - 1) * 0.05) * (0.95 + Math.sin(multiplier * 1.5) * 0.05);
+                    accumulatedNormal += (analysisData.unoptimizedKm * 365) * factor;
+                    accumulatedOptimized += (analysisData.optimizedKm * 365) * factor;
+                  }
 
                   return {
                     label: projectionPeriod === "DAILY" ? `Day ${multiplier}` : projectionPeriod === "MONTHLY" ? `Month ${multiplier}` : `Year ${multiplier}`,
-                    distanceConserved: Math.round(kmVal * 10) / 10,
+                    normalKm: Math.round(accumulatedNormal * 10) / 10,
+                    optimizedKm: Math.round(accumulatedOptimized * 10) / 10,
                   };
                 }
               );
@@ -2304,17 +2394,17 @@ export default function TransitAdminSPA() {
                       </div>
                     </div>
 
-                    {/* Chart 2: Cumulative Distance Conserved Projection */}
+                    {/* Chart 2: Cumulative Distance Traveled (Comparison) */}
                     <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs flex flex-col gap-4">
                       <div className="flex justify-between items-start flex-wrap gap-2 border-b border-slate-50 pb-2">
                         <div>
                           <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                            {projectionPeriod === "DAILY" ? "30-Day Cumulative Distance Conserved" : 
-                             projectionPeriod === "MONTHLY" ? "12-Month Cumulative Distance Conserved" : 
-                             "5-Year Cumulative Distance Conserved"}
+                            {projectionPeriod === "DAILY" ? "30-Day Cumulative Distance Growth" : 
+                             projectionPeriod === "MONTHLY" ? "12-Month Cumulative Distance Growth" : 
+                             "5-Year Cumulative Distance Growth"}
                           </h3>
                           <p className="text-[10px] text-slate-400">
-                            Tracks cumulative route kilometers conserved by optimization over the selected period.
+                            Compares cumulative route distance driven between the unoptimized normal baseline and optimized routes.
                           </p>
                         </div>
                         
@@ -2337,7 +2427,11 @@ export default function TransitAdminSPA() {
                               margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                             >
                               <defs>
-                                <linearGradient id="colorConserved" x1="0" y1="0" x2="0" y2="1">
+                                <linearGradient id="colorNormal" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.2}/>
+                                  <stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/>
+                                </linearGradient>
+                                <linearGradient id="colorOptimized" x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
                                   <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                                 </linearGradient>
@@ -2372,15 +2466,25 @@ export default function TransitAdminSPA() {
                                   fontSize: "11px",
                                 }}
                                 itemStyle={{ color: "#f8fafc" }}
-                                formatter={(value: any) => value !== undefined && value !== null ? [`${value.toLocaleString()} km`, "Cumulative Conserved"] : ["0 km", "Cumulative Conserved"]}
+                              />
+                              <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: "10px" }} />
+                              <Area
+                                type="monotone"
+                                name="Normal Route (Naive)"
+                                dataKey="normalKm"
+                                stroke="#94a3b8"
+                                strokeWidth={2}
+                                fillOpacity={1}
+                                fill="url(#colorNormal)"
                               />
                               <Area
                                 type="monotone"
-                                dataKey="distanceConserved"
+                                name="Optimized Route"
+                                dataKey="optimizedKm"
                                 stroke="#10b981"
                                 strokeWidth={2}
                                 fillOpacity={1}
-                                fill="url(#colorConserved)"
+                                fill="url(#colorOptimized)"
                               />
                             </AreaChart>
                           </ResponsiveContainer>
@@ -2393,124 +2497,158 @@ export default function TransitAdminSPA() {
                     </div>
                   </div>
 
-                  {/* Audit & Route breakdown Table */}
-                  <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden mt-2">
-                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-                      <div>
-                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Detailed Audit Ledger</h3>
-                        <p className="text-[10px] text-slate-400">Granular performance statistics for each dispatch route.</p>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                          <span>Filter Cab:</span>
-                          <select
-                            value={ledgerCabFilter}
-                            onChange={(e) => setLedgerCabFilter(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-lg py-1 px-2.5 text-[10px] font-bold text-slate-700 outline-none focus:border-slate-350 cursor-pointer shadow-2xs"
-                          >
-                            <option value="ALL">All Vehicles</option>
-                            {Array.from(new Set(analysisData.routeBreakdowns?.map((r: any) => r.cabPlate) || [])).map((plate: any) => (
-                              <option key={plate} value={plate}>{plate}</option>
-                            ))}
-                          </select>
+                  {/* Visual separator divider line */}
+                  <div className="border-t border-slate-200/60 my-6"></div>
+
+                  {/* Ledger & Map Split View */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mt-2">
+                    {/* Audit & Route breakdown Table */}
+                    <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
+                      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Detailed Audit Ledger</h3>
+                          <p className="text-[10px] text-slate-400">Granular performance statistics for each dispatch route.</p>
                         </div>
-                        <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded border border-slate-200 font-mono">
-                          {filteredLedgerRoutes.length} / {analysisData.routeBreakdowns?.length || 0} Routes
-                        </span>
+                        
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            <span>Filter Cab:</span>
+                            <select
+                              value={ledgerCabFilter}
+                              onChange={(e) => setLedgerCabFilter(e.target.value)}
+                              className="bg-white border border-slate-200 rounded-lg py-1 px-2.5 text-[10px] font-bold text-slate-700 outline-none focus:border-slate-350 cursor-pointer shadow-2xs"
+                            >
+                              <option value="ALL">All Vehicles</option>
+                              {Array.from(new Set(analysisData.routeBreakdowns?.map((r: any) => r.cabPlate) || [])).map((plate: any) => (
+                                <option key={plate} value={plate}>{plate}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded border border-slate-200 font-mono">
+                            {filteredLedgerRoutes.length} / {analysisData.routeBreakdowns?.length || 0} Routes
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card-based ledger — no horizontal scroll */}
+                      <div className="flex flex-col divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+                        {filteredLedgerRoutes.length === 0 ? (
+                          <div className="px-6 py-8 text-center text-slate-450 text-xs">
+                            No routes match the selected vehicle filter.
+                          </div>
+                        ) : (
+                          filteredLedgerRoutes.map((route: any, idx: number) => {
+                            const effPercent = route.unoptimizedKm > 0
+                              ? Math.round((route.kmSaved / route.unoptimizedKm) * 100)
+                              : 0;
+
+                            let ratingText = "Optimized";
+                            let ratingColor = "bg-blue-50 text-blue-700 border-blue-200";
+                            if (effPercent > 25) {
+                              ratingText = "High Efficiency";
+                              ratingColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                            } else if (effPercent <= 0) {
+                              ratingText = "Baseline";
+                              ratingColor = "bg-slate-50 text-slate-600 border-slate-200";
+                            }
+
+                            const optimizedPct = route.unoptimizedKm > 0
+                              ? Math.round((route.optimizedKm / route.unoptimizedKm) * 100)
+                              : 100;
+
+                            const isActive = ledgerCabFilter === route.cabPlate;
+
+                            return (
+                              <div
+                                key={route.routeId || idx}
+                                className={`px-5 py-4 cursor-pointer transition-colors select-none ${
+                                  isActive ? "bg-emerald-50/60" : "hover:bg-slate-50/70"
+                                }`}
+                                onClick={() =>
+                                  setLedgerCabFilter(isActive ? "ALL" : route.cabPlate)
+                                }
+                              >
+                                {/* Header row */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-bold text-slate-800 text-xs">{route.cabPlate}</span>
+                                    <span className="text-[10px] text-slate-400">Driver: {route.driverName}</span>
+                                  </div>
+                                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wide flex-shrink-0 ${ratingColor}`}>
+                                    {ratingText} · {effPercent}%
+                                  </span>
+                                </div>
+
+                                {/* Metric pills */}
+                                <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+                                  <div className="flex flex-col gap-0.5 bg-slate-50 border border-slate-100 rounded-lg p-2 text-center">
+                                    <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Pax</span>
+                                    <span className="font-bold text-slate-800 text-xs">{route.passengerCount}</span>
+                                  </div>
+                                  <div className="flex flex-col gap-0.5 bg-slate-50 border border-slate-100 rounded-lg p-2 text-center">
+                                    <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Naive</span>
+                                    <span className="font-semibold text-slate-500 text-xs">{route.unoptimizedKm} km</span>
+                                  </div>
+                                  <div className="flex flex-col gap-0.5 bg-slate-50 border border-slate-100 rounded-lg p-2 text-center">
+                                    <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Optimized</span>
+                                    <span className="font-bold text-slate-800 text-xs">{route.optimizedKm} km</span>
+                                  </div>
+                                  <div className="flex flex-col gap-0.5 bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
+                                    <span className="text-[8px] text-emerald-600 font-bold uppercase tracking-wider">Saved</span>
+                                    <span className="font-bold text-emerald-700 text-xs">+{route.kmSaved} km</span>
+                                  </div>
+                                </div>
+
+                                {/* Comparison bar */}
+                                <div className="mt-2 flex items-center gap-2">
+                                  <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                    <div
+                                      className="bg-emerald-500 h-full transition-all duration-500"
+                                      style={{ width: `${Math.min(100, optimizedPct)}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[9px] text-slate-400 font-bold tabular-nums">{optimizedPct}% of naive</span>
+                                </div>
+
+                                {isActive && (
+                                  <div className="mt-2 text-[9px] text-emerald-700 font-bold uppercase tracking-wider flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                                    Showing on map — click again to deselect
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs text-slate-500 border-collapse">
-                        <thead className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                          <tr>
-                            <th className="px-5 py-3">Vehicle / Driver</th>
-                            <th className="px-5 py-3 text-center">Passengers</th>
-                            <th className="px-5 py-3 text-right">Naive Route</th>
-                            <th className="px-5 py-3 text-right">Optimized Route</th>
-                            <th className="px-5 py-3 text-center min-w-[150px]">Visual Comparison</th>
-                            <th className="px-5 py-3 text-right text-emerald-655 font-bold">Saved KM</th>
-                            <th className="px-5 py-3 text-center">Efficiency</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-medium">
-                          {filteredLedgerRoutes.length === 0 ? (
-                            <tr>
-                              <td colSpan={7} className="px-5 py-8 text-center text-slate-450">
-                                No routes match the selected vehicle filter.
-                              </td>
-                            </tr>
-                          ) : (
-                            filteredLedgerRoutes.map((route: any, idx: number) => {
-                              const effPercent = route.unoptimizedKm > 0 
-                                ? Math.round((route.kmSaved / route.unoptimizedKm) * 100)
-                                : 0;
-                              
-                              let ratingText = "Optimized";
-                              let ratingColor = "bg-blue-50 text-blue-700 border-blue-200";
-                              if (effPercent > 25) {
-                                ratingText = "High Efficiency";
-                                ratingColor = "bg-emerald-50 text-emerald-700 border-emerald-250";
-                              } else if (effPercent <= 0) {
-                                ratingText = "Baseline";
-                                ratingColor = "bg-slate-50 text-slate-650 border-slate-200";
+                    {/* Route Visualizer Map */}
+                    <div className="lg:col-span-5 h-[520px]">
+                      {isMounted && (() => {
+                        // In analytics mode, we want to be able to analyze all cabs that ran on the selected date.
+                        // So we use 'routes' (which contains all shifts for the date) instead of activeShiftRoutes.
+                        const analyticsSelectedId = ledgerCabFilter !== "ALL"
+                          ? (analysisData?.routeBreakdowns?.find((rb: any) => rb.cabPlate === ledgerCabFilter)?.routeId || null)
+                          : (routes[0]?.id || null);
+
+                        return (
+                          <RouteVisualizer
+                            routes={routes}
+                            selectedRouteId={analyticsSelectedId}
+                            onSelectRoute={(routeId) => {
+                              const plate = routes.find((r) => r.id === routeId)?.cab?.vehicleNumber;
+                              if (plate) {
+                                setLedgerCabFilter(plate);
+                              } else {
+                                setLedgerCabFilter("ALL");
                               }
-
-                              const optimizedPercentage = route.unoptimizedKm > 0 
-                                ? Math.round((route.optimizedKm / route.unoptimizedKm) * 100)
-                                : 100;
-                              const savedPercentage = Math.max(0, 100 - optimizedPercentage);
-
-                              return (
-                                <tr key={route.routeId || idx} className="hover:bg-slate-50/50 transition-colors">
-                                  <td className="px-5 py-3.5">
-                                    <div className="flex flex-col text-left">
-                                      <span className="font-bold text-slate-800">{route.cabPlate}</span>
-                                      <span className="text-[10px] text-slate-400">Driver: {route.driverName}</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-5 py-3.5 text-center font-bold text-slate-700">
-                                    {route.passengerCount}
-                                  </td>
-                                  <td className="px-5 py-3.5 text-right text-slate-450">
-                                    {route.unoptimizedKm} km
-                                  </td>
-                                  <td className="px-5 py-3.5 text-right font-semibold text-slate-800 font-mono">
-                                    {route.optimizedKm} km
-                                  </td>
-                                  <td className="px-5 py-3.5 text-center min-w-[150px]">
-                                    <div className="flex flex-col gap-1 w-full max-w-[130px] mx-auto">
-                                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden flex">
-                                        <div 
-                                          className="bg-emerald-650 h-full transition-all duration-500" 
-                                          style={{ width: `${Math.min(100, optimizedPercentage)}%` }} 
-                                          title={`Optimized Length: ${optimizedPercentage}%`} 
-                                        />
-                                        <div 
-                                          className="bg-slate-300 h-full flex-grow transition-all duration-500" 
-                                          title={`Saved Length: ${savedPercentage}%`} 
-                                        />
-                                      </div>
-                                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">
-                                        {optimizedPercentage}% of naive
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td className="px-5 py-3.5 text-right font-bold text-emerald-650 font-mono">
-                                    {route.kmSaved > 0 ? `+${route.kmSaved}` : route.kmSaved} km
-                                  </td>
-                                  <td className="px-5 py-3.5 text-center">
-                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wide ${ratingColor}`}>
-                                      {ratingText} ({effPercent}%)
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
+                            }}
+                            mode="ANALYTICS"
+                            analysisData={analysisData}
+                          />
+                        );
+                      })()}
                     </div>
                   </div>
                 </>

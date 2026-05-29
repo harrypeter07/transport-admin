@@ -1042,7 +1042,7 @@ export async function fetchGoogleMapsMatrix(
 }
 
 export interface RouteVariation {
-  strategy: "DISTANCE" | "TIME" | "BALANCED";
+  strategy: "DISTANCE" | "TIME" | "BALANCED" | "NORMAL";
   stops: {
     employeeId: string;
     employeeName: string;
@@ -1130,47 +1130,53 @@ export async function getRouteVariations(
 
   const pool = safePerms.length > 0 ? safePerms : unsafePerms;
 
-  const strategies: ("DISTANCE" | "TIME" | "BALANCED")[] = ["DISTANCE", "TIME", "BALANCED"];
+  const strategies: ("DISTANCE" | "TIME" | "BALANCED" | "NORMAL")[] = ["DISTANCE", "TIME", "BALANCED", "NORMAL"];
   const variations: RouteVariation[] = [];
 
   for (const strategy of strategies) {
     let bestPerm = pool[0];
     let minCost = Infinity;
 
-    for (const perm of pool) {
-      let distCost = 0;
-      let durationCost = 0;
+    if (strategy === "NORMAL") {
+      // Find the permutation that corresponds to the alphabetical sorting of employees
+      const sortedEmployees = [...employees].sort((a, b) => a.name.localeCompare(b.name));
+      bestPerm = sortedEmployees.map(emp => employees.findIndex(e => e.id === emp.id) + 1);
+    } else {
+      for (const perm of pool) {
+        let distCost = 0;
+        let durationCost = 0;
 
-      if (isPickup) {
-        // Stop_1 -> Stop_2 -> ... -> Depot
-        for (let i = 0; i < perm.length - 1; i++) {
-          distCost += distanceMatrix[perm[i]][perm[i + 1]];
-          durationCost += durationMatrix[perm[i]][perm[i + 1]];
+        if (isPickup) {
+          // Stop_1 -> Stop_2 -> ... -> Depot
+          for (let i = 0; i < perm.length - 1; i++) {
+            distCost += distanceMatrix[perm[i]][perm[i + 1]];
+            durationCost += durationMatrix[perm[i]][perm[i + 1]];
+          }
+          distCost += distanceMatrix[perm[perm.length - 1]][0];
+          durationCost += durationMatrix[perm[perm.length - 1]][0];
+        } else {
+          // Depot -> Stop_1 -> Stop_2 -> ...
+          distCost += distanceMatrix[0][perm[0]];
+          durationCost += durationMatrix[0][perm[0]];
+          for (let i = 0; i < perm.length - 1; i++) {
+            distCost += distanceMatrix[perm[i]][perm[i + 1]];
+            durationCost += durationMatrix[perm[i]][perm[i + 1]];
+          }
         }
-        distCost += distanceMatrix[perm[perm.length - 1]][0];
-        durationCost += durationMatrix[perm[perm.length - 1]][0];
-      } else {
-        // Depot -> Stop_1 -> Stop_2 -> ...
-        distCost += distanceMatrix[0][perm[0]];
-        durationCost += durationMatrix[0][perm[0]];
-        for (let i = 0; i < perm.length - 1; i++) {
-          distCost += distanceMatrix[perm[i]][perm[i + 1]];
-          durationCost += durationMatrix[perm[i]][perm[i + 1]];
+
+        let cost = 0;
+        if (strategy === "DISTANCE") {
+          cost = distCost;
+        } else if (strategy === "TIME") {
+          cost = durationCost;
+        } else {
+          cost = distCost + durationCost * 0.5; // Balanced
         }
-      }
 
-      let cost = 0;
-      if (strategy === "DISTANCE") {
-        cost = distCost;
-      } else if (strategy === "TIME") {
-        cost = durationCost;
-      } else {
-        cost = distCost + durationCost * 0.5; // Balanced
-      }
-
-      if (cost < minCost) {
-        minCost = cost;
-        bestPerm = perm;
+        if (cost < minCost) {
+          minCost = cost;
+          bestPerm = perm;
+        }
       }
     }
 

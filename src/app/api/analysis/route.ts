@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getDistance, DEPOT } from "@/lib/optimization";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const date = searchParams.get("date");
+
+    const whereClause: any = {};
+    if (date) whereClause.date = date; // Assuming date is a string YYYY-MM-DD
+
     const routes = await prisma.route.findMany({
+      where: whereClause,
       include: {
         stops: {
           include: {
