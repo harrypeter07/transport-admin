@@ -70,12 +70,16 @@ export default function NagpurLeafletMap({
           const stopsList = [...v.stops].sort((a, b) => a.stopOrder - b.stopOrder);
           const coords: [number, number][] = [];
 
+          if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
+            coords.push([route.cab.driver.startY, route.cab.driver.startX]);
+          }
+
           if (route.isPickup) {
-            // Pickup starts at passenger stops, ends at Depot
+            // Pickup starts at Driver/Passenger stops, ends at Depot
             stopsList.forEach((s) => coords.push([s.y, s.x])); // [lat, lng]
             coords.push([DEPOT_LAT, DEPOT_LNG]);
           } else {
-            // Drop starts at Depot, goes to passenger stops
+            // Drop starts at Driver -> Depot, goes to passenger stops
             coords.push([DEPOT_LAT, DEPOT_LNG]);
             stopsList.forEach((s) => coords.push([s.y, s.x]));
           }
@@ -220,6 +224,22 @@ export default function NagpurLeafletMap({
       });
     };
 
+    const createDriverStartIcon = () => {
+      return L.divIcon({
+        html: `
+          <div class="flex items-center justify-center w-6 h-6 rounded-full border border-white shadow-xs bg-emerald-600 text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5">
+              <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
+              <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a2.29 2.29 0 0 0 .091-.086L12 5.432Z" />
+            </svg>
+          </div>
+        `,
+        className: "custom-driver-marker",
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+    };
+
     // 1. Draw MIHAN Depot Marker
     L.marker([DEPOT_LAT, DEPOT_LNG], { icon: createDepotIcon() })
       .bindTooltip("MIHAN Depot (Hub)", {
@@ -309,6 +329,17 @@ export default function NagpurLeafletMap({
             .addTo(layerGroup);
         });
 
+        // Draw Driver Start Marker if exists
+        if (selectedRoute.cab?.driver?.startY && selectedRoute.cab?.driver?.startX) {
+          const dy = selectedRoute.cab.driver.startY;
+          const dx = selectedRoute.cab.driver.startX;
+          if (isWithinBounds(dy, dx)) fitCoords.push([dy, dx]);
+
+          L.marker([dy, dx], { icon: createDriverStartIcon() })
+            .bindPopup(`<strong>Driver Start Point</strong><br/>${selectedRoute.cab.driver.name}<br/>${selectedRoute.cab.driver.startAddress || "Custom Location"}`)
+            .addTo(layerGroup);
+        }
+
         // Zoom map to fit selected route stops and depot
         if (fitCoords.length > 1) {
           map.fitBounds(L.latLngBounds(fitCoords), { padding: [50, 50] });
@@ -328,6 +359,10 @@ export default function NagpurLeafletMap({
 
         const lineCoords: [number, number][] = [];
         
+        if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
+          lineCoords.push([route.cab.driver.startY, route.cab.driver.startX]);
+        }
+
         if (route.isPickup) {
           sortedStops.forEach((s) => lineCoords.push([s.employee.y, s.employee.x]));
           lineCoords.push([DEPOT_LAT, DEPOT_LNG]);
@@ -345,6 +380,18 @@ export default function NagpurLeafletMap({
         })
           .on("click", () => onSelectRoute(route.id))
           .addTo(layerGroup);
+
+        // Draw Driver Start Marker if exists in Overview
+        if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
+          const dy = route.cab.driver.startY;
+          const dx = route.cab.driver.startX;
+          if (isWithinBounds(dy, dx)) fitCoords.push([dy, dx]);
+
+          L.marker([dy, dx], { icon: createDriverStartIcon() })
+            .bindTooltip(`Driver Start: ${route.cab.driver.name}`)
+            .on("click", () => onSelectRoute(route.id))
+            .addTo(layerGroup);
+        }
 
         // Draw minor markers for stops
         sortedStops.forEach((stop) => {

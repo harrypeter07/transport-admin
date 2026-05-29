@@ -2195,6 +2195,7 @@ export default function TransitAdminSPA() {
                   driverName: form.driverName.value,
                   driverPhone: form.driverPhone.value,
                   licenseNumber: form.licenseNumber.value,
+                  driverStartAddress: form.driverStartAddress.value,
                   status: form.status.value,
                 };
                 await updateCab(editingCab.id, updatedData);
@@ -2261,6 +2262,17 @@ export default function TransitAdminSPA() {
                       name="driverName"
                       required
                       defaultValue={editingCab.driver?.name || ""}
+                      className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-extrabold uppercase text-slate-400">Driver Start Location (Optional)</label>
+                    <input
+                      type="text"
+                      name="driverStartAddress"
+                      placeholder="e.g. Pratap Nagar, Nagpur"
+                      defaultValue={editingCab.driver?.startAddress || ""}
                       className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
                     />
                   </div>

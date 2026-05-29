@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { geocodeNagpurPlace } from "@/lib/optimization";
 
 // POST: Manually create a Cab and its Driver
 export async function POST(req: NextRequest) {
@@ -86,7 +87,7 @@ export async function DELETE(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, status } = body;
+    const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverStartAddress, status } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Cab ID is required" }, { status: 400 });
@@ -103,13 +104,23 @@ export async function PATCH(req: NextRequest) {
 
     const updatedCab = await prisma.$transaction(async (tx) => {
       // Update Driver if exists and driver details are provided
-      if (cab.driverId && (driverName !== undefined || driverPhone !== undefined || licenseNumber !== undefined)) {
+      if (cab.driverId && (driverName !== undefined || driverPhone !== undefined || licenseNumber !== undefined || driverStartAddress !== undefined)) {
+        let startX, startY;
+        if (driverStartAddress) {
+           const coords = await geocodeNagpurPlace(driverStartAddress);
+           startX = coords.x;
+           startY = coords.y;
+        }
+
         await tx.driver.update({
           where: { id: cab.driverId },
           data: {
             name: driverName !== undefined ? driverName : undefined,
             phone: driverPhone !== undefined ? driverPhone : undefined,
             licenseNumber: licenseNumber !== undefined ? licenseNumber : undefined,
+            startAddress: driverStartAddress !== undefined ? driverStartAddress : undefined,
+            startX: startX,
+            startY: startY,
           },
         });
       }

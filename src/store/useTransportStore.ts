@@ -28,6 +28,9 @@ export interface Cab {
     id: string;
     name: string;
     phone: string;
+    startAddress?: string | null;
+    startX?: number | null;
+    startY?: number | null;
   };
 }
 

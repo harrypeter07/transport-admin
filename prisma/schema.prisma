@@ -31,6 +31,9 @@ model Driver {
   licenseNumber String
   status        String  // AVAILABLE, ACTIVE, OFF_DUTY
   cab           Cab?
+  startAddress  String?
+  startX        Float?
+  startY        Float?
 }
 
 model Cab {
