@@ -1,6 +1,7 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -8,32 +9,50 @@ generator client {
 }
 
 model User {
-  id       String @id @default(uuid())
-  email    String @unique
-  password String // Hashed or clear text for POC
-  name     String
-  role     String // ADMIN, DRIVER, EMPLOYEE
+  id                     String                @id @default(uuid())
+  email                  String                @unique
+  password               String                // Hashed
+  name                   String
+  role                   String                // ADMIN, MANAGER, EMPLOYEE, DRIVER
+  isActive               Boolean               @default(true)
+  requiresPasswordChange Boolean               @default(true)
+  resetToken             String?
+  resetTokenExpiry       DateTime?
+  employee               Employee?
+  driver                 Driver?
+  leaves                 LeaveRequest[]        @relation("ApplicantLeaves")
+  approvedLeaves         LeaveRequest[]        @relation("ApproverLeaves")
+  approvedTimings        TimingChangeRequest[] @relation("ApproverTimings")
+  notifications          Notification[]
+  notificationSettings   NotificationSettings?
 }
 
 model Shift {
   id        String     @id @default(uuid())
-  name      String
+  name      String     // e.g. "Morning Shift"
   startTime String     // e.g. "09:00"
   endTime   String     // e.g. "18:00"
   employees Employee[]
+  drivers   Driver[]
+  cabs      Cab[]
   routes    Route[]
 }
 
 model Driver {
   id            String  @id @default(uuid())
+  userId        String? @unique
+  user          User?   @relation(fields: [userId], references: [id])
   name          String
   phone         String
   licenseNumber String
+  vendor        String?
   status        String  // AVAILABLE, ACTIVE, OFF_DUTY
   cab           Cab?
   startAddress  String?
   startX        Float?
   startY        Float?
+  shiftId       String?
+  shift         Shift?  @relation(fields: [shiftId], references: [id])
 }
 
 model Cab {
@@ -45,23 +64,32 @@ model Cab {
   driverId      String? @unique
   driver        Driver? @relation(fields: [driverId], references: [id])
   routes        Route[]
+  shiftId       String?
+  shift         Shift?  @relation(fields: [shiftId], references: [id])
 }
 
 model Employee {
-  id           String      @id @default(uuid())
-  employeeCode String      @unique
+  id           String                @id @default(uuid())
+  userId       String?               @unique
+  user         User?                 @relation(fields: [userId], references: [id])
+  employeeCode String                @unique
   name         String
-  gender       String      // MALE, FEMALE
+  gender       String                // MALE, FEMALE
   phone        String
-  email        String      @unique
+  email        String                @unique
   address      String
-  x            Float       // coordinate X (0-100)
-  y            Float       // coordinate Y (0-100)
+  x            Float                 // coordinate X
+  y            Float                 // coordinate Y
   department   String
+  designation  String?               @default("Engineer") // Manager, Senior Manager, Lead, Engineer, Intern
+  managerId    String?
+  manager      Employee?             @relation("ManagerSubordinates", fields: [managerId], references: [id])
+  subordinates Employee[]            @relation("ManagerSubordinates")
   shiftId      String?
-  shift        Shift?      @relation(fields: [shiftId], references: [id])
-  status       String      // ACTIVE, INACTIVE
+  shift         Shift?                @relation(fields: [shiftId], references: [id])
+  status       String                // ACTIVE, INACTIVE
   stops        RouteStop[]
+  timeRequests TimingChangeRequest[]
 }
 
 model Route {
@@ -72,32 +100,140 @@ model Route {
   shiftId           String
   shift             Shift       @relation(fields: [shiftId], references: [id])
   isPickup          Boolean     @default(true)
-  totalDistance     Float       // computed X/Y units
-  totalDuration     Float       // estimated minutes
-  status            String      // PENDING, IN_PROGRESS, COMPLETED
-  optimizationScore Float       // 0-100 score
+  totalDistance     Float       
+  totalDuration     Float       
+  status            String      // PLANNED, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELLED
+  startedAt         DateTime?
+  completedAt       DateTime?
+  currentLat        Float?
+  currentLng        Float?
+  lastLocationAt    DateTime?
+  optimizationScore Float       
+  optimizationMode  String      @default("FASTEST_TRAVEL") // MAXIMIZE_UTILIZATION, FASTEST_TRAVEL
   stops             RouteStop[]
   violations        Violation[]
   hasEscort         Boolean     @default(false)
+  events            OperationalEvent[]
+  locations         VehicleLocation[]
+  deviations        RouteDeviation[]
 }
 
 model RouteStop {
-  id         String   @id @default(uuid())
-  routeId    String
-  route      Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  stopOrder  Int      // sequence order (1, 2, 3...)
-  etaMinutes Int      // estimated arrival time in minutes from start
-  status     String   // PENDING, PICKED_UP, MISSED, COMPLETED
+  id           String               @id @default(uuid())
+  routeId      String
+  route        Route                @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  employeeId   String
+  employee     Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  stopOrder    Int                  
+  etaMinutes   Int                  
+  status            String               // PENDING, REACHED, BOARDED, SKIPPED
+  expectedTime      DateTime?
+  actualArrivalTime DateTime?
+  boardedTime       DateTime?
+  driverDelayMins   Int                  @default(0)
+  employeeDelayMins Int                  @default(0)
+  events            OperationalEvent[]
 }
 
 model Violation {
-  id      String  @id @default(uuid())
-  routeId String
-  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  type    String  // FEMALE_FIRST_PICKUP, FEMALE_LAST_DROP, OVERCAPACITY, ISOLATED_FEMALE
-  severity String // HIGH, MEDIUM
+  id       String  @id @default(uuid())
+  routeId  String
+  route    Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  type     String  // FEMALE_FIRST_PICKUP, FEMALE_LAST_DROP, OVERCAPACITY, ISOLATED_FEMALE
+  severity String  // HIGH, MEDIUM
   resolved Boolean @default(false)
-  notes   String?
+  notes    String?
+}
+
+model Holiday {
+  id          String  @id @default(uuid())
+  date        String  @unique // "YYYY-MM-DD"
+  name        String
+  description String?
+}
+
+model LeaveRequest {
+  id          String   @id @default(uuid())
+  applicantId String
+  applicant   User     @relation("ApplicantLeaves", fields: [applicantId], references: [id])
+  startDate   String   // "YYYY-MM-DD"
+  endDate     String   // "YYYY-MM-DD"
+  status      String   // PENDING, APPROVED, REJECTED
+  approverId  String?
+  approver    User?    @relation("ApproverLeaves", fields: [approverId], references: [id])
+  comments    String?
+}
+
+model TimingChangeRequest {
+  id            String   @id @default(uuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id])
+  requestType   String   // PICKUP, DROP
+  requestedTime String   // e.g. "08:30"
+  currentTime   String   // e.g. "09:00"
+  status        String   // PENDING, APPROVED, REJECTED
+  approverId    String?
+  approver      User?    @relation("ApproverTimings", fields: [approverId], references: [id])
+  comments      String?
+}
+
+model SystemSettings {
+  id                           String  @id @default("default")
+  leaveApprovalRequired        Boolean @default(true)
+  timingChangeApprovalRequired Boolean @default(true)
+}
+
+model OperationalEvent {
+  id          String    @id @default(uuid())
+  type        String    // ROUTE_STARTED, STOP_REACHED, EMPLOYEE_BOARDED, STOP_SKIPPED, ROUTE_COMPLETED
+  timestamp   DateTime  @default(now())
+  routeId     String?
+  route       Route?    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  routeStopId String?
+  routeStop   RouteStop? @relation(fields: [routeStopId], references: [id], onDelete: Cascade)
+  driverId    String?
+  employeeId  String?
+  metadata    String?   // JSON string for extra data like delay reasons
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  category  String   // ROUTE, LEAVE, APPROVAL, SYSTEM, OPTIMIZATION
+  read      Boolean  @default(false)
+  actionUrl String?
+  createdAt DateTime @default(now())
+}
+
+model NotificationSettings {
+  id                    String  @id @default(uuid())
+  userId                String  @unique
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routeNotifications    Boolean @default(true)
+  leaveNotifications    Boolean @default(true)
+  approvalNotifications Boolean @default(true)
+  systemNotifications   Boolean @default(true)
+}
+
+model VehicleLocation {
+  id        String   @id @default(uuid())
+  routeId   String
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  timestamp DateTime @default(now())
+}
+
+model RouteDeviation {
+  id        String   @id @default(uuid())
+  routeId   String
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  type      String   // OFF_ROUTE, STALLED
+  lat       Float
+  lng       Float
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

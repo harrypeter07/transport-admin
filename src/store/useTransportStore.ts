@@ -94,7 +94,7 @@ interface TransportStore {
   setActiveShiftId: (shiftId: string) => void;
   setSelectedDate: (date: string) => void;
   setSelectedRouteId: (routeId: string | null) => void;
-  runOptimization: (isPickup: boolean, apiKey?: string) => Promise<{ success: boolean; error?: string }>;
+  runOptimization: (isPickup: boolean, apiKey?: string, mode?: string) => Promise<{ success: boolean; error?: string }>;
   updateStopStatus: (routeId: string, stopId: string, status: "PENDING" | "PICKED_UP" | "MISSED" | "COMPLETED") => Promise<void>;
   reorderRouteStops: (routeId: string, stopId: string, direction: "up" | "down") => Promise<void>;
   overrideViolation: (violationId: string) => Promise<void>;
@@ -171,7 +171,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     set({ selectedRouteId: routeId });
   },
 
-  runOptimization: async (isPickup, apiKey = "") => {
+  runOptimization: async (isPickup, apiKey = "", mode = "FASTEST_TRAVEL") => {
     set({ loading: true });
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -186,6 +186,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
           shiftId: get().activeShiftId,
           isPickup,
           date: dateToFetch,
+          mode,
         }),
       });
 

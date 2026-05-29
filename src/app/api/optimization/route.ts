@@ -44,19 +44,43 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { shiftId, isPickup, date } = body;
+    const { shiftId, isPickup, date, mode = "FASTEST_TRAVEL" } = body;
 
-    // 1. Fetch Employees for this date (ignoring shift)
+    const currentDateStr = date || new Date().toISOString().split("T")[0];
+
+    // 1. Fetch Employees for this shift and exclude those on leave
     const dbEmployees = await prisma.employee.findMany({
-      where: { status: "ACTIVE" },
+      where: { 
+        status: "ACTIVE",
+        ...(shiftId ? { shiftId } : {})
+      },
+      include: {
+        user: {
+          include: {
+            ApplicantLeaves: {
+              where: {
+                status: "APPROVED",
+                startDate: { lte: currentDateStr },
+                endDate: { gte: currentDateStr }
+              }
+            }
+          }
+        }
+      }
     });
 
-    if (dbEmployees.length === 0) {
-      return NextResponse.json({ error: "No active employees found" }, { status: 400 });
+    // Filter out employees with active approved leaves
+    const availableEmployees = dbEmployees.filter(emp => {
+      const leaves = emp.user?.ApplicantLeaves || [];
+      return leaves.length === 0;
+    });
+
+    if (availableEmployees.length === 0) {
+      return NextResponse.json({ error: "No active employees found for this shift" }, { status: 400 });
     }
     
     // Fallback shiftId for route creation
-    const fallbackShiftId = dbEmployees[0]?.shiftId || shiftId || "";
+    const fallbackShiftId = availableEmployees[0]?.shiftId || shiftId || "";
 
     // 2. Fetch Available Cabs
     const dbCabs = await prisma.cab.findMany({
@@ -71,7 +95,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Map to Optimizer input types
-    const optEmployees: OptimizeEmployee[] = dbEmployees.map((emp) => ({
+    const optEmployees: OptimizeEmployee[] = availableEmployees.map((emp) => ({
       id: emp.id,
       name: emp.name,
       gender: emp.gender as "MALE" | "FEMALE",
@@ -94,15 +118,13 @@ export async function POST(req: NextRequest) {
     // 4. Run Core Optimizer
     const apiKeyHeader = req.headers.get("x-google-maps-key") || "";
     const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
-    const optimizedRoutes = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey);
-
-    const currentDateStr = date || new Date().toISOString().split("T")[0];
+    const optimizedRoutes = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey, mode);
 
     // 5. Use database transaction to wipe old routes for this date and insert new ones
     await prisma.$transaction(async (tx) => {
       // Find old routes
       const oldRoutes = await tx.route.findMany({
-        where: { date: currentDateStr },
+        where: { date: currentDateStr, shiftId: fallbackShiftId },
         select: { id: true },
       });
       const oldRouteIds = oldRoutes.map((r) => r.id);
@@ -127,6 +149,7 @@ export async function POST(req: NextRequest) {
             totalDuration: optRoute.totalDuration,
             status: "PENDING",
             optimizationScore: optRoute.optimizationScore,
+            optimizationMode: mode,
           },
         });
 

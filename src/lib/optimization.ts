@@ -493,7 +493,8 @@ export async function optimizeRoutes(
   employees: OptimizeEmployee[],
   cabs: OptimizeCab[],
   isPickup: boolean = true,
-  apiKey: string = ""
+  apiKey: string = "",
+  mode: string = "FASTEST_TRAVEL"
 ): Promise<OptimizedRoute[]> {
   if (employees.length === 0 || cabs.length === 0) return [];
 
@@ -541,6 +542,13 @@ export async function optimizeRoutes(
         }
       }
       
+      // Dual Mode Implementation:
+      // If FASTEST_TRAVEL, do not pick up employees who are far away (e.g., > 7km) just to fill the cab.
+      // Leave seats empty to ensure faster travel for the clustered group.
+      if (mode === "FASTEST_TRAVEL" && minDist > 7 && cluster.length > 1) {
+        break; // Stop filling cab to prevent massive detours
+      }
+
       cluster.push(remainingEmployees[closestIdx]);
       remainingEmployees.splice(closestIdx, 1);
     }

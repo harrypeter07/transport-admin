@@ -1,0 +1,128 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { CheckCircle, XCircle } from "lucide-react";
+
+export default function ManagerApprovalsPage() {
+  const [leaves, setLeaves] = useState<any[]>([]);
+  const [timingChanges, setTimingChanges] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchApprovals();
+  }, []);
+
+  async function fetchApprovals() {
+    setLoading(true);
+    const res = await fetch("/api/approvals/manager");
+    if (res.ok) {
+      const data = await res.json();
+      setLeaves(data.leaves || []);
+      setTimingChanges(data.timingChanges || []);
+    }
+    setLoading(false);
+  }
+
+  async function handleAction(id: string, type: "LEAVE" | "TIMING", status: "APPROVED" | "REJECTED") {
+    const res = await fetch("/api/approvals/manager", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, type, status, comments: "Processed via dashboard" })
+    });
+    if (res.ok) {
+      fetchApprovals(); // Refresh
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Approvals</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Review and approve leave and timing change requests from your team.
+          </p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center p-10"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin"></div></div>
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-200 bg-slate-50">
+              <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">
+                Pending Leave Requests ({leaves.length})
+              </h2>
+            </div>
+            <div className="p-0">
+              {leaves.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 bg-white">
+                  <span className="text-slate-400 mb-2 font-medium">No pending leave requests</span>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {leaves.map((l: any) => (
+                    <li key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                      <div>
+                        <p className="font-bold text-slate-900">{l.applicant?.name}</p>
+                        <p className="text-xs text-slate-500">
+                          {l.startDate} to {l.endDate}
+                        </p>
+                        {l.description && <p className="text-xs text-slate-400 mt-1">"{l.description}"</p>}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleAction(l.id, "LEAVE", "APPROVED")} className="flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-100 transition cursor-pointer">
+                          <CheckCircle size={14} /> Approve
+                        </button>
+                        <button onClick={() => handleAction(l.id, "LEAVE", "REJECTED")} className="flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded text-xs font-bold hover:bg-red-100 transition cursor-pointer">
+                          <XCircle size={14} /> Reject
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-200 bg-slate-50">
+              <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">
+                Pending Timing Changes ({timingChanges.length})
+              </h2>
+            </div>
+            <div className="p-0">
+              {timingChanges.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 bg-white">
+                  <span className="text-slate-400 mb-2 font-medium">No pending timing changes</span>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {timingChanges.map((t: any) => (
+                    <li key={t.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                      <div>
+                        <p className="font-bold text-slate-900">{t.employee?.name}</p>
+                        <p className="text-xs text-slate-500">
+                          Change {t.requestType} to {t.requestedTime} (Currently: {t.currentTime})
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleAction(t.id, "TIMING", "APPROVED")} className="flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-100 transition cursor-pointer">
+                          <CheckCircle size={14} /> Approve
+                        </button>
+                        <button onClick={() => handleAction(t.id, "TIMING", "REJECTED")} className="flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded text-xs font-bold hover:bg-red-100 transition cursor-pointer">
+                          <XCircle size={14} /> Reject
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

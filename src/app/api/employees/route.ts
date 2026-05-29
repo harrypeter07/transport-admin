@@ -3,13 +3,37 @@ import { prisma } from "@/lib/db";
 import { parseExcelRoster } from "@/lib/excelParser";
 import { geocodeNagpurPlace } from "@/lib/optimization";
 
+import bcrypt from "bcryptjs";
+import { verifySession } from "@/lib/dal";
+
 // GET all employees
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const session = await verifySession();
+  if (session.role !== "ADMIN" && session.role !== "MANAGER") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get("search") || "";
+  const shiftId = searchParams.get("shiftId");
+
   try {
     const employees = await prisma.employee.findMany({
+      where: {
+        ...(search && {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { employeeCode: { contains: search, mode: "insensitive" } },
+            { department: { contains: search, mode: "insensitive" } },
+          ],
+        }),
+        ...(shiftId && { shiftId }),
+      },
       include: {
         shift: true,
+        manager: { select: { id: true, name: true } },
       },
+      orderBy: { name: "asc" },
     });
     return NextResponse.json(employees);
   } catch (e) {
@@ -26,6 +50,8 @@ export async function DELETE(req: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: "Employee ID is required" }, { status: 400 });
     }
+    // Deleting the employee will also delete the User if we handle it or we can leave the user disabled.
+    // For now we just delete the employee.
     await prisma.employee.delete({
       where: { id },
     });
@@ -40,6 +66,7 @@ export async function DELETE(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const contentType = req.headers.get("content-type") || "";
+    const defaultPassword = await bcrypt.hash("Welcome@123", 10);
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
@@ -59,34 +86,52 @@ export async function POST(req: NextRequest) {
 
       for (const row of rows) {
         try {
-          // Resolve coordinates automatically using geocoder
           const coords = await geocodeNagpurPlace(row.address || row.name);
-          await prisma.employee.upsert({
-            where: { employeeCode: row.employeeCode },
-            update: {
-              name: row.name,
-              gender: row.gender,
-              phone: row.phone,
-              email: row.email,
-              address: row.address,
-              x: coords.x,
-              y: coords.y,
-              department: row.department,
-              shiftId: shiftId || null,
-            },
-            create: {
-              employeeCode: row.employeeCode,
-              name: row.name,
-              gender: row.gender,
-              phone: row.phone,
-              email: row.email,
-              address: row.address,
-              x: coords.x,
-              y: coords.y,
-              department: row.department,
-              shiftId: shiftId || null,
-              status: "ACTIVE",
-            },
+          const employeeEmail = row.email || `${row.employeeCode.toLowerCase()}@corporate.com`;
+
+          await prisma.$transaction(async (tx) => {
+            let user = await tx.user.findUnique({ where: { email: employeeEmail } });
+            if (!user) {
+              user = await tx.user.create({
+                data: {
+                  email: employeeEmail,
+                  password: defaultPassword,
+                  name: row.name,
+                  role: row.department === "Management" || row.employeeCode.includes("MGR") ? "MANAGER" : "EMPLOYEE", // Crude check for excel
+                  requiresPasswordChange: true,
+                },
+              });
+            }
+
+            await tx.employee.upsert({
+              where: { employeeCode: row.employeeCode },
+              update: {
+                name: row.name,
+                gender: row.gender,
+                phone: row.phone,
+                email: employeeEmail,
+                address: row.address,
+                x: coords.x,
+                y: coords.y,
+                department: row.department,
+                shiftId: shiftId || null,
+                userId: user.id,
+              },
+              create: {
+                employeeCode: row.employeeCode,
+                name: row.name,
+                gender: row.gender,
+                phone: row.phone,
+                email: employeeEmail,
+                address: row.address,
+                x: coords.x,
+                y: coords.y,
+                department: row.department,
+                shiftId: shiftId || null,
+                status: "ACTIVE",
+                userId: user.id,
+              },
+            });
           });
           createdCount++;
         } catch (err) {
@@ -102,29 +147,46 @@ export async function POST(req: NextRequest) {
     } else {
       // Create single employee manually
       const body = await req.json();
-      const { employeeCode, name, gender, phone, email, address, department, shiftId } = body;
+      const { employeeCode, name, gender, phone, email, address, department, designation, shiftId } = body;
 
       if (!employeeCode || !name || !gender) {
         return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
       }
 
-      // Geocode neighborhood name to coordinates
       const coords = await geocodeNagpurPlace(address || "Nagpur");
+      const employeeEmail = email || `${employeeCode.toLowerCase()}@corporate.com`;
 
-      const employee = await prisma.employee.create({
-        data: {
-          employeeCode,
-          name,
-          gender,
-          phone,
-          email: email || `${employeeCode.toLowerCase()}@corporate.com`,
-          address: address || "Sadar, Nagpur",
-          x: coords.x,
-          y: coords.y,
-          department: department || "Engineering",
-          shiftId: shiftId || null,
-          status: "ACTIVE",
-        },
+      const employee = await prisma.$transaction(async (tx) => {
+        let user = await tx.user.findUnique({ where: { email: employeeEmail } });
+        if (!user) {
+          user = await tx.user.create({
+            data: {
+              email: employeeEmail,
+              password: defaultPassword,
+              name,
+              role: designation === "Manager" || designation === "Senior Manager" ? "MANAGER" : "EMPLOYEE",
+              requiresPasswordChange: true,
+            },
+          });
+        }
+
+        return await tx.employee.create({
+          data: {
+            employeeCode,
+            name,
+            gender,
+            phone,
+            email: employeeEmail,
+            address: address || "Sadar, Nagpur",
+            x: coords.x,
+            y: coords.y,
+            department: department || "Engineering",
+            designation: designation || "Engineer",
+            shiftId: shiftId || null,
+            status: "ACTIVE",
+            userId: user.id,
+          },
+        });
       });
 
       return NextResponse.json(employee);
@@ -139,7 +201,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, name, gender, phone, email, address, department, shiftId, status } = body;
+    const { id, name, gender, phone, email, address, department, designation, managerId, shiftId, status } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Employee ID is required" }, { status: 400 });
@@ -167,6 +229,8 @@ export async function PATCH(req: NextRequest) {
         x: coords.x,
         y: coords.y,
         department: department !== undefined ? department : undefined,
+        designation: designation !== undefined ? designation : undefined,
+        managerId: managerId !== undefined ? (managerId || null) : undefined,
         shiftId: shiftId !== undefined ? (shiftId || null) : undefined,
         status: status !== undefined ? status : undefined,
       },
