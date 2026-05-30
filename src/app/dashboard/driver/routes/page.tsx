@@ -96,9 +96,9 @@ export default function DriverRoutesExecutionPage() {
           {allStopsCompleted && (
             <button 
               onClick={() => completeRoute(route.id)}
-              className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-xs"
+              className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 shadow-xs"
             >
-              <CheckCircle size={16} /> Complete Route
+              <CheckCircle size={16} /> End Trip
             </button>
           )}
         </div>

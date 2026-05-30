@@ -55,6 +55,20 @@ export default function DriverDashboardPage() {
     }
   }
 
+  async function endTrip(routeId: string) {
+    if (!confirm("Are you sure you want to end this trip?")) return;
+    const res = await fetch("/api/execution/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ routeId, action: "COMPLETE_ROUTE" }),
+    });
+    if (res.ok) {
+      fetchRoutes();
+    } else {
+      alert("Failed to end trip");
+    }
+  }
+
   const routesToRender = activeTab === "ACTIVE" ? activeRoutes : historyRoutes;
 
   return (
@@ -187,12 +201,20 @@ export default function DriverDashboardPage() {
                             <PlayCircle size={15} /> Start Route
                           </button>
                         ) : route.status === "IN_PROGRESS" ? (
-                          <button 
-                            onClick={() => router.push(`/dashboard/driver/routes`)}
-                            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition cursor-pointer flex items-center justify-center gap-1.5"
-                          >
-                            Resume Execution
-                          </button>
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                            <button 
+                              onClick={() => router.push(`/dashboard/driver/routes`)}
+                              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                              Resume Execution
+                            </button>
+                            <button 
+                              onClick={() => endTrip(route.id)}
+                              className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                              <CheckCircle size={15} /> End Trip
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-xs font-bold text-slate-400">Archived</span>
                         )}
