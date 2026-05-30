@@ -156,7 +156,7 @@ async function persistRoutes(
         });
       }
     }
-  });
+  }, { timeout: 20000, maxWait: 10000 });
 }
 
 // POST: Run optimization

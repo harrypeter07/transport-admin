@@ -552,11 +552,19 @@ export async function optimizeRoutes(
         }
       }
       
-      // Dual Mode Implementation:
-      // If FASTEST_TRAVEL, do not pick up employees who are far away (e.g., > 7km) just to fill the cab.
-      // Leave seats empty to ensure faster travel for the clustered group.
-      if (mode === "FASTEST_TRAVEL" && minDist > 7 && cluster.length > 1) {
-        break; // Stop filling cab to prevent massive detours
+      // If FASTEST_TRAVEL, restrict detours tightly to 7km.
+      // If BALANCED, restrict detours to 12km (moderate packing).
+      // If MAXIMIZE_UTILIZATION, no restriction.
+      // ALWAYS override and take the employee if we are running out of subsequent cab capacity!
+      const subsequentCapacity = sortedCabs.slice(i + 1).reduce((sum, c) => sum + c.capacity, 0);
+      const mustTakeToAvoidLeavingBehind = remainingEmployees.length > subsequentCapacity;
+
+      if (!mustTakeToAvoidLeavingBehind) {
+        if (mode === "FASTEST_TRAVEL" && minDist > 7 && cluster.length > 1) {
+          break; // Stop filling cab to prevent massive detours
+        } else if (mode === "BALANCED" && minDist > 12 && cluster.length > 1) {
+          break; // Stop filling cab to prevent moderate detours
+        }
       }
 
       cluster.push(remainingEmployees[closestIdx]);

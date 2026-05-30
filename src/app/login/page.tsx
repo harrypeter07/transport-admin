@@ -106,6 +106,40 @@ export default function LoginPage() {
         <p className="mt-5 text-center text-xs text-slate-400">
           Access is by administrator invitation only.
         </p>
+
+        {/* TEST PHASE CREDENTIALS BOX */}
+        <div className="mt-8 bg-slate-100/80 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full bg-slate-400 opacity-75"></span>
+              <span className="relative inline-flex h-2.5 w-2.5 bg-slate-900"></span>
+            </span>
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">UAT Test Phase Active</h3>
+          </div>
+          
+          <p className="text-[11px] text-slate-700 mb-4 leading-relaxed font-medium">
+            Use the following credentials to explore different role-based views. Password for all test accounts is <strong className="bg-slate-200 px-1 py-0.5 text-slate-900 font-mono">Welcome@123</strong>
+          </p>
+
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-[10px] bg-white/80 p-2">
+              <span className="font-bold text-slate-800 w-16">ADMIN</span>
+              <span className="font-mono text-slate-600 select-all">admin@transitadmin.com</span>
+            </div>
+            <div className="flex justify-between items-center text-[10px] bg-white/80 p-2">
+              <span className="font-bold text-slate-800 w-16">MANAGER</span>
+              <span className="font-mono text-slate-600 select-all">rohit.deshmukh@transitadmin.com</span>
+            </div>
+            <div className="flex justify-between items-center text-[10px] bg-white/80 p-2">
+              <span className="font-bold text-slate-800 w-16">EMPLOYEE</span>
+              <span className="font-mono text-slate-600 select-all">amit.kale@transitadmin.com</span>
+            </div>
+            <div className="flex justify-between items-center text-[10px] bg-white/80 p-2">
+              <span className="font-bold text-slate-800 w-16">DRIVER</span>
+              <span className="font-mono text-slate-600 select-all">suresh@transitadmin.com</span>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   );

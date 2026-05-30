@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { parseExcelRoster } from "@/lib/excelParser";
-import { geocodePlace, makeDepot } from "@/lib/optimization";
+import { geocodePlace, makeDepot, geocodeNagpurPlace } from "@/lib/optimization";
 
 import bcrypt from "bcryptjs";
 import { verifySession } from "@/lib/dal";
@@ -122,28 +122,12 @@ export async function POST(req: NextRequest) {
       const buffer = Buffer.from(bytes);
       const rows = parseExcelRoster(buffer);
 
-      const settings = await prisma.systemSettings.upsert({
-        where: { id: "default" },
-        update: {},
-        create: { id: "default" }
-      });
-      const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
-      const city = settings.defaultCity || "Nagpur";
-      const country = settings.defaultCountry || "India";
-      const maxRadius = settings.maxPickupRadiusKm || 70;
-
       let createdCount = 0;
       let skippedCount = 0;
 
       for (const row of rows) {
         try {
-          const coords = await geocodePlace(row.address || row.name, city, country, depot, maxRadius);
-          
-          if (!coords) {
-            skippedCount++;
-            continue;
-          }
-
+          let coords = await geocodeNagpurPlace(row.address || row.name);
           const employeeEmail = row.email || `${row.employeeCode.toLowerCase()}@corporate.com`;
 
           await prisma.$transaction(async (tx) => {
@@ -216,12 +200,8 @@ export async function POST(req: NextRequest) {
       });
       const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
 
-      const coords = await geocodePlace(
-        address || "Central",
-        settings.defaultCity,
-        settings.defaultCountry,
-        depot,
-        settings.maxPickupRadiusKm
+      let coords = await geocodeNagpurPlace(
+        address || name
       );
 
       if (!coords) {
