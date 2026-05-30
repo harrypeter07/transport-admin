@@ -128,6 +128,7 @@ export default function TransitAdminSPA() {
   const [isPickup, setIsPickup] = useState(true);
   const [optimizeError, setOptimizeError] = useState<string | null>(null);
   const [optimizing, setOptimizing] = useState(false);
+  const [previewedStrategy, setPreviewedStrategy] = useState<"MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED" | null>(null);
   const [applyingStrategy, setApplyingStrategy] = useState<string | null>(null);
 
   // Excel bulk upload state
@@ -209,6 +210,8 @@ export default function TransitAdminSPA() {
       const result = await previewOptimization(isPickup);
       if (!result.success) {
         setOptimizeError(result.error || "Failed to generate plans. Check you have employees and cabs registered.");
+      } else {
+        setPreviewedStrategy("BALANCED"); // Default preview
       }
     } catch (err: any) {
       setOptimizeError(err.message || "Unexpected error generating plans.");
@@ -431,15 +434,39 @@ export default function TransitAdminSPA() {
   };
 
   // Calculations for selected and active items
-  const activeRoutes = [...routes].sort((a, b) => {
+  const dbActiveRoutes = [...routes].sort((a, b) => {
     const timeA = a.shift?.startTime || "";
     const timeB = b.shift?.startTime || "";
     if (timeA !== timeB) return timeA.localeCompare(timeB);
     return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
   });
-  const selectedRoute = routes.find((r) => r.id === selectedRouteId);
-  const totalViolations = routes.reduce(
-    (acc, r) => acc + r.violations.filter((v) => !v.resolved).length,
+  
+  // If previewing a generated plan, map its routes to the expected Route format for the map
+  const activeRoutesRaw = (optimizationPlans && previewedStrategy)
+    ? optimizationPlans[previewedStrategy].routes.map((r: any, idx: number) => ({
+        ...r,
+        id: `preview-${idx}`,
+        cab: { vehicleNumber: r.vehicleNumber, driverName: r.driverName, driverPhone: r.driverPhone },
+        stops: r.stops.map((s: any) => ({
+          ...s,
+          id: `preview-stop-${s.employeeId}`,
+          employee: {
+            id: s.employeeId,
+            name: s.employeeName,
+            gender: s.gender,
+            x: s.x,
+            y: s.y,
+            address: s.address,
+            phone: "N/A"
+          }
+        }))
+    }))
+    : dbActiveRoutes;
+  const activeRoutes = activeRoutesRaw as Route[];
+
+  const selectedRoute = activeRoutes.find((r: any) => r.id === selectedRouteId);
+  const totalViolations = activeRoutes.reduce(
+    (acc, r) => acc + (r.violations || []).filter((v: any) => !v.resolved).length,
     0
   );
 
@@ -698,7 +725,10 @@ export default function TransitAdminSPA() {
                   </p>
                 </div>
                 <button
-                  onClick={clearOptimizationPreview}
+                  onClick={() => {
+                    clearOptimizationPreview();
+                    setPreviewedStrategy(null);
+                  }}
                   className="text-indigo-400 hover:text-indigo-700 text-lg font-bold leading-none"
                   aria-label="Dismiss plans"
                 >×</button>
@@ -711,19 +741,16 @@ export default function TransitAdminSPA() {
                   { key: "BALANCED",              label: "Balanced",             icon: "⚖️", desc: "15km radius, ~80% fill target. Best of both worlds.", color: "violet" },
                 ] as const).map(({ key, label, icon, desc, color }) => {
                   const plan = optimizationPlans[key];
-                  const isApplying = applyingStrategy === key;
-                  const colorMap: Record<string, string> = {
-                    emerald: "bg-emerald-50 border-emerald-500 text-emerald-700",
-                    blue:    "bg-blue-50 border-blue-500 text-blue-700",
-                    violet:  "bg-violet-50 border-violet-500 text-violet-700",
-                  };
-                  const btnMap: Record<string, string> = {
-                    emerald: "bg-emerald-600 hover:bg-emerald-700",
-                    blue:    "bg-blue-600 hover:bg-blue-700",
-                    violet:  "bg-violet-600 hover:bg-violet-700",
-                  };
+                  const isPreviewing = previewedStrategy === key;
+                  
                   return (
-                    <div key={key} className="p-5 flex flex-col gap-4">
+                    <button
+                      key={key}
+                      onClick={() => setPreviewedStrategy(key)}
+                      className={`text-left p-5 flex flex-col gap-4 transition-all duration-200 cursor-pointer border-b-4 ${
+                        isPreviewing ? "bg-white border-indigo-600 shadow-inner" : "bg-slate-50 border-transparent hover:bg-slate-100"
+                      }`}
+                    >
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-lg">{icon}</span>
@@ -732,54 +759,62 @@ export default function TransitAdminSPA() {
                         <p className="text-[11px] text-slate-500 leading-relaxed">{desc}</p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                      <div className="grid grid-cols-2 gap-2 text-xs w-full">
+                        <div className="bg-white rounded-lg p-2.5 text-center shadow-xs">
                           <div className="font-black text-lg text-slate-900">{plan.totalCabsUsed}</div>
                           <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wide">Cabs Used</div>
                         </div>
-                        <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <div className="bg-white rounded-lg p-2.5 text-center shadow-xs">
                           <div className="font-black text-lg text-slate-900">{plan.totalEmployeesCovered}</div>
                           <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wide">Covered</div>
                         </div>
-                        <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <div className="bg-white rounded-lg p-2.5 text-center shadow-xs">
                           <div className="font-black text-lg text-slate-900">{plan.totalDistance} km</div>
                           <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wide">Total Dist.</div>
                         </div>
-                        <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <div className="bg-white rounded-lg p-2.5 text-center shadow-xs">
                           <div className="font-black text-lg text-slate-900">{plan.avgCommuteMins} min</div>
                           <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wide">Avg Commute</div>
                         </div>
                       </div>
 
                       {plan.totalViolations > 0 && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                        <div className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 w-full">
                           <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
                           <span><strong>{plan.totalViolations}</strong> safety flag{plan.totalViolations > 1 ? "s" : ""}</span>
                         </div>
                       )}
                       {plan.totalViolations === 0 && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 w-full">
                           <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                           <span>No safety violations</span>
                         </div>
                       )}
-
-                      <button
-                        id={`btn-apply-${key.toLowerCase()}`}
-                        onClick={() => handleApplyPlan(key)}
-                        disabled={!!applyingStrategy || loading}
-                        className={`w-full flex items-center justify-center gap-1.5 text-white px-3 py-2 rounded-xl text-xs font-black transition disabled:opacity-50 shadow-xs ${btnMap[color]}`}
-                      >
-                        {isApplying ? (
-                          <><RotateCw className="w-3.5 h-3.5 animate-spin" /> Applying...</>
-                        ) : (
-                          <><CheckCircle2 className="w-3.5 h-3.5" /> Select This Plan</>
-                        )}
-                      </button>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
+              
+              {/* Apply Bar */}
+              {previewedStrategy && (
+                <div className="p-4 bg-white border-t border-indigo-100 flex items-center justify-between animate-fadeIn">
+                  <div className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <span className="text-indigo-600">Currently previewing on map:</span>
+                    {previewedStrategy.replace("_", " ")}
+                  </div>
+                  <button
+                    onClick={() => handleApplyPlan(previewedStrategy)}
+                    disabled={applyingStrategy === previewedStrategy || loading}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-black hover:bg-indigo-700 transition disabled:opacity-50 shadow-md cursor-pointer"
+                  >
+                    {applyingStrategy === previewedStrategy ? (
+                      <><RotateCw className="w-4 h-4 animate-spin" /> Committing to Database...</>
+                    ) : (
+                      <><CheckCircle2 className="w-4 h-4" /> Confirm & Apply Plan</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
