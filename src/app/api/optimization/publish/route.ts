@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifySession, requireApiRole } from "@/lib/dal";
+import { requireApiRole } from "@/lib/apiAuth";
 import { prisma } from "@/lib/db";
 
 export async function POST(req: Request) {

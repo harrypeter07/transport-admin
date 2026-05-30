@@ -39,8 +39,7 @@ import {
   MessageSquare,
   Sparkles,
   Info,
-  Search,
-  Send
+  Search
 } from "lucide-react";
 
 export default function TransitAdminSPA() {
@@ -720,9 +719,8 @@ export default function TransitAdminSPA() {
                             alert("Error publishing routes.");
                           }
                         }}
-                        className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-2xs cursor-pointer animate-pulse"
+                        className="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-black transition shadow-2xs cursor-pointer"
                       >
-                        <Send className="w-3.5 h-3.5" />
                         Publish to Fleet
                       </button>
                     )}
