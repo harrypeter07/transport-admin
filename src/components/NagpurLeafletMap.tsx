@@ -37,6 +37,11 @@ export default function LeafletMap({
   const DEPOT_LAT = depotLat;
   const DEPOT_LNG = depotLng;
 
+  const isWithinBounds = (lat: number, lng: number) => {
+    return lat >= DEPOT_LAT - 1.0 && lat <= DEPOT_LAT + 1.0 &&
+           lng >= DEPOT_LNG - 1.0 && lng <= DEPOT_LNG + 1.0;
+  };
+
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const layerGroupRef = useRef<any>(null);
