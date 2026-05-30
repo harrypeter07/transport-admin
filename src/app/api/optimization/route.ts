@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { optimizeRoutes, OptimizeEmployee, OptimizeCab } from "@/lib/optimization";
+import { requireApiRole } from "@/lib/apiAuth";
 
 // GET all routes with details
 export async function GET(req: NextRequest) {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(req.url);
     const shiftId = searchParams.get("shiftId");
     const date = searchParams.get("date");
@@ -15,11 +19,7 @@ export async function GET(req: NextRequest) {
     const routes = await prisma.route.findMany({
       where: whereClause,
       include: {
-        cab: {
-          include: {
-            driver: true,
-          },
-        },
+        cab: true,
         shift: true,
         stops: {
           include: {
@@ -43,6 +43,9 @@ export async function GET(req: NextRequest) {
 // POST: Run optimization and save routes
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const body = await req.json();
     const { shiftId, isPickup, date, mode = "FASTEST_TRAVEL" } = body;
 
@@ -57,7 +60,7 @@ export async function POST(req: NextRequest) {
       include: {
         user: {
           include: {
-            ApplicantLeaves: {
+            leaves: {
               where: {
                 status: "APPROVED",
                 startDate: { lte: currentDateStr },
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     // Filter out employees with active approved leaves
     const availableEmployees = dbEmployees.filter(emp => {
-      const leaves = emp.user?.ApplicantLeaves || [];
+      const leaves = emp.user?.leaves || [];
       return leaves.length === 0;
     });
 
@@ -82,12 +85,13 @@ export async function POST(req: NextRequest) {
     // Fallback shiftId for route creation
     const fallbackShiftId = availableEmployees[0]?.shiftId || shiftId || "";
 
-    // 2. Fetch Available Cabs
+    // 2. Fetch Available Cabs for this shift
     const dbCabs = await prisma.cab.findMany({
-      where: { status: "AVAILABLE" },
-      include: {
-        driver: true,
+      where: { 
+        status: "AVAILABLE",
+        ...(fallbackShiftId ? { shiftId: fallbackShiftId } : {})
       },
+
     });
 
     if (dbCabs.length === 0) {
@@ -111,8 +115,8 @@ export async function POST(req: NextRequest) {
       vehicleNumber: cab.vehicleNumber,
       capacity: cab.capacity,
       vendor: cab.vendor,
-      driverName: cab.driver?.name || "Unassigned",
-      driverPhone: cab.driver?.phone || "N/A",
+      driverName: cab.driverName || "Unassigned",
+      driverPhone: cab.driverPhone || "N/A",
     }));
 
     // 4. Run Core Optimizer

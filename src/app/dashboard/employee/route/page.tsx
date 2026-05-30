@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Map, Clock, Navigation, CheckCircle, Car } from "lucide-react";
+import { Car } from "lucide-react";
 
 export default function EmployeeRoutePage() {
   const [routeData, setRouteData] = useState<any>(null);
-  const [trackingData, setTrackingData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -59,9 +58,9 @@ export default function EmployeeRoutePage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Live Route Progress</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Route Progress</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Track your assigned cab and estimated arrival time.
+            Follow your assigned cab status from the driver worksheet.
           </p>
         </div>
       </div>

@@ -22,22 +22,6 @@ export default function ImportsPage() {
     fetchImportSheets();
   }, []);
 
-  const handleImportSheet = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedImportSheet) return;
-
-    setStatus({ type: "loading", message: "Importing roster and generating routes..." });
-    try {
-      const res = await importSheet(selectedImportSheet);
-      if (res.success) {
-        setStatus({ type: "success", message: `Successfully imported ${res.importedEmployees || 0} employees and completed route optimization.` });
-      } else {
-        setStatus({ type: "error", message: res.error || "Failed to import sheet." });
-      }
-    } catch (err: any) {
-      setStatus({ type: "error", message: err.message || "An unexpected error occurred during import." });
-    }
-  };
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,9 +31,8 @@ export default function ImportsPage() {
     try {
       const res = await uploadRosterFile(uploadFile);
       if (res.success) {
-        setStatus({ type: "success", message: "File uploaded successfully. You can now select a sheet to import." });
+        setStatus({ type: "success", message: res.message || "Master data imported successfully." });
         setUploadFile(null);
-        setSelectedImportSheet("");
       } else {
         setStatus({ type: "error", message: res.error || "Failed to upload file." });
       }
@@ -73,7 +56,7 @@ export default function ImportsPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Roster Imports</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Upload employee rosters via Excel and auto-generate optimized transport routes.</p>
+          <p className="text-slate-500 text-sm mt-0.5">Upload employee rosters via Excel to onboard employees, cabs, and shifts.</p>
         </div>
       </div>
 
@@ -91,62 +74,15 @@ export default function ImportsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Import from Workspace */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center gap-3">
-            <div className="p-2 bg-slate-100 rounded-lg">
-              <FileSpreadsheet className="w-5 h-5 text-slate-600" />
-            </div>
-            <div>
-              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Import Workspace Roster</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Import from roster.xlsx in the project root</p>
-            </div>
-          </div>
-          <div className="p-5">
-            {importSheets.length > 0 ? (
-              <form onSubmit={handleImportSheet} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-600">
-                    Available Date Sheets
-                  </label>
-                  <select
-                    value={selectedImportSheet}
-                    onChange={(e) => setSelectedImportSheet(e.target.value)}
-                    required
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg text-sm py-2.5 px-3 focus:outline-none focus:bg-white focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all"
-                  >
-                    <option value="">-- Choose Date Sheet --</option>
-                    {importSheets.map((sheet) => (
-                      <option key={sheet} value={sheet}>{sheet}</option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="submit"
-                  disabled={status.type === "loading" || !selectedImportSheet}
-                  className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-slate-800 transition disabled:opacity-50"
-                >
-                  Import & Auto-Optimize
-                </button>
-              </form>
-            ) : (
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 text-center">
-                No <strong className="text-slate-900 font-mono text-xs">roster.xlsx</strong> file found at the root of the project workspace.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Upload New Roster */}
+      <div className="max-w-xl">
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-5 border-b border-slate-100 flex items-center gap-3">
             <div className="p-2 bg-slate-100 rounded-lg">
               <Upload className="w-5 h-5 text-slate-600" />
             </div>
             <div>
-              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Upload New File</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Upload a new Excel (.xlsx) roster file</p>
+              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Upload Master Roster</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Upload a daily or monthly roster Excel (.xlsx) file</p>
             </div>
           </div>
           <div className="p-5">
@@ -167,9 +103,9 @@ export default function ImportsPage() {
               <button
                 type="submit"
                 disabled={status.type === "loading" || !uploadFile}
-                className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-900 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 transition disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-slate-800 transition disabled:opacity-50"
               >
-                Upload File
+                {status.type === "loading" ? "Processing Data..." : "Upload & Process Data"}
               </button>
             </form>
           </div>
@@ -183,10 +119,9 @@ export default function ImportsPage() {
           How Import works
         </h3>
         <p>
-          Importing an Excel sheet automatically triggers the backend Route Optimization engine. 
-          The system reads employee locations, maps them to shift schedules, clusters nearby pick-up/drop-off points, 
-          and generates the most efficient routes utilizing the available cab fleet capacity. 
-          You can view the generated routes in the <Link href="/dashboard/admin/transport/optimization" className="text-white underline hover:text-indigo-300 font-medium">Route Optimization</Link> module.
+          Uploading the Excel roster automatically creates or updates the master list of Employees, Cabs, and Shifts. 
+          It processes <strong>every sheet</strong> in the file automatically and removes duplicates, saving you time. 
+          To actually schedule transport, head over to the <Link href="/dashboard/admin/transport/optimization" className="text-white underline hover:text-indigo-300 font-medium">Route Optimization</Link> page where you can select specific dates, respect employee leaves, and auto-generate routes!
         </p>
       </div>
     </div>

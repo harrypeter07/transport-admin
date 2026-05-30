@@ -30,7 +30,7 @@ export async function GET(req: Request) {
       include: {
         route: {
           include: {
-            cab: { include: { driver: true } },
+            cab: true,
             stops: {
               include: { employee: true },
               orderBy: { stopOrder: "asc" }

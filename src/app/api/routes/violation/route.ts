@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireApiRole } from "@/lib/apiAuth";
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const { violationId } = await req.json();
     if (!violationId) {
       return NextResponse.json({ error: "violationId is required" }, { status: 400 });

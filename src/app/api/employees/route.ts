@@ -5,6 +5,7 @@ import { geocodeNagpurPlace } from "@/lib/optimization";
 
 import bcrypt from "bcryptjs";
 import { verifySession } from "@/lib/dal";
+import { requireApiRole } from "@/lib/apiAuth";
 
 // GET all employees
 export async function GET(req: NextRequest) {
@@ -18,17 +19,32 @@ export async function GET(req: NextRequest) {
   const shiftId = searchParams.get("shiftId");
 
   try {
+    const whereClause: any = {
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { employeeCode: { contains: search, mode: "insensitive" } },
+          { department: { contains: search, mode: "insensitive" } },
+        ],
+      }),
+      ...(shiftId && { shiftId }),
+    };
+
+    if (session.role === "MANAGER") {
+      const managerEmployee = await prisma.employee.findFirst({
+        where: { userId: session.userId },
+        select: { id: true },
+      });
+
+      if (!managerEmployee) {
+        return NextResponse.json([]);
+      }
+
+      whereClause.managerId = managerEmployee.id;
+    }
+
     const employees = await prisma.employee.findMany({
-      where: {
-        ...(search && {
-          OR: [
-            { name: { contains: search, mode: "insensitive" } },
-            { employeeCode: { contains: search, mode: "insensitive" } },
-            { department: { contains: search, mode: "insensitive" } },
-          ],
-        }),
-        ...(shiftId && { shiftId }),
-      },
+      where: whereClause,
       include: {
         shift: true,
         manager: { select: { id: true, name: true } },
@@ -45,16 +61,38 @@ export async function GET(req: NextRequest) {
 // DELETE an employee
 export async function DELETE(req: NextRequest) {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) {
       return NextResponse.json({ error: "Employee ID is required" }, { status: 400 });
     }
-    // Deleting the employee will also delete the User if we handle it or we can leave the user disabled.
-    // For now we just delete the employee.
-    await prisma.employee.delete({
+
+    const employee = await prisma.employee.findUnique({
       where: { id },
+      select: { userId: true },
     });
+
+    if (!employee) {
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.employee.update({
+        where: { id },
+        data: { status: "INACTIVE" },
+      });
+
+      if (employee.userId) {
+        await tx.user.update({
+          where: { id: employee.userId },
+          data: { isActive: false },
+        });
+      }
+    });
+
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error("Error deleting employee:", e);
@@ -65,6 +103,9 @@ export async function DELETE(req: NextRequest) {
 // POST: Add new employee or bulk upload Excel
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const contentType = req.headers.get("content-type") || "";
     const defaultPassword = await bcrypt.hash("Welcome@123", 10);
 
@@ -182,6 +223,7 @@ export async function POST(req: NextRequest) {
             y: coords.y,
             department: department || "Engineering",
             designation: designation || "Engineer",
+            managerId: managerId || null,
             shiftId: shiftId || null,
             status: "ACTIVE",
             userId: user.id,
@@ -200,6 +242,9 @@ export async function POST(req: NextRequest) {
 // PATCH: Edit employee details
 export async function PATCH(req: NextRequest) {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const body = await req.json();
     const { id, name, gender, phone, email, address, department, designation, managerId, shiftId, status } = body;
 

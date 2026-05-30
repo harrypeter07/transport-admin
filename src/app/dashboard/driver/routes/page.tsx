@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, UserCheck, XCircle, CheckCircle, Navigation, Radio } from "lucide-react";
+import { MapPin, UserCheck, XCircle, CheckCircle, Navigation } from "lucide-react";
 
 export default function DriverRoutesExecutionPage() {
   const [route, setRoute] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [isTracking, setIsTracking] = useState(false);
-  const watchIdRef = useRef<number | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -95,10 +93,6 @@ export default function DriverRoutesExecutionPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold ${isTracking ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-            <Radio size={14} className={isTracking ? 'animate-pulse' : ''} />
-            {isTracking ? 'GPS Active' : 'GPS Inactive'}
-          </div>
           {allStopsCompleted && (
             <button 
               onClick={() => completeRoute(route.id)}

@@ -11,16 +11,13 @@ export async function GET() {
   try {
     const [
       totalEmployees,
-      totalDrivers,
       totalCabs,
       totalRoutes,
       employeesByDesignation,
       employeesByShift,
-      activeCabs,
-      activeDrivers
+      activeCabs
     ] = await Promise.all([
       prisma.employee.count(),
-      prisma.driver.count(),
       prisma.cab.count(),
       prisma.route.count(),
       prisma.employee.groupBy({
@@ -32,7 +29,6 @@ export async function GET() {
         _count: { id: true }
       }),
       prisma.cab.count({ where: { status: 'ACTIVE' } }),
-      prisma.driver.count({ where: { status: 'ACTIVE' } }),
     ]);
 
     // Fetch shift names for the employeesByShift mapping
@@ -47,7 +43,6 @@ export async function GET() {
     return NextResponse.json({
       operations: {
         totalEmployees,
-        totalDrivers,
         totalCabs,
         totalRoutes,
       },
@@ -60,7 +55,6 @@ export async function GET() {
       },
       fleet: {
         activeCabs,
-        activeDrivers,
       }
     });
   } catch (error: any) {

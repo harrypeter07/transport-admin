@@ -1,0 +1,313 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Calendar as CalendarIcon, CheckCircle, XCircle, Clock, Plus, User as UserIcon } from "lucide-react";
+
+type LeaveRequest = {
+  id: string;
+  applicant: { id: string; name: string; email: string };
+  approver?: { id: string; name: string };
+  startDate: string;
+  endDate: string;
+  status: string;
+  comments?: string;
+};
+
+type AppUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+export default function LeaveManagementPage() {
+  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  
+  // Form State
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ applicantId: "", startDate: "", endDate: "", comments: "" });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchLeaves();
+    fetchUsers();
+  }, [statusFilter]);
+
+  async function fetchLeaves() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/leaves?status=${statusFilter}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLeaves(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  }
+
+  async function fetchUsers() {
+    try {
+      const res = await fetch("/api/users");
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data.filter((u: AppUser) => u.role !== "ADMIN"));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleAction(id: string, action: "APPROVE" | "REJECT") {
+    if (!confirm(`Are you sure you want to ${action.toLowerCase()} this leave request?`)) return;
+
+    try {
+      const res = await fetch("/api/leaves", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+
+      if (res.ok) {
+        fetchLeaves();
+      } else {
+        alert("Action failed");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.applicantId || !form.startDate || !form.endDate) return;
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/leaves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, status: "APPROVED" }), // Admin-added leaves are auto-approved
+      });
+
+      if (res.ok) {
+        setForm({ applicantId: "", startDate: "", endDate: "", comments: "" });
+        setShowForm(false);
+        fetchLeaves();
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to add leave");
+      }
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setSubmitting(false);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Leaves & Approvals</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Manage employee absence and time-off requests.
+          </p>
+        </div>
+        <button 
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition shadow-sm"
+        >
+          <Plus size={16} />
+          Log Manual Leave
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm mb-6 animate-fadeIn">
+          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">
+            Log Manual Leave
+          </h2>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+            {error && <div className="col-span-full text-red-600 text-xs font-bold">{error}</div>}
+            
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-700 mb-1">Employee *</label>
+              <select 
+                required
+                value={form.applicantId}
+                onChange={(e) => setForm({...form, applicantId: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+              >
+                <option value="">Select Employee...</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-700 mb-1">Start Date *</label>
+              <input 
+                type="date" 
+                required
+                value={form.startDate}
+                onChange={(e) => setForm({...form, startDate: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+              />
+            </div>
+
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-700 mb-1">End Date *</label>
+              <input 
+                type="date" 
+                required
+                value={form.endDate}
+                onChange={(e) => setForm({...form, endDate: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+              />
+            </div>
+
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-slate-700 mb-1">Reason (Optional)</label>
+              <input 
+                type="text" 
+                value={form.comments}
+                onChange={(e) => setForm({...form, comments: e.target.value})}
+                placeholder="e.g. Sick Leave"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+              />
+            </div>
+
+            <div className="lg:col-span-1">
+              <button 
+                type="submit" 
+                disabled={submitting}
+                className="w-full bg-slate-900 hover:bg-slate-800 shadow-md shadow-slate-900/20 text-white font-bold text-sm py-2 px-4 rounded-lg transition disabled:opacity-50"
+              >
+                {submitting ? "Saving..." : "Log Leave (Auto-Approve)"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+          >
+            <option value="ALL">All Leaves</option>
+            <option value="PENDING">Pending Approvals</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-600">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-4 font-bold">Applicant</th>
+                <th className="px-6 py-4 font-bold">Duration</th>
+                <th className="px-6 py-4 font-bold">Status</th>
+                <th className="px-6 py-4 font-bold">Notes</th>
+                <th className="px-6 py-4 font-bold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400 font-medium">
+                    Loading leave requests...
+                  </td>
+                </tr>
+              ) : leaves.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400 font-medium">
+                    No leave requests found matching the current filter.
+                  </td>
+                </tr>
+              ) : (
+                leaves.map((leave) => (
+                  <tr key={leave.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                          <UserIcon size={14} />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{leave.applicant?.name || "Unknown"}</p>
+                          <p className="text-xs text-slate-500">{leave.applicant?.email || "N/A"}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-slate-900 font-bold font-mono">{leave.startDate}</span>
+                        <span className="text-xs text-slate-400">to <span className="text-slate-600 font-mono">{leave.endDate}</span></span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {leave.status === "APPROVED" && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle size={12} /> Approved
+                        </span>
+                      )}
+                      {leave.status === "REJECTED" && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
+                          <XCircle size={12} /> Rejected
+                        </span>
+                      )}
+                      {leave.status === "PENDING" && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                          <Clock size={12} /> Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-xs">
+                      <p className="text-slate-700">{leave.comments || "-"}</p>
+                      {leave.approver && (
+                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider font-bold">
+                          By: {leave.approver.name}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {leave.status === "PENDING" ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleAction(leave.id, "REJECT")}
+                            className="px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => handleAction(leave.id, "APPROVE")}
+                            className="px-3 py-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200"
+                          >
+                            Approve
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mr-2">Actioned</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -11,7 +11,11 @@ export default function CabsPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterShift, setFilterShift] = useState("");
+  const [sortBy, setSortBy] = useState("vehicleNumber");
   const [showModal, setShowModal] = useState(false);
+  const [editingCab, setEditingCab] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -49,20 +53,26 @@ export default function CabsPage() {
       vendor: data.get("vendor"),
       status: data.get("status") || "AVAILABLE",
       shiftId: data.get("shiftId") || null,
+      driverName: data.get("driverName"),
+      driverPhone: data.get("driverPhone"),
+      licenseNumber: data.get("licenseNumber"),
     };
     try {
-      const res = await fetch("/api/cabs", {
-        method: "POST",
+      const url = editingCab ? `/api/cabs/${editingCab.id}` : "/api/cabs";
+      const method = editingCab ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
         setShowModal(false);
+        setEditingCab(null);
         formRef.current?.reset();
         fetchCabs();
       } else {
         const err = await res.json();
-        setFormError(err.error || "Failed to register cab.");
+        setFormError(err.error || `Failed to ${editingCab ? "update" : "register"} cab.`);
       }
     } catch {
       setFormError("Network error. Please try again.");
@@ -79,9 +89,24 @@ export default function CabsPage() {
     } catch (e) { console.error(e); }
   };
 
+  let processedCabs = [...cabs];
+  if (filterStatus) {
+    processedCabs = processedCabs.filter((cab) => cab.status === filterStatus);
+  }
+  if (filterShift) {
+    processedCabs = processedCabs.filter((cab) => cab.shiftId === filterShift);
+  }
+  processedCabs.sort((a, b) => {
+    if (sortBy === "vehicleNumber") return (a.vehicleNumber || "").localeCompare(b.vehicleNumber || "");
+    if (sortBy === "status") return (a.status || "").localeCompare(b.status || "");
+    if (sortBy === "shift") return (a.shift?.name || "").localeCompare(b.shift?.name || "");
+    return 0;
+  });
+
   return (
-    <div className="space-y-6 animate-fadeIn">
-      <nav className="flex items-center gap-1.5 text-xs text-slate-500">
+    <>
+      <div className="space-y-6 animate-fadeIn">
+        <nav className="flex items-center gap-1.5 text-xs text-slate-500">
         <Link href="/dashboard/admin" className="hover:text-slate-900 transition">Dashboard</Link>
         <ChevronRight className="w-3 h-3" />
         <span className="font-semibold text-slate-900">Cabs</span>
@@ -101,8 +126,8 @@ export default function CabsPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100">
-          <div className="relative max-w-sm">
+        <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row gap-3">
+          <div className="relative flex-1 max-w-sm">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
@@ -111,6 +136,23 @@ export default function CabsPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-8 pr-4 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all"
             />
+          </div>
+          <div className="flex gap-2">
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all text-slate-700">
+              <option value="">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="AVAILABLE">Available</option>
+              <option value="MAINTENANCE">Maintenance</option>
+            </select>
+            <select value={filterShift} onChange={e => setFilterShift(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all text-slate-700">
+              <option value="">All Shifts</option>
+              {shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all text-slate-700">
+              <option value="vehicleNumber">Sort: Vehicle No</option>
+              <option value="status">Sort: Status</option>
+              <option value="shift">Sort: Shift</option>
+            </select>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -129,10 +171,10 @@ export default function CabsPage() {
             <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
               {loading ? (
                 <tr><td colSpan={7} className="px-5 py-10 text-center text-slate-400 text-xs">Loading…</td></tr>
-              ) : cabs.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-400 text-xs">No cabs registered. Click &ldquo;Register Cab&rdquo; to add one.</td></tr>
+              ) : processedCabs.length === 0 ? (
+                <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-400 text-xs">No cabs match the filters.</td></tr>
               ) : (
-                cabs.map((cab) => (
+                processedCabs.map((cab) => (
                   <tr key={cab.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-3.5 font-mono font-black text-slate-900 text-sm">{cab.vehicleNumber}</td>
                     <td className="px-5 py-3.5 font-semibold text-slate-700">{cab.capacity} seats</td>
@@ -149,10 +191,26 @@ export default function CabsPage() {
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">{cab.shift.name}</span>
                       ) : <span className="text-[11px] text-slate-400">Unassigned</span>}
                     </td>
-                    <td className="px-5 py-3.5 font-semibold">{cab.driver?.name ?? <span className="font-normal text-slate-400 text-[11px]">Unassigned</span>}</td>
+                    <td className="px-5 py-3.5 font-semibold">
+                      {cab.driverName ? (
+                        <>
+                          <div className="text-slate-900">{cab.driverName}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">{cab.driverPhone}</div>
+                        </>
+                      ) : <span className="font-normal text-slate-400 text-[11px]">Unassigned</span>}
+                    </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded transition"><Edit className="w-3.5 h-3.5" /></button>
+                        <button 
+                          onClick={() => {
+                            setEditingCab(cab);
+                            setShowModal(true);
+                            setFormError(null);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded transition"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
                         <button onClick={() => handleDelete(cab.id, cab.vehicleNumber)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
@@ -163,63 +221,86 @@ export default function CabsPage() {
           </table>
         </div>
       </div>
-
+      </div>
+      
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Register Cab</h2>
-              <button onClick={() => setShowModal(false)} className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"><X className="w-4 h-4" /></button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100/80 bg-white/50 sticky top-0 z-10">
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                {editingCab ? "Edit Cab Details" : "Register Cab"}
+              </h2>
+              <button 
+                onClick={() => { setShowModal(false); setEditingCab(null); }} 
+                className="p-2 rounded-full hover:bg-slate-200/50 text-slate-500 hover:text-slate-900 transition-all bg-slate-100/50"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <form ref={formRef} onSubmit={handleCreate} className="p-5 space-y-4">
+            <form ref={formRef} key={editingCab?.id || "new"} onSubmit={handleCreate} className="p-6 space-y-6 bg-white/40">
               {formError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-semibold text-red-700">{formError}</div>
+                <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 text-sm font-semibold text-red-700 backdrop-blur-sm">{formError}</div>
               )}
               <div className="grid grid-cols-2 gap-4">
-                <CField label="Vehicle Number" name="vehicleNumber" required placeholder="MH31 AB1234" />
-                <CField label="Capacity (seats)" name="capacity" required type="number" placeholder="6" />
+                <CField label="Vehicle Number" name="vehicleNumber" required placeholder="MH31 AB1234" defaultValue={editingCab?.vehicleNumber} />
+                <CField label="Capacity (seats)" name="capacity" required type="number" placeholder="6" defaultValue={editingCab?.capacity} />
               </div>
-              <CField label="Vendor / Agency" name="vendor" required placeholder="Maharaja Transport" />
+              <CField label="Vendor / Agency" name="vendor" required placeholder="Maharaja Transport" defaultValue={editingCab?.vendor} />
+              
+              <div className="border-t border-slate-100 pt-3 mt-1">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Driver Details</h3>
+                <div className="grid grid-cols-2 gap-4 mb-3">
+                  <CField label="Driver Name" name="driverName" placeholder="John Doe" defaultValue={editingCab?.driverName} />
+                  <CField label="Phone Number" name="driverPhone" placeholder="+91 9900000000" defaultValue={editingCab?.driverPhone} />
+                </div>
+                <CField label="License Number" name="licenseNumber" placeholder="DL-..." defaultValue={editingCab?.licenseNumber} />
+              </div>
               <div className="grid grid-cols-2 gap-4">
-                <CSelectField label="Status" name="status" required>
+                <CSelectField label="Status" name="status" required defaultValue={editingCab?.status}>
                   <option value="AVAILABLE">Available</option>
                   <option value="ACTIVE">Active</option>
                   <option value="MAINTENANCE">Maintenance</option>
                 </CSelectField>
-                <CSelectField label="Shift" name="shiftId">
+                <CSelectField label="Shift" name="shiftId" defaultValue={editingCab?.shiftId || ""}>
                   <option value="">-- No shift --</option>
                   {shifts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </CSelectField>
               </div>
-              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 mt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition">Cancel</button>
-                <button type="submit" disabled={submitting} className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition disabled:opacity-50">
-                  {submitting ? "Registering…" : "Register Cab"}
+              <div className="flex justify-end gap-3 pt-6 border-t border-slate-100/80">
+                <button 
+                  type="button" 
+                  onClick={() => { setShowModal(false); setEditingCab(null); }} 
+                  className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={submitting} className="px-6 py-2.5 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-md shadow-slate-900/20 rounded-xl transition-all disabled:opacity-50">
+                  {submitting ? (editingCab ? "Saving…" : "Registering…") : (editingCab ? "Save Changes" : "Register Cab")}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-function CField({ label, name, required, type = "text", placeholder }: any) {
+function CField({ label, name, required, type = "text", placeholder, defaultValue }: any) {
   return (
     <div>
-      <label className="block text-[10px] font-black text-slate-600 uppercase tracking-widest mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
-      <input name={name} type={type} required={required} placeholder={placeholder}
-        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all" />
+      <label className="block text-xs font-bold text-slate-700 mb-1.5">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <input name={name} type={type} required={required} placeholder={placeholder} defaultValue={defaultValue}
+        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500 transition-all placeholder:text-slate-400 text-slate-900" />
     </div>
   );
 }
-function CSelectField({ label, name, required, children }: any) {
+function CSelectField({ label, name, required, children, defaultValue }: any) {
   return (
     <div>
-      <label className="block text-[10px] font-black text-slate-600 uppercase tracking-widest mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
-      <select name={name} required={required}
-        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all">
+      <label className="block text-xs font-bold text-slate-700 mb-1.5">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <select name={name} required={required} defaultValue={defaultValue}
+        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500 transition-all text-slate-900">
         {children}
       </select>
     </div>

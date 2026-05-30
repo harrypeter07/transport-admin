@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 
 export async function GET(req: Request) {
   const session = await verifySession();
-  if (session.role !== "ADMIN") {
+  if (session.role !== "ADMIN" && session.role !== "MANAGER") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -42,7 +42,7 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   const session = await verifySession();
-  if (session.role !== "ADMIN") {
+  if (session.role !== "ADMIN" && session.role !== "MANAGER") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

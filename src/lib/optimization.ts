@@ -32,7 +32,7 @@ export interface OptimizedRouteStop {
   address: string;
   stopOrder: number; // 1-indexed
   etaMinutes: number;
-  status: "PENDING" | "PICKED_UP" | "MISSED" | "COMPLETED";
+  status: "PENDING" | "REACHED" | "BOARDED" | "SKIPPED";
 }
 
 export interface OptimizedRoute {
@@ -349,8 +349,8 @@ export function checkSafetyViolations(
   if (stops.length === 0 || hasEscort) return [];
   const violations: ReturnType<typeof checkSafetyViolations> = [];
 
-  // Filter out MISSED stops to get active stops
-  const activeStops = stops.filter((s) => s.status !== "MISSED");
+  // Filter out skipped stops to get active stops
+  const activeStops = stops.filter((s) => s.status !== "SKIPPED");
   if (activeStops.length === 0) return [];
 
   // 1. Check if she is the sole active passenger

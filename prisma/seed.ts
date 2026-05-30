@@ -1,5 +1,5 @@
-const { PrismaClient } = require("@prisma/client");
-const bcrypt = require("bcryptjs");
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -7,7 +7,11 @@ async function main() {
   console.log("Cleaning database and running clean seed...");
 
   // Clear in dependency order
-  await prisma.stopOperationalLog.deleteMany();
+  await prisma.routeDeviation.deleteMany();
+  await prisma.vehicleLocation.deleteMany();
+  await prisma.operationalEvent.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.notificationSettings.deleteMany();
   await prisma.violation.deleteMany();
   await prisma.routeStop.deleteMany();
   await prisma.route.deleteMany();
@@ -15,7 +19,6 @@ async function main() {
   await prisma.leaveRequest.deleteMany();
   await prisma.employee.deleteMany();
   await prisma.cab.deleteMany();
-  await prisma.driver.deleteMany();
   await prisma.shift.deleteMany();
   await prisma.systemSettings.deleteMany();
   await prisma.holiday.deleteMany();

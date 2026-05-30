@@ -1,24 +1,242 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Users, Calendar, Mail, Phone, Clock, FileText, ChevronLeft, ChevronRight, UserCheck } from "lucide-react";
+
 export default function ManagerTeamPage() {
+  const [team, setTeam] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"ROSTER" | "CALENDAR">("ROSTER");
+
+  // Roster Calendar States
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  useEffect(() => {
+    fetchTeam();
+  }, []);
+
+  async function fetchTeam() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/manager/team");
+      if (res.ok) {
+        const data = await res.json();
+        setTeam(data.team || []);
+      }
+    } catch (e) {
+      console.error("Error loading manager team:", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Monthly Calendar logic
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  function handlePrevMonth() {
+    setCurrentDate(new Date(year, month - 1, 1));
+  }
+
+  function handleNextMonth() {
+    setCurrentDate(new Date(year, month + 1, 1));
+  }
+
+  // Get leaves scheduled on a specific date for any team member
+  function getLeavesForDate(dateStr: string) {
+    const activeLeaves: any[] = [];
+    team.forEach(emp => {
+      const leaves = emp.user?.leaves || [];
+      leaves.forEach((l: any) => {
+        if (l.status === "APPROVED" && l.startDate <= dateStr && l.endDate >= dateStr) {
+          activeLeaves.push({ employeeName: emp.name, leave: l });
+        }
+      });
+    });
+    return activeLeaves;
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">My Team</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Manage your team members and view their schedules.
+            Manage your reporting lines, view shifts, and monitor calendar schedules.
           </p>
+        </div>
+        
+        <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-white">
+          <button
+            onClick={() => setActiveTab("ROSTER")}
+            className={`px-4 py-2 text-xs font-bold rounded-md cursor-pointer transition ${
+              activeTab === "ROSTER"
+                ? "bg-slate-950 text-white shadow-xs"
+                : "text-slate-655 hover:text-slate-900 hover:bg-slate-50"
+            }`}
+          >
+            Team Roster
+          </button>
+          <button
+            onClick={() => setActiveTab("CALENDAR")}
+            className={`px-4 py-2 text-xs font-bold rounded-md cursor-pointer transition ${
+              activeTab === "CALENDAR"
+                ? "bg-slate-950 text-white shadow-xs"
+                : "text-slate-655 hover:text-slate-900 hover:bg-slate-50"
+            }`}
+          >
+            Coverage Calendar
+          </button>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
-        <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4">
-          Team Roster
-        </h2>
-        <div className="flex flex-col items-center justify-center py-10 bg-slate-50 rounded-lg border border-slate-100 border-dashed">
-          <span className="text-slate-400 mb-2">No team members assigned</span>
-          <p className="text-sm text-slate-500">Employees reporting to you will appear here.</p>
+      {loading ? (
+        <div className="flex justify-center p-20"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin"></div></div>
+      ) : team.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center">
+          <span className="text-slate-400 mb-2 font-bold uppercase tracking-widest text-xs">No Direct Reports</span>
+          <p className="text-sm text-slate-500 max-w-xs">There are no employees reporting to your profile in the database.</p>
         </div>
-      </div>
+      ) : activeTab === "ROSTER" ? (
+        /* Team Roster Tab */
+        <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+            <h2 className="text-xs font-black text-slate-700 uppercase tracking-widest">
+              Team Roster ({team.length} Members)
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="p-3 pl-4">Name</th>
+                  <th className="p-3">Employee Code</th>
+                  <th className="p-3">Designation</th>
+                  <th className="p-3">Shift Schedule</th>
+                  <th className="p-3">Contact</th>
+                  <th className="p-3 pr-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {team.map((emp) => (
+                  <tr key={emp.id} className="hover:bg-slate-50">
+                    <td className="p-3 pl-4 font-bold text-slate-900">
+                      {emp.name}
+                      <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">{emp.department}</span>
+                    </td>
+                    <td className="p-3 font-mono text-slate-600">{emp.employeeCode}</td>
+                    <td className="p-3 font-medium text-slate-700">{emp.designation || "Engineer"}</td>
+                    <td className="p-3">
+                      {emp.shift ? (
+                        <span className="font-semibold text-slate-700 flex items-center gap-1">
+                          <Clock size={12} className="text-slate-400" />
+                          {emp.shift.name} ({emp.shift.startTime} - {emp.shift.endTime})
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">No shift assigned</span>
+                      )}
+                    </td>
+                    <td className="p-3 space-y-1">
+                      <div className="flex items-center gap-1.5 text-slate-500">
+                        <Mail size={12} /> {emp.email}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                        <Phone size={12} /> {emp.phone}
+                      </div>
+                    </td>
+                    <td className="p-3 pr-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                        emp.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        {emp.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* Team Calendar Coverage Tab */
+        <div className="bg-white border border-slate-200 rounded-xl shadow-xs p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
+              <Calendar size={15} className="text-slate-500" /> Team Coverage Calendar
+            </h2>
+            
+            <div className="flex items-center gap-3">
+              <button onClick={handlePrevMonth} className="p-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-655 cursor-pointer">
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-sm font-black text-slate-800 uppercase tracking-wide min-w-[120px] text-center">
+                {months[month]} {year}
+              </span>
+              <button onClick={handleNextMonth} className="p-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-655 cursor-pointer">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center font-bold text-slate-400 text-[10px] uppercase tracking-widest mb-1">
+            <span>Sun</span>
+            <span>Mon</span>
+            <span>Tue</span>
+            <span>Wed</span>
+            <span>Thu</span>
+            <span>Fri</span>
+            <span>Sat</span>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1.5 min-h-[300px]">
+            {/* Blank offset days */}
+            {Array.from({ length: firstDayOfMonth }).map((_, idx) => (
+              <div key={`offset-${idx}`} className="bg-slate-50/50 rounded-xl border border-slate-100 border-dashed" />
+            ))}
+
+            {/* Days in Month */}
+            {Array.from({ length: daysInMonth }).map((_, idx) => {
+              const day = idx + 1;
+              const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+              const dayLeaves = getLeavesForDate(dateStr);
+              const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
+
+              return (
+                <div 
+                  key={day} 
+                  className={`border rounded-xl p-2 flex flex-col text-left justify-between min-h-[70px] transition-colors ${
+                    isToday ? "border-slate-850 bg-slate-50 shadow-2xs" : "border-slate-200 hover:bg-slate-50/50"
+                  }`}
+                >
+                  <span className={`text-[10px] font-black tracking-wide ${isToday ? "text-slate-900" : "text-slate-450"}`}>
+                    {day}
+                  </span>
+                  
+                  <div className="flex flex-col gap-1 mt-1">
+                    {dayLeaves.map((dl, lIdx) => (
+                      <span 
+                        key={lIdx} 
+                        className="bg-amber-50 border border-amber-200 text-amber-800 text-[9px] font-bold px-1.5 py-0.5 rounded truncate"
+                        title={`${dl.employeeName} on Leave`}
+                      >
+                        🌴 {dl.employeeName.split(" ")[0]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,7 +18,10 @@ export async function POST(req: Request) {
 
     const stop = await prisma.routeStop.findUnique({
       where: { id: stopId },
-      include: { route: true, employee: true }
+      include: {
+        route: { include: { cab: true } },
+        employee: true
+      }
     });
 
     if (!stop) {
@@ -27,6 +30,10 @@ export async function POST(req: Request) {
 
     if (stop.route.status !== "IN_PROGRESS") {
       return NextResponse.json({ error: "Route is not in progress" }, { status: 400 });
+    }
+
+    if (session.role === "DRIVER" && stop.route.cab.userId !== session.userId) {
+      return NextResponse.json({ error: "Stop not assigned to this driver" }, { status: 403 });
     }
 
     const now = new Date();
@@ -59,7 +66,7 @@ export async function POST(req: Request) {
             timestamp: now,
             routeId: stop.routeId,
             routeStopId: stopId,
-            driverId: session.role === "DRIVER" ? session.userId : undefined,
+            cabId: stop.route.cab.id,
             employeeId: stop.employeeId,
             metadata: metadata ? JSON.stringify(metadata) : null,
           }
@@ -115,7 +122,7 @@ export async function POST(req: Request) {
             timestamp: now,
             routeId: stop.routeId,
             routeStopId: stopId,
-            driverId: session.role === "DRIVER" ? session.userId : undefined,
+            cabId: stop.route.cab.id,
             employeeId: stop.employeeId,
             metadata: metadata ? JSON.stringify(metadata) : null,
           }
@@ -157,4 +164,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-

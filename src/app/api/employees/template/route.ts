@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { generateExcelTemplate } from "@/lib/excelParser";
+import { requireApiRole } from "@/lib/apiAuth";
 
 export async function GET() {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const buffer = generateExcelTemplate();
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

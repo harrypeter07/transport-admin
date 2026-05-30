@@ -252,9 +252,7 @@ export default function AdminHolidayManagement() {
                 <button 
                   type="submit" 
                   disabled={submitting}
-                  className={`flex-1 text-white font-bold text-sm py-2 rounded-lg transition disabled:opacity-50
-                    ${isEditMode ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-900 hover:bg-slate-800'}
-                  `}
+                  className={`flex-1 text-white font-bold text-sm py-2 rounded-lg transition disabled:opacity-50 bg-slate-900 hover:bg-slate-800 shadow-sm`}
                 >
                   {submitting ? "Saving..." : (isEditMode ? "Update Holiday" : "Save Holiday")}
                 </button>

@@ -4,6 +4,8 @@ import { geocodeNagpurPlace, getDistance, checkSafetyViolations, DEPOT } from "@
 import * as xlsx from "xlsx";
 import * as path from "path";
 import * as fs from "fs";
+import { requireApiRole } from "@/lib/apiAuth";
+import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
 
@@ -59,119 +61,73 @@ function parseDriverDetails(detailsList: any[]): { vehicleNumber: string; driver
   return { vehicleNumber, driverName, driverPhone };
 }
 
-// GET: List all sheet names from the local roster.xlsx
-export async function GET() {
-  try {
-    const filePath = path.join(process.cwd(), "roster.xlsx");
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({
-        success: true,
-        sheets: [],
-      });
-    }
-
-    const fileBuffer = fs.readFileSync(filePath);
-    const workbook = xlsx.read(fileBuffer, { type: "buffer" });
-    return NextResponse.json({
-      success: true,
-      sheets: workbook.SheetNames,
-    });
-  } catch (e) {
-    console.error("Failed listing Excel sheets:", e);
-    return NextResponse.json({ error: "Failed to read excel sheets" }, { status: 500 });
-  }
-}
-
-// POST: Parse and import a specific sheet OR upload a new roster.xlsx
+// POST: Upload and process roster.xlsx
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const contentType = req.headers.get("content-type") || "";
 
-    if (contentType.includes("multipart/form-data")) {
-      const formData = await req.formData();
-      const file = formData.get("file") as File;
-
-      if (!file) {
-        return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
-      }
-
-      const filePath = path.join(process.cwd(), "roster.xlsx");
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      
-      fs.writeFileSync(filePath, buffer);
-
-      const workbook = xlsx.read(buffer, { type: "buffer" });
-      return NextResponse.json({
-        success: true,
-        message: "Roster spreadsheet uploaded successfully. Choose a sheet date to optimize.",
-        sheets: workbook.SheetNames,
-      });
+    if (!contentType.includes("multipart/form-data")) {
+      return NextResponse.json({ error: "Only multipart/form-data is supported" }, { status: 400 });
     }
 
-    const body = await req.json();
-    const { sheetName } = body;
+    const formData = await req.formData();
+    const file = formData.get("file") as File;
 
-    if (!sheetName) {
-      return NextResponse.json({ error: "sheetName is required" }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
     const filePath = path.join(process.cwd(), "roster.xlsx");
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: "roster.xlsx not found in project root" }, { status: 404 });
-    }
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    
+    fs.writeFileSync(filePath, buffer);
 
-    const fileBuffer = fs.readFileSync(filePath);
-    const workbook = xlsx.read(fileBuffer, { type: "buffer" });
-    if (!workbook.SheetNames.includes(sheetName)) {
-      return NextResponse.json({ error: `Sheet ${sheetName} not found in workbook` }, { status: 400 });
-    }
-
-    const sheet = workbook.Sheets[sheetName];
-    const rows = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
-
-    // Step 1: Parse rows into route blocks
-    let currentRouteNo: string | null = null;
+    const workbook = xlsx.read(buffer, { type: "buffer" });
+    const defaultPassword = await bcrypt.hash("Welcome@123", 10);
+    
+    // Step 1: Parse rows into route blocks across ALL sheets
     const routeBlocks: { [key: string]: any[][] } = {};
+    const uniqueEmployeeCodes = new Set<string>();
 
-    rows.forEach((row) => {
-      if (!row || row.length === 0) return;
-      if (row[0] === "Rout No" || row[0] === "Route No") return; // Skip headers
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const rows = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+      
+      let currentRouteNo: string | null = null;
+      rows.forEach((row) => {
+        if (!row || row.length === 0) return;
+        if (row[0] === "Rout No" || row[0] === "Route No") return; // Skip headers
 
-      const routeNo = String(row[0] || "").trim();
-      if (routeNo) {
-        currentRouteNo = routeNo;
-      }
+        const routeNo = String(row[0] || "").trim();
+        if (routeNo) {
+          currentRouteNo = routeNo;
+        }
 
-      if (!currentRouteNo) return;
+        if (!currentRouteNo) return;
 
-      if (!routeBlocks[currentRouteNo]) {
-        routeBlocks[currentRouteNo] = [];
-      }
-      routeBlocks[currentRouteNo].push(row);
-    });
+        const empCode = String(row[3] || "").trim();
+        // Deduplicate rows so we don't process the same employee multiple times
+        const rowKey = `${currentRouteNo}_${empCode}`;
 
-    let importedRoutesCount = 0;
+        if (!uniqueEmployeeCodes.has(rowKey)) {
+          uniqueEmployeeCodes.add(rowKey);
+          if (!routeBlocks[currentRouteNo]) {
+            routeBlocks[currentRouteNo] = [];
+          }
+          routeBlocks[currentRouteNo].push(row);
+        }
+      });
+    }
+
     let importedEmployeesCount = 0;
     let importedCabsCount = 0;
     let firstShiftId: string | null = null;
 
-    // Parse date from sheetName (e.g. 27-5-26 -> 2026-05-27)
-    // SheetName is DD-MM-YY or D-M-YY
-    let dateStr = "";
-    try {
-      const parts = sheetName.split("-");
-      if (parts.length === 3) {
-        const d = parts[0].padStart(2, "0");
-        const m = parts[1].padStart(2, "0");
-        const y = `20${parts[2].padStart(2, "0")}`; // e.g. 26 -> 2026
-        dateStr = `${y}-${m}-${d}`;
-      } else {
-        dateStr = new Date().toISOString().split("T")[0];
-      }
-    } catch {
-      dateStr = new Date().toISOString().split("T")[0];
-    }
+    let dateStr = new Date().toISOString().split("T")[0];
 
     // Process each route block
     for (const [routeNo, rRows] of Object.entries(routeBlocks)) {
@@ -185,51 +141,22 @@ export async function POST(req: NextRequest) {
       const finalDriverName = driverName || `Driver ${routeNo}`;
       const finalDriverPhone = driverPhone || "+91 99000 00000";
 
-      // 1. Find or create Cab & Driver
+      // 1. Find or create Cab
       const cab = await prisma.$transaction(async (tx) => {
-        // Find existing cab by vehicleNumber
         let existingCab = await tx.cab.findUnique({
           where: { vehicleNumber: finalVehicleNumber },
-          include: { driver: true },
         });
 
         if (existingCab) {
-          // Update driver if name changed
-          if (existingCab.driverId) {
-            await tx.driver.update({
-              where: { id: existingCab.driverId },
-              data: {
-                name: finalDriverName,
-                phone: finalDriverPhone,
-              },
-            });
-          } else {
-            const driver = await tx.driver.create({
-              data: {
-                name: finalDriverName,
-                phone: finalDriverPhone,
-                licenseNumber: `DL-AUTO-${Math.floor(1000 + Math.random() * 9000)}`,
-                status: "AVAILABLE",
-              },
-            });
-            existingCab = await tx.cab.update({
-              where: { id: existingCab.id },
-              data: { driverId: driver.id },
-              include: { driver: true },
-            });
-          }
-          return existingCab;
-        } else {
-          // Create Driver
-          const driver = await tx.driver.create({
+          // Update driver info if it changed
+          return await tx.cab.update({
+            where: { id: existingCab.id },
             data: {
-              name: finalDriverName,
-              phone: finalDriverPhone,
-              licenseNumber: `DL-AUTO-${Math.floor(1000 + Math.random() * 9000)}`,
-              status: "AVAILABLE",
+              driverName: finalDriverName,
+              driverPhone: finalDriverPhone,
             },
           });
-          // Create Cab
+        } else {
           const capacity = Math.max(6, rRows.filter((r) => r[3] && String(r[3]).toLowerCase() !== "escort").length);
           return await tx.cab.create({
             data: {
@@ -237,10 +164,9 @@ export async function POST(req: NextRequest) {
               capacity: capacity,
               vendor: String(rRows[0]?.[1] || "FT").trim(),
               status: "AVAILABLE",
-              driverId: driver.id,
-            },
-            include: {
-              driver: true,
+              driverName: finalDriverName,
+              driverPhone: finalDriverPhone,
+              licenseNumber: `DL-AUTO-${Math.floor(1000 + Math.random() * 9000)}`,
             },
           });
         }
@@ -296,11 +222,7 @@ export async function POST(req: NextRequest) {
         firstShiftId = shift.id;
       }
 
-      // 3. Create employees and route stops
-      const routeStopsToCreate: { employeeId: string; stopOrder: number; etaMinutes: number; status: string }[] = [];
-      let stopOrder = 1;
-      let currentDistance = 0;
-      let lastStopCoords = DEPOT;
+      // 3. Create employees
 
       // Extract passengers
       for (const r of rRows) {
@@ -331,7 +253,7 @@ export async function POST(req: NextRequest) {
             : `${finalEmpCode.toLowerCase().replace(/[^a-z0-9]/g, "")}.${phoneDigits}@corporate.com`;
 
         const employeeStatus = String(r[11] || "YES").trim().toUpperCase() === "YES" ? "ACTIVE" : "INACTIVE";
-        const stopStatus = employeeStatus === "ACTIVE" ? "PENDING" : "MISSED";
+        const stopStatus = employeeStatus === "ACTIVE" ? "PENDING" : "SKIPPED";
         const gender = String(r[13] || "M").trim().toUpperCase().startsWith("F") ? "FEMALE" : "MALE";
 
         // Find or create employee by code OR email (both are now always non-empty/unique)
@@ -362,6 +284,20 @@ export async function POST(req: NextRequest) {
 
         const dbAddress = pickupPoint === address ? address : `${pickupPoint} | ${address}`;
 
+        // Provision User Account
+        let user = await prisma.user.findUnique({ where: { email: finalEmail } });
+        if (!user) {
+          user = await prisma.user.create({
+            data: {
+              email: finalEmail,
+              password: defaultPassword,
+              name: empName,
+              role: empCode.includes("MGR") || String(r[10] || "").toLowerCase().includes("manager") ? "MANAGER" : "EMPLOYEE",
+              requiresPasswordChange: true,
+            },
+          });
+        }
+
         if (!employee) {
           employee = await prisma.employee.create({
             data: {
@@ -376,6 +312,7 @@ export async function POST(req: NextRequest) {
               department: "Operations",
               shiftId: shift.id,
               status: employeeStatus,
+              userId: user.id,
             },
           });
         } else {
@@ -390,130 +327,22 @@ export async function POST(req: NextRequest) {
               address: dbAddress,
               x: coords.x,
               y: coords.y,
+              userId: user.id,
             },
           });
         }
 
         importedEmployeesCount++;
 
-        // Calculate segment distance for ETA
-        const stopCoords = { x: employee.x, y: employee.y };
-        if (isPickup) {
-          if (stopOrder > 1) {
-            currentDistance += getDistance(lastStopCoords, stopCoords);
-          }
-          lastStopCoords = stopCoords;
-          routeStopsToCreate.push({
-            employeeId: employee.id,
-            stopOrder: stopOrder++,
-            etaMinutes: Math.round(currentDistance / AVG_SPEED) + 10,
-            status: stopStatus,
-          });
-        } else {
-          // Drop starts at depot
-          if (stopOrder === 1) {
-            currentDistance += getDistance(DEPOT, stopCoords);
-          } else {
-            currentDistance += getDistance(lastStopCoords, stopCoords);
-          }
-          lastStopCoords = stopCoords;
-          routeStopsToCreate.push({
-            employeeId: employee.id,
-            stopOrder: stopOrder++,
-            etaMinutes: Math.round(currentDistance / AVG_SPEED),
-            status: stopStatus,
-          });
-        }
       }
 
-      // Add final leg distance
-      if (isPickup && routeStopsToCreate.length > 0) {
-        currentDistance += getDistance(lastStopCoords, DEPOT);
-      }
 
-      const totalDistance = Math.round(currentDistance * 10) / 10;
-      const totalDuration = Math.round(currentDistance / AVG_SPEED) + (isPickup ? 10 : 0);
-
-      // Clean up previous route for this cab, date, and shift
-      const oldRoutes = await prisma.route.findMany({
-        where: { cabId: cab.id, date: dateStr, shiftId: shift.id },
-        select: { id: true },
-      });
-      const oldRouteIds = oldRoutes.map((r) => r.id);
-      if (oldRouteIds.length > 0) {
-        await prisma.routeStop.deleteMany({ where: { routeId: { in: oldRouteIds } } });
-        await prisma.violation.deleteMany({ where: { routeId: { in: oldRouteIds } } });
-        await prisma.route.deleteMany({ where: { id: { in: oldRouteIds } } });
-      }
-
-      // 4. Create new Route
-      const route = await prisma.route.create({
-        data: {
-          cabId: cab.id,
-          date: dateStr,
-          shiftId: shift.id,
-          isPickup: isPickup,
-          totalDistance: totalDistance,
-          totalDuration: totalDuration,
-          status: "PENDING",
-          optimizationScore: 100,
-          hasEscort: hasEscort,
-        },
-      });
-
-      // 5. Create RouteStops in DB
-      for (const stop of routeStopsToCreate) {
-        await prisma.routeStop.create({
-          data: {
-            routeId: route.id,
-            employeeId: stop.employeeId,
-            stopOrder: stop.stopOrder,
-            etaMinutes: stop.etaMinutes,
-            status: stop.status,
-          },
-        });
-      }
-
-      // 6. Check and insert safety violations
-      const stopsData = await prisma.routeStop.findMany({
-        where: { routeId: route.id },
-        include: { employee: true },
-        orderBy: { stopOrder: "asc" },
-      });
-
-      const finalViolations = checkSafetyViolations(
-        stopsData.map((s) => ({ name: s.employee.name, gender: s.employee.gender as "MALE" | "FEMALE", status: s.status })),
-        isPickup,
-        hasEscort
-      );
-
-      for (const viol of finalViolations) {
-        await prisma.violation.create({
-          data: {
-            routeId: route.id,
-            type: viol.type,
-            severity: viol.severity,
-            resolved: false,
-            notes: viol.notes,
-          },
-        });
-      }
-
-      // Update optimization score with penalty
-      const penalty = (hasEscort ? 15 : 0) + finalViolations.length * 30;
-      const score = Math.max(30, Math.round(100 - totalDistance * 0.8 - penalty));
-
-      await prisma.route.update({
-        where: { id: route.id },
-        data: { optimizationScore: score },
-      });
-
-      importedRoutesCount++;
     }
+
 
     return NextResponse.json({
       success: true,
-      message: `Roster import completed for sheet "${sheetName}". Imported ${importedRoutesCount} routes, ${importedEmployeesCount} employee records, and ${importedCabsCount} cab profiles.`,
+      message: `Roster import completed. Imported ${importedEmployeesCount} employee records and ${importedCabsCount} cab profiles.`,
       date: dateStr,
       shiftId: firstShiftId,
     });
@@ -526,13 +355,15 @@ export async function POST(req: NextRequest) {
 // DELETE: Reset database — clears all DB records and deletes the uploaded roster.xlsx file
 export async function DELETE() {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     await prisma.$transaction([
       prisma.violation.deleteMany(),
       prisma.routeStop.deleteMany(),
       prisma.route.deleteMany(),
       prisma.employee.deleteMany(),
       prisma.cab.deleteMany(),
-      prisma.driver.deleteMany(),
       prisma.shift.deleteMany(),
     ]);
 

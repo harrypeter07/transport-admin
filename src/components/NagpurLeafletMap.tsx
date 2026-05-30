@@ -92,9 +92,7 @@ export default function NagpurLeafletMap({
         // 1. Build actual optimized coordinates
         const stopsList = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
         const optCoords: [number, number][] = [];
-        if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
-          optCoords.push([route.cab.driver.startY, route.cab.driver.startX]);
-        }
+
         if (route.isPickup) {
           stopsList.forEach((s) => optCoords.push([s.employee.y, s.employee.x]));
           optCoords.push([DEPOT_LAT, DEPOT_LNG]);
@@ -106,9 +104,7 @@ export default function NagpurLeafletMap({
         // 2. Build normal (naive alphabetical) coordinates
         const normalStopsList = [...route.stops].sort((a, b) => a.employee.name.localeCompare(b.employee.name));
         const normCoords: [number, number][] = [];
-        if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
-          normCoords.push([route.cab.driver.startY, route.cab.driver.startX]);
-        }
+
         if (route.isPickup) {
           normalStopsList.forEach((s) => normCoords.push([s.employee.y, s.employee.x]));
           normCoords.push([DEPOT_LAT, DEPOT_LNG]);
@@ -157,9 +153,7 @@ export default function NagpurLeafletMap({
           const stopsList = [...v.stops].sort((a, b) => a.stopOrder - b.stopOrder);
           const coords: [number, number][] = [];
 
-          if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
-            coords.push([route.cab.driver.startY, route.cab.driver.startX]);
-          }
+
 
           if (route.isPickup) {
             // Pickup starts at Driver/Passenger stops, ends at Depot
@@ -444,16 +438,7 @@ export default function NagpurLeafletMap({
           });
         }
 
-        // Draw Driver Start Marker if exists
-        if (selectedRoute.cab?.driver?.startY && selectedRoute.cab?.driver?.startX) {
-          const dy = selectedRoute.cab.driver.startY;
-          const dx = selectedRoute.cab.driver.startX;
-          if (isWithinBounds(dy, dx)) fitCoords.push([dy, dx]);
 
-          L.marker([dy, dx], { icon: createDriverStartIcon() })
-            .bindPopup(`<strong>Driver Start Point</strong><br/>${selectedRoute.cab.driver.name}<br/>${selectedRoute.cab.driver.startAddress || "Custom Location"}`)
-            .addTo(layerGroup);
-        }
 
         // Zoom map to fit selected route stops and depot
         if (fitCoords.length > 1) {
@@ -474,9 +459,7 @@ export default function NagpurLeafletMap({
 
         const lineCoords: [number, number][] = [];
         
-        if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
-          lineCoords.push([route.cab.driver.startY, route.cab.driver.startX]);
-        }
+
 
         if (route.isPickup) {
           sortedStops.forEach((s) => lineCoords.push([s.employee.y, s.employee.x]));
@@ -496,17 +479,7 @@ export default function NagpurLeafletMap({
           .on("click", () => onSelectRoute(route.id))
           .addTo(layerGroup);
 
-        // Draw Driver Start Marker if exists in Overview
-        if (route.cab?.driver?.startY && route.cab?.driver?.startX) {
-          const dy = route.cab.driver.startY;
-          const dx = route.cab.driver.startX;
-          if (isWithinBounds(dy, dx)) fitCoords.push([dy, dx]);
 
-          L.marker([dy, dx], { icon: createDriverStartIcon() })
-            .bindTooltip(`Driver Start: ${route.cab.driver.name}`)
-            .on("click", () => onSelectRoute(route.id))
-            .addTo(layerGroup);
-        }
 
         // Draw minor markers for stops
         sortedStops.forEach((stop) => {

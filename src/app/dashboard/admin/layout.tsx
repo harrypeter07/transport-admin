@@ -27,11 +27,12 @@ const navGroups = [
     label: "Operations",
     items: [
       { name: "Employees", href: "/dashboard/admin/operations/employees", icon: Users },
-      { name: "Drivers", href: "/dashboard/admin/operations/drivers", icon: CarFront },
-      { name: "Cabs", href: "/dashboard/admin/operations/cabs", icon: Bus },
+      { name: "Cabs", href: "/dashboard/admin/operations/cabs", icon: CarFront },
       { name: "Shifts", href: "/dashboard/admin/operations/shifts", icon: Clock },
+      { name: "Leaves & Approvals", href: "/dashboard/admin/operations/leaves", icon: FileSpreadsheet },
       { name: "Hierarchy", href: "/dashboard/admin/operations/hierarchy", icon: Network },
-      { name: "Calendar & Holidays", href: "/dashboard/admin/operations/calendar", icon: Clock }, // Added Calendar
+      { name: "Calendar & Holidays", href: "/dashboard/admin/operations/calendar", icon: Clock },
+      { name: "User Accounts", href: "/dashboard/admin/operations/users", icon: UserCog },
     ],
   },
   {
@@ -44,7 +45,6 @@ const navGroups = [
   {
     label: "System",
     items: [
-      { name: "User Accounts", href: "/dashboard/admin/operations/users", icon: UserCog },
       { name: "Analytics", href: "/dashboard/admin/analytics", icon: BarChart },
       { name: "Settings", href: "/dashboard/admin/settings", icon: Settings },
     ],

@@ -19,7 +19,7 @@ model User {
   resetToken             String?
   resetTokenExpiry       DateTime?
   employee               Employee?
-  driver                 Driver?
+  cab                    Cab?
   leaves                 LeaveRequest[]        @relation("ApplicantLeaves")
   approvedLeaves         LeaveRequest[]        @relation("ApproverLeaves")
   approvedTimings        TimingChangeRequest[] @relation("ApproverTimings")
@@ -33,26 +33,8 @@ model Shift {
   startTime String     // e.g. "09:00"
   endTime   String     // e.g. "18:00"
   employees Employee[]
-  drivers   Driver[]
   cabs      Cab[]
   routes    Route[]
-}
-
-model Driver {
-  id            String  @id @default(uuid())
-  userId        String? @unique
-  user          User?   @relation(fields: [userId], references: [id])
-  name          String
-  phone         String
-  licenseNumber String
-  vendor        String?
-  status        String  // AVAILABLE, ACTIVE, OFF_DUTY
-  cab           Cab?
-  startAddress  String?
-  startX        Float?
-  startY        Float?
-  shiftId       String?
-  shift         Shift?  @relation(fields: [shiftId], references: [id])
 }
 
 model Cab {
@@ -61,8 +43,11 @@ model Cab {
   capacity      Int     // e.g. 4, 6
   vendor        String
   status        String  // AVAILABLE, ACTIVE, MAINTENANCE
-  driverId      String? @unique
-  driver        Driver? @relation(fields: [driverId], references: [id])
+  userId        String? @unique
+  user          User?   @relation(fields: [userId], references: [id])
+  driverName    String
+  driverPhone   String
+  licenseNumber String
   routes        Route[]
   shiftId       String?
   shift         Shift?  @relation(fields: [shiftId], references: [id])
@@ -191,7 +176,7 @@ model OperationalEvent {
   route       Route?    @relation(fields: [routeId], references: [id], onDelete: Cascade)
   routeStopId String?
   routeStop   RouteStop? @relation(fields: [routeStopId], references: [id], onDelete: Cascade)
-  driverId    String?
+  cabId       String?
   employeeId  String?
   metadata    String?   // JSON string for extra data like delay reasons
 }

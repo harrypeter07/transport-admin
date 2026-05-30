@@ -23,15 +23,9 @@ export interface Cab {
   capacity: number;
   vendor: string;
   status: string;
-  driverId: string | null;
-  driver?: {
-    id: string;
-    name: string;
-    phone: string;
-    startAddress?: string | null;
-    startX?: number | null;
-    startY?: number | null;
-  };
+  driverName?: string | null;
+  driverPhone?: string | null;
+  licenseNumber?: string | null;
 }
 
 export interface Shift {
@@ -48,7 +42,7 @@ export interface RouteStop {
   employee: Employee;
   stopOrder: number;
   etaMinutes: number;
-  status: "PENDING" | "PICKED_UP" | "MISSED" | "COMPLETED";
+  status: "PENDING" | "REACHED" | "BOARDED" | "SKIPPED";
 }
 
 export interface Violation {
@@ -95,7 +89,7 @@ interface TransportStore {
   setSelectedDate: (date: string) => void;
   setSelectedRouteId: (routeId: string | null) => void;
   runOptimization: (isPickup: boolean, apiKey?: string, mode?: string) => Promise<{ success: boolean; error?: string }>;
-  updateStopStatus: (routeId: string, stopId: string, status: "PENDING" | "PICKED_UP" | "MISSED" | "COMPLETED") => Promise<void>;
+  updateStopStatus: (routeId: string, stopId: string, status: "PENDING" | "REACHED" | "BOARDED" | "SKIPPED") => Promise<void>;
   reorderRouteStops: (routeId: string, stopId: string, direction: "up" | "down") => Promise<void>;
   overrideViolation: (violationId: string) => Promise<void>;
   addEmployee: (employee: any) => Promise<{ success: boolean; error?: string }>;
@@ -228,7 +222,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
                 s.id === stopId ? { ...s, status } : s
               );
               // Check if all stops are completed to update route status
-              const allDone = updatedStops.every((s) => s.status !== "PENDING");
+              const allDone = updatedStops.every((s) => s.status === "BOARDED" || s.status === "SKIPPED");
               const routeStatus = allDone ? "COMPLETED" : "IN_PROGRESS";
               return { ...r, stops: updatedStops, status: routeStatus };
             }

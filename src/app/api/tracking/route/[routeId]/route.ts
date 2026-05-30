@@ -15,6 +15,10 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 export async function GET(req: Request, { params }: { params: Promise<{ routeId: string }> }) {
   try {
     const session = await verifySession();
+    if (session.role !== "ADMIN" && session.role !== "MANAGER") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const routeId = (await params).routeId;
 
     const route = await prisma.route.findUnique({
@@ -24,11 +28,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ routeId:
           include: { employee: true },
           orderBy: { stopOrder: "asc" } 
         },
-        cab: { include: { driver: true } }
+        cab: true
       }
     });
 
     if (!route) return NextResponse.json({ error: "Route not found" }, { status: 404 });
+
+    if (session.role === "MANAGER") {
+      const managerEmployee = await prisma.employee.findFirst({
+        where: { userId: session.userId },
+        select: { id: true }
+      });
+
+      if (!managerEmployee || !route.stops.some((stop) => stop.employee.managerId === managerEmployee.id)) {
+        return NextResponse.json({ error: "Route not in manager scope" }, { status: 403 });
+      }
+    }
 
     const currentLat = route.currentLat;
     const currentLng = route.currentLng;

@@ -36,7 +36,8 @@ import {
   Phone,
   CheckCircle2,
   ShieldOff,
-  MessageSquare
+  MessageSquare,
+  Sparkles
 } from "lucide-react";
 
 export default function TransitAdminSPA() {
@@ -378,13 +379,13 @@ export default function TransitAdminSPA() {
   };
 
   const handleToggleStopStatus = async (stop: RouteStop) => {
-    let newStatus: "PENDING" | "PICKED_UP" | "COMPLETED" | "MISSED";
+    let newStatus: "PENDING" | "REACHED" | "BOARDED" | "SKIPPED";
     if (stop.status === "PENDING") {
-      newStatus = "PICKED_UP";
-    } else if (stop.status === "PICKED_UP") {
-      newStatus = "COMPLETED";
-    } else if (stop.status === "COMPLETED") {
-      newStatus = "MISSED";
+      newStatus = "BOARDED";
+    } else if (stop.status === "BOARDED") {
+      newStatus = "SKIPPED";
+    } else if (stop.status === "SKIPPED") {
+      newStatus = "PENDING";
     } else {
       newStatus = "PENDING";
     }
@@ -418,7 +419,7 @@ export default function TransitAdminSPA() {
 
   const filteredCabs = cabs.filter((cab) =>
     cab.vehicleNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (cab.driver?.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+    (cab.driverName || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const activeViolationsList = routes.flatMap((r) =>
@@ -426,8 +427,8 @@ export default function TransitAdminSPA() {
       ...v,
       routeId: r.id,
       vehicleNumber: r.cab.vehicleNumber,
-      driverName: r.cab.driver?.name || "N/A",
-      driverPhone: r.cab.driver?.phone || "N/A",
+      driverName: r.cab.driverName || "N/A",
+      driverPhone: r.cab.driverPhone || "N/A",
       totalStops: r.stops.length,
     }))
   );
@@ -653,6 +654,32 @@ export default function TransitAdminSPA() {
              </div>
           )}
 
+          {/* Dual Mode Comparison Helper */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col gap-3 animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-indigo-500" />
+                Optimization Mode Comparison Rationale
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className={`p-4 rounded-xl border transition ${optimizationMode === "FASTEST_TRAVEL" ? "border-slate-850 bg-slate-900 text-white shadow-xs" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                <span className="font-bold text-sm block mb-1">Mode A: Fastest Travel (Minimize Commute)</span>
+                <p className="leading-relaxed text-[11px] opacity-90">
+                  Prioritizes employee experience by limiting detours. When grouping employees, it leaves seats empty if a detour would add more than 7 km to the trip. 
+                  <strong className="block mt-1 font-bold">Best for: Night shifts, female safety routing, and employee satisfaction.</strong>
+                </p>
+              </div>
+              <div className={`p-4 rounded-xl border transition ${optimizationMode === "MAXIMIZE_UTILIZATION" ? "border-slate-850 bg-slate-900 text-white shadow-xs" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                <span className="font-bold text-sm block mb-1">Mode B: Maximize Utilization (Minimize Fleet)</span>
+                <p className="leading-relaxed text-[11px] opacity-90">
+                  Prioritizes operational efficiency by packing cabs as close to capacity as possible. Disregards detour distance limits to reduce total vehicles and driver counts.
+                  <strong className="block mt-1 font-bold">Best for: General day shifts, fuel conservation, and fleet cost minimization.</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* System Configuration & Diagnostics Panel */}
           <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-3">
             <button
@@ -808,7 +835,7 @@ export default function TransitAdminSPA() {
                                   .filter(r => r.date === today)
                                   .flatMap(r => r.stops.filter((s: any) => s.employeeId === emp.id));
                                 for (const stop of matchingStops) {
-                                  const newStopStatus = finalStatus === "INACTIVE" ? "MISSED" : "PENDING";
+                                  const newStopStatus = finalStatus === "INACTIVE" ? "SKIPPED" : "PENDING";
                                   await updateStopStatus(stop.routeId, stop.id, newStopStatus as any);
                                 }
                               }}
@@ -883,13 +910,13 @@ export default function TransitAdminSPA() {
 
                     <div className="text-[11px] text-slate-600 flex flex-col gap-1 text-left">
                       <p>
-                        <span className="text-slate-400">Driver:</span> {selectedRoute.cab.driver?.name || "N/A"}
+                        <span className="text-slate-400">Driver:</span> {selectedRoute.cab.driverName || "N/A"}
                       </p>
                       <p>
                         <span className="text-slate-400">Cab Capacity:</span> {selectedRoute.stops.length} / {selectedRoute.cab.capacity} passengers
                       </p>
                       <p>
-                        <span className="text-slate-400">Contact:</span> {selectedRoute.cab.driver?.phone || "N/A"}
+                        <span className="text-slate-400">Contact:</span> {selectedRoute.cab.driverPhone || "N/A"}
                       </p>
                     </div>
 
@@ -942,7 +969,7 @@ export default function TransitAdminSPA() {
 
                               <div className={`flex-1 p-2 border rounded-lg flex items-center justify-between text-[11px] transition-all hover:bg-slate-100/50
                                 ${
-                                  stop.status === "MISSED"
+                                  stop.status === "SKIPPED"
                                     ? "bg-red-50/40 border-red-150 text-slate-400"
                                     : "bg-slate-50 border-slate-200"
                                 }
@@ -970,28 +997,28 @@ export default function TransitAdminSPA() {
                                     className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border cursor-pointer transition-all
                                       ${
                                         stop.status === "PENDING" ? "bg-slate-100 border-slate-350 text-slate-650" :
-                                        stop.status === "PICKED_UP" ? "bg-blue-50 border-blue-200 text-blue-700" :
-                                        stop.status === "COMPLETED" ? "bg-emerald-50 border-emerald-250 text-emerald-700" :
+                                        stop.status === "REACHED" ? "bg-blue-50 border-blue-200 text-blue-700" :
+                                        stop.status === "BOARDED" ? "bg-emerald-50 border-emerald-250 text-emerald-700" :
                                         "bg-red-50 border-red-200 text-red-600"
                                       }
                                     `}
                                   >
                                     {stop.status === "PENDING" ? "PENDING" :
-                                     stop.status === "PICKED_UP" ? "PICKED" :
-                                     stop.status === "COMPLETED" ? "DONE" : "MISSED"}
+                                     stop.status === "REACHED" ? "REACHED" :
+                                     stop.status === "BOARDED" ? "BOARDED" : "SKIPPED"}
                                   </button>
 
                                   <div className="flex items-center gap-0.5">
                                     <button
                                       onClick={() => reorderRouteStops(selectedRoute.id, stop.id, "up")}
-                                      disabled={isFirst || stop.status === "MISSED" || selectedRoute.stops[idx - 1]?.status === "MISSED"}
+                                      disabled={isFirst || stop.status === "SKIPPED" || selectedRoute.stops[idx - 1]?.status === "SKIPPED"}
                                       className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-500 disabled:opacity-30 transition cursor-pointer"
                                     >
                                       <ArrowUp className="w-3 h-3" />
                                     </button>
                                     <button
                                       onClick={() => reorderRouteStops(selectedRoute.id, stop.id, "down")}
-                                      disabled={isLast || stop.status === "MISSED" || selectedRoute.stops[idx + 1]?.status === "MISSED"}
+                                      disabled={isLast || stop.status === "SKIPPED" || selectedRoute.stops[idx + 1]?.status === "SKIPPED"}
                                       className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-500 disabled:opacity-30 transition cursor-pointer"
                                     >
                                       <ArrowDown className="w-3 h-3" />
@@ -1118,8 +1145,8 @@ export default function TransitAdminSPA() {
                             </td>
                             <td className="p-3">
                               <div className="flex flex-col text-left">
-                                <span className="text-slate-900 font-bold">{route.cab.driver?.name || "N/A"}</span>
-                                <span className="text-[9px] text-slate-400 font-mono">{route.cab.driver?.phone || "N/A"}</span>
+                                <span className="text-slate-900 font-bold">{route.cab.driverName || "N/A"}</span>
+                                <span className="text-[9px] text-slate-400 font-mono">{route.cab.driverPhone || "N/A"}</span>
                               </div>
                             </td>
                             <td className="p-3 font-mono text-slate-900">{route.cab.vehicleNumber}</td>
@@ -1256,8 +1283,8 @@ export default function TransitAdminSPA() {
                         <div className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-4">
                           <div className="flex flex-col text-left">
                             <span className="text-[8px] uppercase font-extrabold tracking-wider text-slate-400">Driver</span>
-                            <span className="text-xs font-bold text-slate-950">{route.cab.driver?.name || "N/A"}</span>
-                            <span className="text-[9px] text-slate-500 font-mono font-medium">{route.cab.driver?.phone || "N/A"}</span>
+                            <span className="text-xs font-bold text-slate-950">{route.cab.driverName || "N/A"}</span>
+                            <span className="text-[9px] text-slate-500 font-mono font-medium">{route.cab.driverPhone || "N/A"}</span>
                           </div>
                           <div className="flex gap-1.5 print:hidden">
                             <button
@@ -1412,7 +1439,7 @@ export default function TransitAdminSPA() {
                               const empId = stop.employee ? stop.employee.id : (stop as any).employeeId;
                               const empName = stop.employee ? stop.employee.name : (stop as any).employeeName;
                               const empAddress = stop.employee ? stop.employee.address : (stop as any).address;
-                              const isMissed = stop.status === "MISSED" || (stop as any).status === "MISSED";
+                              const isMissed = stop.status === "SKIPPED" || (stop as any).status === "SKIPPED";
 
                               return (
                                 <div key={stop.id || empId} className="relative flex items-center gap-3">
@@ -1471,15 +1498,15 @@ export default function TransitAdminSPA() {
                                         className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer print:hidden
                                           ${
                                             stop.status === "PENDING" ? "bg-slate-100 border-slate-300 text-slate-650 hover:bg-slate-200" :
-                                            stop.status === "PICKED_UP" ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100" :
-                                            stop.status === "COMPLETED" ? "bg-emerald-50 border-emerald-250 text-emerald-700 hover:bg-emerald-100" :
+                                            stop.status === "REACHED" ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100" :
+                                            stop.status === "BOARDED" ? "bg-emerald-50 border-emerald-250 text-emerald-700 hover:bg-emerald-100" :
                                             "bg-red-50 border-red-200 text-red-600 hover:bg-red-100"
                                           }
                                         `}
                                       >
                                         {stop.status === "PENDING" ? "PENDING" :
-                                         stop.status === "PICKED_UP" ? "PICKED UP" :
-                                         stop.status === "COMPLETED" ? "COMPLETED" : "MISSED"}
+                                         stop.status === "REACHED" ? "REACHED" :
+                                         stop.status === "BOARDED" ? "BOARDED" : "SKIPPED"}
                                       </button>
                                     )}
                                   </div>
@@ -1882,8 +1909,8 @@ export default function TransitAdminSPA() {
                             <tr key={cab.id} className="hover:bg-slate-50/50 transition">
                               <td className="p-3 font-mono font-bold text-slate-900">{cab.vehicleNumber}</td>
                               <td className="p-3">{cab.capacity} seats</td>
-                              <td className="p-3 text-slate-900">{cab.driver?.name}</td>
-                              <td className="p-3 font-mono text-slate-500">{cab.driver?.phone}</td>
+                              <td className="p-3 text-slate-900">{cab.driverName}</td>
+                              <td className="p-3 font-mono text-slate-500">{cab.driverPhone}</td>
                               <td className="p-3 text-slate-500">{cab.vendor}</td>
                               <td className="p-3 text-center">
                                 <button
@@ -2900,7 +2927,7 @@ export default function TransitAdminSPA() {
                       type="text"
                       name="driverName"
                       required
-                      defaultValue={editingCab.driver?.name || ""}
+                      defaultValue={editingCab.driverName || ""}
                       className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
                     />
                   </div>
@@ -2911,7 +2938,7 @@ export default function TransitAdminSPA() {
                       type="text"
                       name="driverStartAddress"
                       placeholder="e.g. Pratap Nagar, Nagpur"
-                      defaultValue={editingCab.driver?.startAddress || ""}
+                      defaultValue=""
                       className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
                     />
                   </div>
@@ -2922,7 +2949,7 @@ export default function TransitAdminSPA() {
                       <input
                         type="text"
                         name="driverPhone"
-                        defaultValue={editingCab.driver?.phone || ""}
+                        defaultValue={editingCab.driverPhone || ""}
                         className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
                       />
                     </div>
@@ -2931,7 +2958,7 @@ export default function TransitAdminSPA() {
                       <input
                         type="text"
                         name="licenseNumber"
-                        defaultValue={editingCab.driver?.licenseNumber || ""}
+                        defaultValue={editingCab.licenseNumber || ""}
                         className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
                       />
                     </div>
@@ -2996,7 +3023,7 @@ export default function TransitAdminSPA() {
                     >
                       <div className="flex flex-col text-left">
                         <span className="text-xs font-bold text-slate-900">{cab.vehicleNumber} ({cab.capacity} seats)</span>
-                        <span className="text-[10px] text-slate-500">Driver: {cab.driver?.name || "N/A"} · {cab.vendor}</span>
+                        <span className="text-[10px] text-slate-500">Driver: {cab.driverName || "N/A"} · {cab.vendor}</span>
                       </div>
                       {isAssigned ? (
                         <span className="text-[8px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-200 uppercase">

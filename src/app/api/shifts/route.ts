@@ -12,7 +12,7 @@ export async function GET() {
     const shifts = await prisma.shift.findMany({
       include: {
         _count: {
-          select: { employees: true, drivers: true, cabs: true },
+          select: { employees: true, cabs: true },
         },
       },
       orderBy: { startTime: "asc" },

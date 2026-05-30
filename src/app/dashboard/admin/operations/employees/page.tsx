@@ -11,7 +11,11 @@ export default function EmployeesPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterRole, setFilterRole] = useState("");
+  const [filterShift, setFilterShift] = useState("");
+  const [sortBy, setSortBy] = useState("name");
   const [showModal, setShowModal] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -60,21 +64,26 @@ export default function EmployeesPage() {
       address: data.get("address"),
       department: data.get("department"),
       designation: data.get("designation"),
+      managerId: data.get("managerId") || null,
       shiftId: data.get("shiftId") || null,
+      ...(editingEmployee && { id: editingEmployee.id })
     };
     try {
-      const res = await fetch("/api/employees", {
-        method: "POST",
+      const url = "/api/employees";
+      const method = editingEmployee ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
         setShowModal(false);
+        setEditingEmployee(null);
         formRef.current?.reset();
         fetchEmployees();
       } else {
         const err = await res.json();
-        setFormError(err.error || "Failed to create employee.");
+        setFormError(err.error || `Failed to ${editingEmployee ? "update" : "create"} employee.`);
       }
     } catch {
       setFormError("Network error. Please try again.");
@@ -93,9 +102,24 @@ export default function EmployeesPage() {
     }
   };
 
+  let processedEmployees = [...employees];
+  if (filterRole) {
+    processedEmployees = processedEmployees.filter((emp) => emp.designation === filterRole);
+  }
+  if (filterShift) {
+    processedEmployees = processedEmployees.filter((emp) => emp.shiftId === filterShift);
+  }
+  processedEmployees.sort((a, b) => {
+    if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
+    if (sortBy === "role") return (a.designation || "").localeCompare(b.designation || "");
+    if (sortBy === "shift") return (a.shift?.name || "").localeCompare(b.shift?.name || "");
+    return 0;
+  });
+
   return (
-    <div className="space-y-6 animate-fadeIn">
-      {/* Breadcrumb */}
+    <>
+      <div className="space-y-6 animate-fadeIn">
+        {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500">
         <Link href="/dashboard/admin" className="hover:text-slate-900 transition">Dashboard</Link>
         <ChevronRight className="w-3 h-3" />
@@ -118,7 +142,7 @@ export default function EmployeesPage() {
 
       {/* Table card */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100">
+        <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -128,6 +152,24 @@ export default function EmployeesPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-8 pr-4 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all"
             />
+          </div>
+          <div className="flex gap-2">
+            <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all text-slate-700">
+              <option value="">All Roles</option>
+              <option value="Manager">Manager</option>
+              <option value="Senior Manager">Senior Manager</option>
+              <option value="Engineer">Engineer</option>
+              <option value="Driver">Driver</option>
+            </select>
+            <select value={filterShift} onChange={e => setFilterShift(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all text-slate-700">
+              <option value="">All Shifts</option>
+              {shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all text-slate-700">
+              <option value="name">Sort: Name</option>
+              <option value="role">Sort: Role</option>
+              <option value="shift">Sort: Shift</option>
+            </select>
           </div>
         </div>
 
@@ -146,10 +188,10 @@ export default function EmployeesPage() {
             <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
               {loading ? (
                 <tr><td colSpan={6} className="px-5 py-10 text-center text-slate-400 text-xs">Loading…</td></tr>
-              ) : employees.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-12 text-center text-slate-400 text-xs">No employees found. Use the &ldquo;Add Employee&rdquo; button to create one.</td></tr>
+              ) : processedEmployees.length === 0 ? (
+                <tr><td colSpan={6} className="px-5 py-12 text-center text-slate-400 text-xs">No employees match the filters.</td></tr>
               ) : (
-                employees.map((emp) => (
+                processedEmployees.map((emp) => (
                   <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="font-semibold text-slate-900">{emp.name}</div>
@@ -179,7 +221,14 @@ export default function EmployeesPage() {
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded transition">
+                        <button 
+                          onClick={() => {
+                            setEditingEmployee(emp);
+                            setShowModal(true);
+                            setFormError(null);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded transition"
+                        >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
                         <button
@@ -197,35 +246,41 @@ export default function EmployeesPage() {
           </table>
         </div>
       </div>
-
+      </div>
+      
       {/* Create Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Add Employee</h2>
-              <button onClick={() => setShowModal(false)} className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition">
-                <X className="w-4 h-4" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100/80 bg-white/50 sticky top-0 z-10">
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                {editingEmployee ? "Edit Employee" : "Add Employee"}
+              </h2>
+              <button 
+                onClick={() => { setShowModal(false); setEditingEmployee(null); }} 
+                className="p-2 rounded-full hover:bg-slate-200/50 text-slate-500 hover:text-slate-900 transition-all bg-slate-100/50"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form ref={formRef} onSubmit={handleCreate} className="p-5 space-y-4">
+            <form ref={formRef} key={editingEmployee?.id || "new"} onSubmit={handleCreate} className="p-6 space-y-6 bg-white/40">
               {formError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-semibold text-red-700">
+                <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 text-sm font-semibold text-red-700 backdrop-blur-sm">
                   {formError}
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Employee Code" name="employeeCode" required placeholder="EMP001" />
-                <Field label="Full Name" name="name" required placeholder="John Doe" />
+                <Field label="Employee Code" name="employeeCode" required placeholder="EMP001" defaultValue={editingEmployee?.employeeCode} />
+                <Field label="Full Name" name="name" required placeholder="John Doe" defaultValue={editingEmployee?.name} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <SelectField label="Gender" name="gender" required>
+                <SelectField label="Gender" name="gender" required defaultValue={editingEmployee?.gender}>
                   <option value="MALE">Male</option>
                   <option value="FEMALE">Female</option>
                 </SelectField>
-                <SelectField label="Designation" name="designation">
+                <SelectField label="Designation" name="designation" defaultValue={editingEmployee?.designation}>
                   <option value="Engineer">Engineer</option>
                   <option value="Lead">Lead</option>
                   <option value="Manager">Manager</option>
@@ -234,57 +289,71 @@ export default function EmployeesPage() {
                 </SelectField>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Email" name="email" type="email" placeholder="john@company.com" />
-                <Field label="Phone" name="phone" placeholder="+91 98765 43210" />
+                <Field label="Email" name="email" type="email" placeholder="john@company.com" defaultValue={editingEmployee?.email} />
+                <Field label="Phone" name="phone" placeholder="+91 98765 43210" defaultValue={editingEmployee?.phone} />
               </div>
-              <Field label="Department" name="department" placeholder="Engineering" />
-              <Field label="Address / Locality" name="address" required placeholder="Sadar, Nagpur" />
-              <SelectField label="Shift" name="shiftId">
+              <Field label="Department" name="department" placeholder="Engineering" defaultValue={editingEmployee?.department} />
+              <Field label="Address / Locality" name="address" required placeholder="Sadar, Nagpur" defaultValue={editingEmployee?.address} />
+              <SelectField label="Shift" name="shiftId" defaultValue={editingEmployee?.shiftId || ""}>
                 <option value="">-- No shift --</option>
                 {shifts.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </SelectField>
+              <SelectField label="Manager" name="managerId" defaultValue={editingEmployee?.managerId || ""}>
+                <option value="">-- No manager --</option>
+                {employees
+                  .filter((emp) => emp.id !== editingEmployee?.id)
+                  .map((emp) => (
+                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.designation})</option>
+                  ))}
+              </SelectField>
 
-              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 mt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition">
+              <div className="flex justify-end gap-3 pt-6 border-t border-slate-100/80">
+                <button 
+                  type="button" 
+                  onClick={() => { setShowModal(false); setEditingEmployee(null); }} 
+                  className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm"
+                >
                   Cancel
                 </button>
-                <button type="submit" disabled={submitting} className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition disabled:opacity-50">
-                  {submitting ? "Creating…" : "Create Employee"}
+                <button type="submit" disabled={submitting} className="px-6 py-2.5 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-md shadow-slate-900/20 rounded-xl transition-all disabled:opacity-50">
+                  {submitting ? (editingEmployee ? "Saving…" : "Creating…") : (editingEmployee ? "Save Changes" : "Create Employee")}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-function Field({ label, name, required, type = "text", placeholder }: { label: string; name: string; required?: boolean; type?: string; placeholder?: string }) {
+function Field({ label, name, required, type = "text", placeholder, defaultValue }: { label: string; name: string; required?: boolean; type?: string; placeholder?: string; defaultValue?: string }) {
   return (
     <div>
-      <label className="block text-[10px] font-black text-slate-600 uppercase tracking-widest mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <label className="block text-xs font-bold text-slate-700 mb-1.5">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
       <input
         name={name}
         type={type}
         required={required}
         placeholder={placeholder}
-        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all"
+        defaultValue={defaultValue}
+        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500 transition-all placeholder:text-slate-400 text-slate-900"
       />
     </div>
   );
 }
 
-function SelectField({ label, name, required, children }: { label: string; name: string; required?: boolean; children: React.ReactNode }) {
+function SelectField({ label, name, required, children, defaultValue }: { label: string; name: string; required?: boolean; children: React.ReactNode; defaultValue?: string }) {
   return (
     <div>
-      <label className="block text-[10px] font-black text-slate-600 uppercase tracking-widest mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <label className="block text-xs font-bold text-slate-700 mb-1.5">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
       <select
         name={name}
         required={required}
-        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all"
+        defaultValue={defaultValue}
+        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500 transition-all text-slate-900"
       >
         {children}
       </select>

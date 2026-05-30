@@ -9,11 +9,27 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Fetch all active routes
+    const routeWhere =
+      session.role === "MANAGER"
+        ? {
+            status: "IN_PROGRESS",
+            stops: {
+              some: {
+                employee: {
+                  manager: {
+                    userId: session.userId,
+                  },
+                },
+              },
+            },
+          }
+        : { status: "IN_PROGRESS" };
+
+    // Fetch active routes in the caller's scope
     const routes = await prisma.route.findMany({
-      where: { status: "IN_PROGRESS" },
+      where: routeWhere,
       include: {
-        cab: { include: { driver: true } },
+        cab: true,
         stops: {
           include: { employee: true },
           orderBy: { stopOrder: "asc" }
@@ -40,7 +56,7 @@ export async function GET(req: Request) {
       return {
         routeId: r.id,
         cabNumber: r.cab.vehicleNumber,
-        driverName: r.cab.driver?.name || "Unassigned",
+        driverName: r.cab.driverName || "Unassigned",
         currentLat: r.currentLat,
         currentLng: r.currentLng,
         lastLocationAt: r.lastLocationAt,

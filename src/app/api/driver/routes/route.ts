@@ -9,30 +9,40 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const history = searchParams.get("history") === "true";
     const today = new Date().toISOString().split("T")[0];
 
-    const driver = await prisma.driver.findUnique({
-      where: { userId: session.userId },
-      include: { cab: true }
+    const cab = await prisma.cab.findUnique({
+      where: { userId: session.userId }
     });
 
-    if (!driver || !driver.cab) {
+    if (!cab) {
       return NextResponse.json({ routes: [] });
     }
 
     const routes = await prisma.route.findMany({
       where: {
-        cabId: driver.cab.id,
-        date: today,
-        status: { in: ["PLANNED", "ASSIGNED", "IN_PROGRESS", "COMPLETED"] }
+        cabId: cab.id,
+        ...(history
+          ? { OR: [
+              { status: { in: ["COMPLETED", "CANCELLED"] } },
+              { date: { lt: today } }
+            ]}
+          : { date: today }
+        )
       },
       include: {
+        shift: true,
         stops: {
           include: { employee: true },
           orderBy: { stopOrder: "asc" }
         }
       },
-      orderBy: { startedAt: "desc" }
+      orderBy: [
+        { date: "desc" },
+        { startedAt: "desc" }
+      ]
     });
 
     return NextResponse.json({ routes });

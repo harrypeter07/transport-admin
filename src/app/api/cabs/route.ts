@@ -24,7 +24,6 @@ export async function GET(req: Request) {
         ...(shiftId && { shiftId }),
       },
       include: {
-        driver: true,
         shift: true,
       },
       orderBy: { vehicleNumber: "asc" },
@@ -44,7 +43,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { vehicleNumber, capacity, vendor, status, driverId, shiftId } = body;
+    const { vehicleNumber, capacity, vendor, status, driverName, driverPhone, licenseNumber, shiftId } = body;
 
     const newCab = await prisma.cab.create({
       data: {
@@ -52,10 +51,12 @@ export async function POST(req: Request) {
         capacity: parseInt(capacity),
         vendor,
         status,
-        driverId: driverId || null,
+        driverName: driverName || "Unassigned",
+        driverPhone: driverPhone || "",
+        licenseNumber: licenseNumber || "",
         shiftId: shiftId || null
       },
-      include: { driver: true, shift: true }
+      include: { shift: true }
     });
     return NextResponse.json(newCab);
   } catch (error: any) {

@@ -17,11 +17,16 @@ export async function POST(req: Request) {
     }
 
     const route = await prisma.route.findUnique({
-      where: { id: routeId }
+      where: { id: routeId },
+      include: { cab: true }
     });
 
     if (!route || route.status !== "IN_PROGRESS") {
       return NextResponse.json({ error: "Route not active" }, { status: 400 });
+    }
+
+    if (route.cab.userId !== session.userId) {
+      return NextResponse.json({ error: "Route not assigned to this driver" }, { status: 403 });
     }
 
     const now = new Date();

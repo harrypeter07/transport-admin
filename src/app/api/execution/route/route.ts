@@ -21,12 +21,16 @@ export async function POST(req: Request) {
       where: { id: routeId },
       include: { 
         stops: { include: { employee: true }, orderBy: { stopOrder: "asc" } },
-        cab: { include: { driver: true } }
+        cab: true
       }
     });
 
     if (!route) {
       return NextResponse.json({ error: "Route not found" }, { status: 404 });
+    }
+
+    if (session.role === "DRIVER" && route.cab.userId !== session.userId) {
+      return NextResponse.json({ error: "Route not assigned to this driver" }, { status: 403 });
     }
 
     const now = new Date();
@@ -61,7 +65,7 @@ export async function POST(req: Request) {
             type: "ROUTE_STARTED",
             timestamp: now,
             routeId,
-            driverId: session.role === "DRIVER" ? session.userId : undefined,
+            cabId: route.cab.id,
             metadata: metadata ? JSON.stringify(metadata) : null,
           }
         });
@@ -104,7 +108,7 @@ export async function POST(req: Request) {
             type: "ROUTE_COMPLETED",
             timestamp: now,
             routeId,
-            driverId: session.role === "DRIVER" ? session.userId : undefined,
+            cabId: route.cab.id,
             metadata: metadata ? JSON.stringify(metadata) : null,
           }
         });

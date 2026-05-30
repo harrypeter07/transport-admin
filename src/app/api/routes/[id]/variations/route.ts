@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getRouteVariations, OptimizeEmployee } from "@/lib/optimization";
+import { requireApiRole } from "@/lib/apiAuth";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const { id: routeId } = await params;
     
     // Fetch the target route and its current stops/employees

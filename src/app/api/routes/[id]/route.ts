@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getDistance, checkSafetyViolations, DEPOT, fetchOSRMRoute } from "@/lib/optimization";
+import { requireApiRole } from "@/lib/apiAuth";
 
 const AVG_SPEED = 0.5; // units per minute (30 km/h)
 
@@ -9,6 +10,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
+
     const { id: routeId } = await params;
     const body = await req.json();
     const { action } = body;
@@ -31,6 +35,10 @@ export async function PATCH(
 
     if (action === "UPDATE_STATUS") {
       const { stopId, status } = body;
+      if (!["PENDING", "REACHED", "BOARDED", "SKIPPED"].includes(status)) {
+        return NextResponse.json({ error: "Invalid stop status" }, { status: 400 });
+      }
+
       await prisma.routeStop.update({
         where: { id: stopId },
         data: { status },
@@ -41,7 +49,7 @@ export async function PATCH(
         where: { routeId },
       });
       const allCompletedOrMissed = allStops.every(
-        (s) => s.status === "PICKED_UP" || s.status === "MISSED" || s.status === "COMPLETED"
+        (s) => s.status === "BOARDED" || s.status === "SKIPPED"
       );
 
       const routeStatus = allCompletedOrMissed ? "COMPLETED" : "IN_PROGRESS";
@@ -63,23 +71,23 @@ export async function PATCH(
       }
 
       const targetStop = stops[targetIdx];
-      if (targetStop.status === "MISSED") {
-        return NextResponse.json({ error: "Cannot reorder a missed stop" }, { status: 400 });
+      if (targetStop.status === "SKIPPED") {
+        return NextResponse.json({ error: "Cannot reorder a skipped stop" }, { status: 400 });
       }
 
       // Reorder stops in array
       if (direction === "up" && targetIdx > 0) {
         const siblingStop = stops[targetIdx - 1];
-        if (siblingStop.status === "MISSED") {
-          return NextResponse.json({ error: "Cannot swap with a missed stop" }, { status: 400 });
+        if (siblingStop.status === "SKIPPED") {
+          return NextResponse.json({ error: "Cannot swap with a skipped stop" }, { status: 400 });
         }
         const temp = stops[targetIdx];
         stops[targetIdx] = stops[targetIdx - 1];
         stops[targetIdx - 1] = temp;
       } else if (direction === "down" && targetIdx < stops.length - 1) {
         const siblingStop = stops[targetIdx + 1];
-        if (siblingStop.status === "MISSED") {
-          return NextResponse.json({ error: "Cannot swap with a missed stop" }, { status: 400 });
+        if (siblingStop.status === "SKIPPED") {
+          return NextResponse.json({ error: "Cannot swap with a skipped stop" }, { status: 400 });
         }
         const temp = stops[targetIdx];
         stops[targetIdx] = stops[targetIdx + 1];
@@ -271,7 +279,6 @@ export async function PATCH(
       // Check if cab exists
       const targetCab = await prisma.cab.findUnique({
         where: { id: cabId },
-        include: { driver: true }
       });
 
       if (!targetCab) {

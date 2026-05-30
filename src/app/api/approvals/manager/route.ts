@@ -66,14 +66,60 @@ export async function PATCH(req: Request) {
     }
 
     const { id, type, status, comments } = await req.json();
+
+    if (!["APPROVED", "REJECTED"].includes(status)) {
+      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
+
+    const managerEmployee = await prisma.employee.findFirst({
+      where: { userId: session.userId }
+    });
+
+    if (!managerEmployee) {
+      return NextResponse.json({ error: "Manager employee profile not found" }, { status: 404 });
+    }
+
+    const subordinates = await prisma.employee.findMany({
+      where: { managerId: managerEmployee.id },
+      select: { id: true, userId: true }
+    });
+
+    const subordinateIds = subordinates.map((s) => s.id);
+    const subordinateUserIds = subordinates
+      .map((s) => s.userId)
+      .filter((userId): userId is string => Boolean(userId));
     
     if (type === "LEAVE") {
+      const leave = await prisma.leaveRequest.findFirst({
+        where: {
+          id,
+          applicantId: { in: subordinateUserIds },
+          status: "PENDING"
+        }
+      });
+
+      if (!leave) {
+        return NextResponse.json({ error: "Request not found" }, { status: 404 });
+      }
+
       const updated = await prisma.leaveRequest.update({
         where: { id },
         data: { status, comments, approverId: session.userId }
       });
       return NextResponse.json({ success: true, updated });
     } else if (type === "TIMING") {
+      const timing = await prisma.timingChangeRequest.findFirst({
+        where: {
+          id,
+          employeeId: { in: subordinateIds },
+          status: "PENDING"
+        }
+      });
+
+      if (!timing) {
+        return NextResponse.json({ error: "Request not found" }, { status: 404 });
+      }
+
       const updated = await prisma.timingChangeRequest.update({
         where: { id },
         data: { status, comments, approverId: session.userId }
