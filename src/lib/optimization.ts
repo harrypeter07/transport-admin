@@ -1235,3 +1235,306 @@ export async function getRouteVariations(
 
   return variations;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MULTI-STRATEGY OPTIMIZATION ENGINE
+// Runs 3 distinct clustering strategies simultaneously, returning all 3 plans
+// so the admin can compare and choose which one to commit to the database.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface StrategyPlan {
+  routes: OptimizedRoute[];
+  totalCabsUsed: number;
+  totalEmployeesCovered: number;
+  totalDistance: number;          // km (sum across all routes)
+  avgCommuteMins: number;         // average commute time per employee
+  totalViolations: number;
+}
+
+export interface AllStrategyPlans {
+  MAXIMIZE_UTILIZATION: StrategyPlan;
+  MINIMIZE_TIME: StrategyPlan;
+  BALANCED: StrategyPlan;
+  capacityShortfall: number;      // > 0 → admin needs more cabs
+  totalCabCapacity: number;
+  totalEmployees: number;
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+function idxFurthestFromDepot(employees: OptimizeEmployee[], depot: Point): number {
+  let idx = 0, maxD = -1;
+  for (let i = 0; i < employees.length; i++) {
+    const d = getDistance({ x: employees[i].x, y: employees[i].y }, depot);
+    if (d > maxD) { maxD = d; idx = i; }
+  }
+  return idx;
+}
+
+function idxNearestTo(employees: OptimizeEmployee[], ref: OptimizeEmployee): { idx: number; dist: number } {
+  let idx = 0, minD = Infinity;
+  for (let i = 0; i < employees.length; i++) {
+    const d = getDistance({ x: employees[i].x, y: employees[i].y }, { x: ref.x, y: ref.y });
+    if (d < minD) { minD = d; idx = i; }
+  }
+  return { idx, dist: minD };
+}
+
+type ClusterAssignment = { cab: OptimizeCab; cluster: OptimizeEmployee[] };
+
+/**
+ * Strategy 1 — MAXIMIZE_UTILIZATION
+ * Greedily fills every cab to capacity. No radius limit.
+ * Uses fewest cabs possible. Some employees may have longer rides.
+ */
+function clusterMaxUtilization(employees: OptimizeEmployee[], cabs: OptimizeCab[], depot: Point): ClusterAssignment[] {
+  const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
+  let remaining = [...employees];
+  const assignments: ClusterAssignment[] = [];
+
+  for (const cab of sortedCabs) {
+    if (remaining.length === 0) break;
+    const seedIdx = idxFurthestFromDepot(remaining, depot);
+    const seed = remaining.splice(seedIdx, 1)[0];
+    const cluster: OptimizeEmployee[] = [seed];
+
+    while (cluster.length < cab.capacity && remaining.length > 0) {
+      const { idx } = idxNearestTo(remaining, seed);
+      cluster.push(remaining.splice(idx, 1)[0]);
+    }
+    assignments.push({ cab, cluster });
+  }
+  return assignments;
+}
+
+/**
+ * Strategy 2 — MINIMIZE_TIME
+ * Keeps clusters geographically tight (10 km radius from seed).
+ * Outliers seed their own separate cab — shorter rides for everyone.
+ * May leave some cab seats empty.
+ */
+function clusterMinTime(
+  employees: OptimizeEmployee[],
+  cabs: OptimizeCab[],
+  depot: Point,
+  radiusKm: number = 10
+): ClusterAssignment[] {
+  const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
+  let remaining = [...employees];
+  const assignments: ClusterAssignment[] = [];
+
+  for (const cab of sortedCabs) {
+    if (remaining.length === 0) break;
+    const seedIdx = idxFurthestFromDepot(remaining, depot);
+    const seed = remaining.splice(seedIdx, 1)[0];
+    const cluster: OptimizeEmployee[] = [seed];
+
+    while (cluster.length < cab.capacity && remaining.length > 0) {
+      const { idx, dist } = idxNearestTo(remaining, seed);
+      if (dist > radiusKm) break; // stop — next employee is too far away
+      cluster.push(remaining.splice(idx, 1)[0]);
+    }
+    assignments.push({ cab, cluster });
+  }
+  return assignments;
+}
+
+/**
+ * Strategy 3 — BALANCED
+ * 15 km radius, targets ~80% fill before stopping.
+ * Balances commute time vs cab utilization.
+ */
+function clusterBalanced(employees: OptimizeEmployee[], cabs: OptimizeCab[], depot: Point): ClusterAssignment[] {
+  const RADIUS_KM = 15;
+  const FILL_RATIO = 0.8;
+  const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
+  let remaining = [...employees];
+  const assignments: ClusterAssignment[] = [];
+
+  for (const cab of sortedCabs) {
+    if (remaining.length === 0) break;
+    const targetFill = Math.max(1, Math.ceil(cab.capacity * FILL_RATIO));
+    const seedIdx = idxFurthestFromDepot(remaining, depot);
+    const seed = remaining.splice(seedIdx, 1)[0];
+    const cluster: OptimizeEmployee[] = [seed];
+
+    while (cluster.length < cab.capacity && remaining.length > 0) {
+      const { idx, dist } = idxNearestTo(remaining, seed);
+      // Stop if we've hit the target fill AND the next person is too far
+      if (dist > RADIUS_KM && cluster.length >= targetFill) break;
+      cluster.push(remaining.splice(idx, 1)[0]);
+    }
+    assignments.push({ cab, cluster });
+  }
+  return assignments;
+}
+
+// ── Route builder from a set of cluster assignments ───────────────────────────
+
+async function buildRoutesFromAssignments(
+  assignments: ClusterAssignment[],
+  employees: OptimizeEmployee[],  // full employee list for post-swap lookups
+  isPickup: boolean,
+  apiKey: string,
+  depot: Point
+): Promise<OptimizedRoute[]> {
+  const routes: OptimizedRoute[] = [];
+
+  for (const { cab, cluster } of assignments) {
+    if (cluster.length === 0) continue;
+
+    // Optimal stop order + safety enforcement
+    let ordered = getOptimalPermutation(cluster, isPickup);
+    const { route: safeRoute } = enforceSafetyRules(ordered, isPickup, false);
+
+    // Build stops with Haversine ETAs
+    let cumulativeDist = 0;
+    const stops: OptimizedRouteStop[] = [];
+
+    if (isPickup && safeRoute.length > 0) {
+      cumulativeDist += getDistance(depot, { x: safeRoute[0].x, y: safeRoute[0].y });
+    } else if (!isPickup && safeRoute.length > 0) {
+      cumulativeDist += getDistance(depot, { x: safeRoute[0].x, y: safeRoute[0].y });
+    }
+
+    for (let j = 0; j < safeRoute.length; j++) {
+      const emp = safeRoute[j];
+      if (j > 0) {
+        const prev = safeRoute[j - 1];
+        cumulativeDist += getDistance({ x: prev.x, y: prev.y }, { x: emp.x, y: emp.y });
+      }
+      stops.push({
+        employeeId: emp.id,
+        employeeName: emp.name,
+        gender: emp.gender,
+        x: emp.x,
+        y: emp.y,
+        address: emp.address,
+        stopOrder: j + 1,
+        etaMinutes: Math.round(cumulativeDist / AVG_SPEED) + (isPickup ? 10 : 0),
+        status: "PENDING",
+      });
+    }
+
+    if (isPickup && safeRoute.length > 0) {
+      const last = safeRoute[safeRoute.length - 1];
+      cumulativeDist += getDistance({ x: last.x, y: last.y }, depot);
+    }
+
+    // Accurate road distance via Google Maps or OSRM
+    let distance = 0, duration = 0;
+
+    if (apiKey && safeRoute.length > 0) {
+      const points = [depot, ...safeRoute.map(e => ({ x: e.x, y: e.y }))];
+      const { distanceMatrix, durationMatrix } = await fetchGoogleMapsMatrix(points, apiKey);
+      const n = safeRoute.length;
+
+      if (isPickup) {
+        for (let j = 1; j < n; j++) {
+          distance += distanceMatrix[j][j + 1] ?? 0;
+          duration += durationMatrix[j][j + 1] ?? 0;
+        }
+        distance += distanceMatrix[n]?.[0] ?? 0;
+        duration += (durationMatrix[n]?.[0] ?? 0) + 10;
+      } else {
+        distance += distanceMatrix[0]?.[1] ?? 0;
+        duration += durationMatrix[0]?.[1] ?? 0;
+        for (let j = 1; j < n; j++) {
+          distance += distanceMatrix[j][j + 1] ?? 0;
+          duration += durationMatrix[j][j + 1] ?? 0;
+        }
+      }
+    }
+
+    // Fall back to OSRM if Google Maps gave us 0 or key was absent
+    if (distance === 0) {
+      const osrm = await fetchOSRMRoute(safeRoute.map(e => ({ x: e.x, y: e.y })), isPickup, depot);
+      distance = osrm.distance;
+      duration = osrm.duration;
+    }
+
+    const violations = checkSafetyViolations(
+      stops.map(s => ({ name: s.employeeName, gender: s.gender, status: s.status })),
+      isPickup,
+      false
+    );
+
+    const score = Math.max(30, Math.round(100 - distance * 0.8 - violations.length * 30));
+
+    routes.push({
+      cabId: cab.id,
+      vehicleNumber: cab.vehicleNumber,
+      capacity: cab.capacity,
+      driverName: cab.driverName || "Unassigned",
+      driverPhone: cab.driverPhone || "N/A",
+      stops,
+      totalDistance: Math.round(distance * 10) / 10,
+      totalDuration: duration || Math.round(cumulativeDist / AVG_SPEED) + (isPickup ? 10 : 0),
+      optimizationScore: score,
+      violations,
+      hasEscort: false,
+    });
+  }
+
+  return routes;
+}
+
+function summarisePlan(routes: OptimizedRoute[]): StrategyPlan {
+  const covered = new Set(routes.flatMap(r => r.stops.map(s => s.employeeId))).size;
+  const totalDist = routes.reduce((s, r) => s + r.totalDistance, 0);
+  const allDurations = routes.flatMap(r => r.stops.map(s => s.etaMinutes));
+  const avgMins = allDurations.length > 0
+    ? Math.round(allDurations.reduce((a, b) => a + b, 0) / allDurations.length)
+    : 0;
+  const violations = routes.reduce((s, r) => s + r.violations.filter(v => !('resolved' in v) || !(v as any).resolved).length, 0);
+
+  return {
+    routes,
+    totalCabsUsed: routes.length,
+    totalEmployeesCovered: covered,
+    totalDistance: Math.round(totalDist * 10) / 10,
+    avgCommuteMins: avgMins,
+    totalViolations: violations,
+  };
+}
+
+/**
+ * Main entry point: run all 3 clustering strategies simultaneously.
+ * Returns a preview of all 3 plans WITHOUT saving to the database.
+ * The admin reviews them and picks one via applyOptimizationPlan().
+ */
+export async function optimizeAllStrategies(
+  employees: OptimizeEmployee[],
+  cabs: OptimizeCab[],
+  isPickup: boolean = true,
+  apiKey: string = "",
+  depot: Point = DEPOT
+): Promise<AllStrategyPlans> {
+  const totalCabCapacity = cabs.reduce((sum, c) => sum + c.capacity, 0);
+  const capacityShortfall = Math.max(0, employees.length - totalCabCapacity);
+
+  const [maxRoutes, minRoutes, balRoutes] = await Promise.all([
+    buildRoutesFromAssignments(
+      clusterMaxUtilization(employees, cabs, depot),
+      employees, isPickup, apiKey, depot
+    ),
+    buildRoutesFromAssignments(
+      clusterMinTime(employees, cabs, depot, 10),
+      employees, isPickup, apiKey, depot
+    ),
+    buildRoutesFromAssignments(
+      clusterBalanced(employees, cabs, depot),
+      employees, isPickup, apiKey, depot
+    ),
+  ]);
+
+  return {
+    MAXIMIZE_UTILIZATION: summarisePlan(maxRoutes),
+    MINIMIZE_TIME: summarisePlan(minRoutes),
+    BALANCED: summarisePlan(balRoutes),
+    capacityShortfall,
+    totalCabCapacity,
+    totalEmployees: employees.length,
+  };
+}
+

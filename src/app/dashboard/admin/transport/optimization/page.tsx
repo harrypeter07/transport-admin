@@ -56,6 +56,11 @@ export default function TransitAdminSPA() {
     setActiveShiftId,
     setSelectedRouteId,
     runOptimization,
+    previewOptimization,
+    applyOptimizationPlan,
+    clearOptimizationPreview,
+    optimizationPlans,
+    previewing,
     updateStopStatus,
     reorderRouteStops,
     overrideViolation,
@@ -121,9 +126,9 @@ export default function TransitAdminSPA() {
 
   // State for commute routing
   const [isPickup, setIsPickup] = useState(true);
-  const [optimizationMode, setOptimizationMode] = useState<"MAXIMIZE_UTILIZATION" | "FASTEST_TRAVEL">("FASTEST_TRAVEL");
   const [optimizeError, setOptimizeError] = useState<string | null>(null);
   const [optimizing, setOptimizing] = useState(false);
+  const [applyingStrategy, setApplyingStrategy] = useState<string | null>(null);
 
   // Excel bulk upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -197,15 +202,48 @@ export default function TransitAdminSPA() {
     }
   }, [shifts]);
 
+  const handleGeneratePlans = async () => {
+    setOptimizing(true);
+    setOptimizeError(null);
+    try {
+      const result = await previewOptimization(isPickup);
+      if (!result.success) {
+        setOptimizeError(result.error || "Failed to generate plans. Check you have employees and cabs registered.");
+      }
+    } catch (err: any) {
+      setOptimizeError(err.message || "Unexpected error generating plans.");
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
+  const handleApplyPlan = async (strategy: "MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED") => {
+    setApplyingStrategy(strategy);
+    setOptimizeError(null);
+    try {
+      const result = await applyOptimizationPlan(strategy, isPickup);
+      if (!result.success) {
+        setOptimizeError(result.error || "Failed to apply plan.");
+      } else {
+        setVariations({});
+        setActiveVarIndices({});
+      }
+    } catch (err: any) {
+      setOptimizeError(err.message || "Unexpected error applying plan.");
+    } finally {
+      setApplyingStrategy(null);
+    }
+  };
+
+  // Legacy single-strategy handler (kept for backward compat with "Optimize Routing" button)
   const handleRunOptimization = async () => {
     setOptimizing(true);
     setOptimizeError(null);
     try {
-      const result = await runOptimization(isPickup, "", optimizationMode);
+      const result = await runOptimization(isPickup, "", "FASTEST_TRAVEL");
       if (!result.success) {
         setOptimizeError(result.error || "Optimization failed. Please check you have employees and cabs registered.");
       } else {
-        // Clear variations cache since routes changed
         setVariations({});
         setActiveVarIndices({});
       }
@@ -609,31 +647,20 @@ export default function TransitAdminSPA() {
                     onClick={() => setIsPickup(!isPickup)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-2xs border ${isPickup ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}
                   >
-                    {isPickup ? "Pickup (To MIHAN)" : "Drop (From MIHAN)"}
+                    {isPickup ? "Pickup (To Office)" : "Drop (From Office)"}
                   </button>
                 </div>
 
                 <div className="h-4 w-px bg-slate-200"></div>
 
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-lg shadow-2xs">
-                  <span className="text-xs font-bold text-slate-500">Mode:</span>
-                  <select
-                    value={optimizationMode}
-                    onChange={(e) => setOptimizationMode(e.target.value as any)}
-                    className="bg-transparent border-none text-xs font-bold text-slate-900 outline-none cursor-pointer focus:ring-0"
-                  >
-                    <option value="FASTEST_TRAVEL">Fastest Travel</option>
-                    <option value="MAXIMIZE_UTILIZATION">Maximize Utilization</option>
-                  </select>
-                </div>
-
                 <button
-                  onClick={handleRunOptimization}
-                  disabled={optimizing || loading}
-                  className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50 shadow-2xs"
+                  id="btn-generate-plans"
+                  onClick={handleGeneratePlans}
+                  disabled={optimizing || previewing || loading}
+                  className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 transition disabled:opacity-50 shadow-2xs"
                 >
-                  <RotateCw className={`w-3.5 h-3.5 ${optimizing ? "animate-spin" : ""}`} />
-                  {optimizing ? "Solving..." : "Optimize Routing"}
+                  <Sparkles className={`w-3.5 h-3.5 ${previewing ? "animate-spin" : ""}`} />
+                  {previewing ? "Generating..." : "Generate Plans"}
                 </button>
 
                 <button
@@ -654,31 +681,107 @@ export default function TransitAdminSPA() {
              </div>
           )}
 
-          {/* Dual Mode Comparison Helper */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col gap-3 animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-indigo-500" />
-                Optimization Mode Comparison Rationale
-              </span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className={`p-4 rounded-xl border transition ${optimizationMode === "FASTEST_TRAVEL" ? "border-slate-850 bg-slate-900 text-white shadow-xs" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
-                <span className="font-bold text-sm block mb-1">Mode A: Fastest Travel (Minimize Commute)</span>
-                <p className="leading-relaxed text-[11px] opacity-90">
-                  Prioritizes employee experience by limiting detours. When grouping employees, it leaves seats empty if a detour would add more than 7 km to the trip. 
-                  <strong className="block mt-1 font-bold">Best for: Night shifts, female safety routing, and employee satisfaction.</strong>
-                </p>
+          {/* ── 3-Strategy Plan Comparison Panel ─────────────────────────── */}
+          {optimizationPlans && (
+            <div className="bg-white border border-indigo-200 rounded-2xl shadow-md overflow-hidden animate-fadeIn">
+              <div className="px-6 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-black text-indigo-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-500" />
+                    3 Optimized Plans Ready — Select One to Apply
+                  </h2>
+                  <p className="text-xs text-indigo-600 mt-0.5">
+                    {optimizationPlans.totalEmployees} employees · {optimizationPlans.totalCabCapacity} total seat capacity
+                    {optimizationPlans.capacityShortfall > 0 && (
+                      <span className="ml-2 text-red-600 font-bold">⚠️ {optimizationPlans.capacityShortfall} employees cannot be assigned — add more cabs!</span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={clearOptimizationPreview}
+                  className="text-indigo-400 hover:text-indigo-700 text-lg font-bold leading-none"
+                  aria-label="Dismiss plans"
+                >×</button>
               </div>
-              <div className={`p-4 rounded-xl border transition ${optimizationMode === "MAXIMIZE_UTILIZATION" ? "border-slate-850 bg-slate-900 text-white shadow-xs" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
-                <span className="font-bold text-sm block mb-1">Mode B: Maximize Utilization (Minimize Fleet)</span>
-                <p className="leading-relaxed text-[11px] opacity-90">
-                  Prioritizes operational efficiency by packing cabs as close to capacity as possible. Disregards detour distance limits to reduce total vehicles and driver counts.
-                  <strong className="block mt-1 font-bold">Best for: General day shifts, fuel conservation, and fleet cost minimization.</strong>
-                </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+                {([
+                  { key: "MAXIMIZE_UTILIZATION", label: "Maximize Utilization", icon: "🚛", desc: "Fewest cabs, every seat filled. Employees may have longer rides.", color: "emerald" },
+                  { key: "MINIMIZE_TIME",         label: "Minimize Commute",     icon: "⚡", desc: "Tightest geographic clusters (10km radius). Fastest rides, may use more cabs.", color: "blue" },
+                  { key: "BALANCED",              label: "Balanced",             icon: "⚖️", desc: "15km radius, ~80% fill target. Best of both worlds.", color: "violet" },
+                ] as const).map(({ key, label, icon, desc, color }) => {
+                  const plan = optimizationPlans[key];
+                  const isApplying = applyingStrategy === key;
+                  const colorMap: Record<string, string> = {
+                    emerald: "bg-emerald-50 border-emerald-500 text-emerald-700",
+                    blue:    "bg-blue-50 border-blue-500 text-blue-700",
+                    violet:  "bg-violet-50 border-violet-500 text-violet-700",
+                  };
+                  const btnMap: Record<string, string> = {
+                    emerald: "bg-emerald-600 hover:bg-emerald-700",
+                    blue:    "bg-blue-600 hover:bg-blue-700",
+                    violet:  "bg-violet-600 hover:bg-violet-700",
+                  };
+                  return (
+                    <div key={key} className="p-5 flex flex-col gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">{icon}</span>
+                          <span className="font-black text-sm text-slate-900">{label}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">{desc}</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                          <div className="font-black text-lg text-slate-900">{plan.totalCabsUsed}</div>
+                          <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wide">Cabs Used</div>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                          <div className="font-black text-lg text-slate-900">{plan.totalEmployeesCovered}</div>
+                          <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wide">Covered</div>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                          <div className="font-black text-lg text-slate-900">{plan.totalDistance} km</div>
+                          <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wide">Total Dist.</div>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                          <div className="font-black text-lg text-slate-900">{plan.avgCommuteMins} min</div>
+                          <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wide">Avg Commute</div>
+                        </div>
+                      </div>
+
+                      {plan.totalViolations > 0 && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span><strong>{plan.totalViolations}</strong> safety flag{plan.totalViolations > 1 ? "s" : ""}</span>
+                        </div>
+                      )}
+                      {plan.totalViolations === 0 && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>No safety violations</span>
+                        </div>
+                      )}
+
+                      <button
+                        id={`btn-apply-${key.toLowerCase()}`}
+                        onClick={() => handleApplyPlan(key)}
+                        disabled={!!applyingStrategy || loading}
+                        className={`w-full flex items-center justify-center gap-1.5 text-white px-3 py-2 rounded-xl text-xs font-black transition disabled:opacity-50 shadow-xs ${btnMap[color]}`}
+                      >
+                        {isApplying ? (
+                          <><RotateCw className="w-3.5 h-3.5 animate-spin" /> Applying...</>
+                        ) : (
+                          <><CheckCircle2 className="w-3.5 h-3.5" /> Select This Plan</>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
+          )}
 
           {/* System Configuration & Diagnostics Panel */}
           <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-3">

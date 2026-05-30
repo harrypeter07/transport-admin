@@ -72,6 +72,24 @@ export interface Route {
 }
 
 
+export interface StrategyPlan {
+  routes: any[];
+  totalCabsUsed: number;
+  totalEmployeesCovered: number;
+  totalDistance: number;
+  avgCommuteMins: number;
+  totalViolations: number;
+}
+
+export interface OptimizationPlans {
+  MAXIMIZE_UTILIZATION: StrategyPlan;
+  MINIMIZE_TIME: StrategyPlan;
+  BALANCED: StrategyPlan;
+  capacityShortfall: number;
+  totalCabCapacity: number;
+  totalEmployees: number;
+}
+
 interface TransportStore {
   employees: Employee[];
   cabs: Cab[];
@@ -82,6 +100,8 @@ interface TransportStore {
   selectedDate: string; // ISO date string: YYYY-MM-DD
   selectedRouteId: string | null;
   loading: boolean;
+  optimizationPlans: OptimizationPlans | null;
+  previewing: boolean;
   
   // Actions
   fetchInitialData: (opts?: { date?: string; shiftId?: string }) => Promise<void>;
@@ -89,6 +109,9 @@ interface TransportStore {
   setSelectedDate: (date: string) => void;
   setSelectedRouteId: (routeId: string | null) => void;
   runOptimization: (isPickup: boolean, apiKey?: string, mode?: string) => Promise<{ success: boolean; error?: string }>;
+  previewOptimization: (isPickup: boolean) => Promise<{ success: boolean; error?: string }>;
+  applyOptimizationPlan: (strategy: keyof OptimizationPlans, isPickup: boolean) => Promise<{ success: boolean; error?: string }>;
+  clearOptimizationPreview: () => void;
   updateStopStatus: (routeId: string, stopId: string, status: "PENDING" | "REACHED" | "BOARDED" | "SKIPPED") => Promise<void>;
   reorderRouteStops: (routeId: string, stopId: string, direction: "up" | "down") => Promise<void>;
   overrideViolation: (violationId: string) => Promise<void>;
@@ -113,9 +136,11 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
   routes: [],
   importSheets: [],
   activeShiftId: "",
-  selectedDate: new Date().toISOString().split("T")[0], // Track which date's routes are shown
+  selectedDate: new Date().toISOString().split("T")[0],
   selectedRouteId: null,
   loading: false,
+  optimizationPlans: null,
+  previewing: false,
 
   // Helper: build the routes URL with the given (or stored) date and optional shiftId
   fetchInitialData: async (opts?: { date?: string; shiftId?: string }) => {
@@ -169,42 +194,100 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     set({ loading: true });
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (apiKey) {
-        headers["x-google-maps-key"] = apiKey;
-      }
+      if (apiKey) headers["x-google-maps-key"] = apiKey;
       const dateToFetch = get().selectedDate;
       const res = await fetch("/api/optimization", {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          shiftId: get().activeShiftId,
-          isPickup,
-          date: dateToFetch,
-          mode,
-        }),
+        body: JSON.stringify({ shiftId: get().activeShiftId, isPickup, date: dateToFetch, mode }),
       });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         const msg = errData.error || `Optimization failed (HTTP ${res.status})`;
-        console.error("Optimization API error:", msg);
         set({ loading: false });
         return { success: false, error: msg };
       }
 
-      // Re-fetch routes for the date
-      const shiftId = get().activeShiftId;
-      const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
+      const dateStr = get().selectedDate;
+      const resRoutes = await fetch(`/api/optimization?date=${dateStr}`);
       const routes = await resRoutes.json();
-
       set({ routes, loading: false });
       return { success: true };
     } catch (e) {
-      console.error("Error optimization:", e);
       set({ loading: false });
       return { success: false, error: "Network error during optimization" };
     }
   },
+
+  previewOptimization: async (isPickup) => {
+    set({ previewing: true, optimizationPlans: null });
+    try {
+      const res = await fetch("/api/optimization", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shiftId: get().activeShiftId,
+          isPickup,
+          date: get().selectedDate,
+          mode: "ALL",
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        set({ previewing: false });
+        return { success: false, error: errData.error || "Preview failed" };
+      }
+
+      const data = await res.json();
+      set({ optimizationPlans: data.preview, previewing: false });
+      return { success: true };
+    } catch (e) {
+      set({ previewing: false });
+      return { success: false, error: "Network error during preview" };
+    }
+  },
+
+  applyOptimizationPlan: async (strategy, isPickup) => {
+    const plans = get().optimizationPlans;
+    if (!plans || !(strategy in plans) || strategy === "capacityShortfall" || strategy === "totalCabCapacity" || strategy === "totalEmployees") {
+      return { success: false, error: "No preview available" };
+    }
+    const plan = (plans as any)[strategy] as { routes: any[] };
+    set({ loading: true });
+    try {
+      const res = await fetch("/api/optimization", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shiftId: get().activeShiftId,
+          isPickup,
+          date: get().selectedDate,
+          mode: "APPLY",
+          selectedStrategy: strategy,
+          previewRoutes: plan.routes,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        set({ loading: false });
+        return { success: false, error: errData.error || "Apply failed" };
+      }
+
+      const dateStr = get().selectedDate;
+      const resRoutes = await fetch(`/api/optimization?date=${dateStr}`);
+      const routes = await resRoutes.json();
+      set({ routes, loading: false, optimizationPlans: null });
+      return { success: true };
+    } catch (e) {
+      set({ loading: false });
+      return { success: false, error: "Network error applying plan" };
+    }
+  },
+
+  clearOptimizationPreview: () => set({ optimizationPlans: null }),
 
   updateStopStatus: async (routeId, stopId, status) => {
     try {

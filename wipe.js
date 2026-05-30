@@ -22,7 +22,7 @@ async function wipeData() {
     await prisma.user.deleteMany({
       where: {
         email: {
-          not: "admin@shaibya.com" // Assuming this is the main admin, or just keep all ADMINs
+          not: "admin@transitadmin.com" 
         },
         role: {
           not: "ADMIN"
