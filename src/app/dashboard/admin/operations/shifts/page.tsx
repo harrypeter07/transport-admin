@@ -107,22 +107,44 @@ export default function ShiftsPage() {
                   <button onClick={() => handleDelete(shift.id, shift.name)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               </div>
-              <div className="p-5 bg-slate-50">
-                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Resources</div>
-                <div className="space-y-2">
-                  {[
-                    { Icon: Users, label: "Employees", count: shift._count?.employees ?? 0 },
-                    { Icon: CarFront, label: "Drivers", count: shift._count?.drivers ?? 0 },
-                    { Icon: Bus, label: "Cabs", count: shift._count?.cabs ?? 0 },
-                  ].map(({ Icon, label, count }) => (
-                    <div key={label} className="flex justify-between items-center">
-                      <span className="flex items-center gap-2 text-xs text-slate-600">
-                        <Icon className="w-3.5 h-3.5 text-slate-400" /> {label}
-                      </span>
-                      <span className="text-xs font-black text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded-md">{count}</span>
-                    </div>
-                  ))}
+              <div className="p-5 bg-slate-50 flex flex-col gap-4">
+                <div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Resources</div>
+                  <div className="space-y-2">
+                    {[
+                      { Icon: Users, label: "Employees", count: shift._count?.employees ?? 0 },
+                      { Icon: CarFront, label: "Drivers", count: shift._count?.drivers ?? 0 },
+                      { Icon: Bus, label: "Cabs", count: shift._count?.cabs ?? 0 },
+                    ].map(({ Icon, label, count }) => (
+                      <div key={label} className="flex justify-between items-center">
+                        <span className="flex items-center gap-2 text-xs text-slate-600">
+                          <Icon className="w-3.5 h-3.5 text-slate-400" /> {label}
+                        </span>
+                        <span className="text-xs font-black text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded-md">{count}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {shift.cabs && shift.cabs.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 border-t border-slate-200 pt-3">Assigned Cabs</div>
+                    <div className="grid grid-cols-1 gap-2">
+                      {shift.cabs.map((cab: any) => (
+                        <div key={cab.id} className="bg-white border border-slate-200 rounded-lg p-2.5 flex justify-between items-center shadow-xs">
+                          <div className="flex flex-col">
+                            <span className="text-[11px] font-black font-mono text-slate-900">{cab.vehicleNumber}</span>
+                            <span className="text-[9px] text-slate-500 font-semibold">{cab.vendor} · {cab.capacity} seats</span>
+                          </div>
+                          <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-bold text-slate-700">{cab.driverName || "No Driver"}</span>
+                            <span className="text-[9px] text-slate-400 font-mono">{cab.driverPhone || "N/A"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))

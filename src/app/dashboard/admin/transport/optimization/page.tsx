@@ -37,7 +37,8 @@ import {
   CheckCircle2,
   ShieldOff,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  Info
 } from "lucide-react";
 
 export default function TransitAdminSPA() {
@@ -130,6 +131,7 @@ export default function TransitAdminSPA() {
   const [optimizing, setOptimizing] = useState(false);
   const [previewedStrategy, setPreviewedStrategy] = useState<"MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED" | null>(null);
   const [applyingStrategy, setApplyingStrategy] = useState<string | null>(null);
+  const [visibleCabsCount, setVisibleCabsCount] = useState(4);
 
   // Excel bulk upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -1340,53 +1342,67 @@ export default function TransitAdminSPA() {
                 </div>
               ) : (
                 /* High-Visibility Route Cards View */
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1">
-                  {activeRoutes.map((route) => {
-                    const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
-                    const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
-                    const isSelected = selectedRouteId === route.id;
-                    
-                    const routeVariations = variations[route.id] || [];
-                    const isLoadingVars = loadingVariations[route.id] || false;
-                    const activeVarIdx = activeVarIndices[route.id] ?? -1;
+                <div className="flex flex-col gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1">
+                    {activeRoutes.slice(0, visibleCabsCount).map((route) => {
+                      const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+                      const activeViolationsCount = route.violations.filter((v: any) => !v.resolved).length;
+                      const isSelected = selectedRouteId === route.id;
+                      
+                      const routeVariations = variations[route.id] || [];
+                      const isLoadingVars = loadingVariations[route.id] || false;
+                      const activeVarIdx = activeVarIndices[route.id] ?? -1;
 
-                    return (
-                      <div
-                        key={route.id}
-                        onClick={() => setSelectedRouteId(route.id)}
-                        className={`p-6 rounded-2xl bg-white border transition-all duration-200 flex flex-col gap-5 text-left cursor-pointer print:border-slate-300 print:shadow-none
-                          ${
-                            isSelected
-                              ? "border-slate-800 shadow-md ring-1 ring-slate-800/10"
-                              : "border-slate-200 hover:border-slate-350 shadow-xs"
-                          }
-                        `}
-                      >
-                        {/* Header */}
-                        <div className="flex justify-between items-start border-b border-slate-100 pb-3">
-                          <div className="flex flex-col gap-0.5 text-left">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[9px] uppercase font-extrabold tracking-widest text-slate-400">
-                                Vehicle Assignment Details
-                              </span>
-                              <span className="bg-slate-950 text-white font-mono text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                {route.shift?.name || "Shift"}
+                      return (
+                        <div
+                          key={route.id}
+                          onClick={() => setSelectedRouteId(route.id)}
+                          className={`p-6 rounded-2xl bg-white border transition-all duration-200 flex flex-col gap-5 text-left cursor-pointer print:border-slate-300 print:shadow-none
+                            ${
+                              isSelected
+                                ? "border-slate-800 shadow-md ring-1 ring-slate-800/10"
+                                : "border-slate-200 hover:border-slate-350 shadow-xs"
+                            }
+                          `}
+                        >
+                          {/* Header */}
+                          <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                            <div className="flex flex-col gap-0.5 text-left">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] uppercase font-extrabold tracking-widest text-slate-400">
+                                  Vehicle Assignment Details
+                                </span>
+                                <span className="bg-slate-950 text-white font-mono text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                  {route.shift?.name || "Shift"}
+                                </span>
+                              </div>
+                              <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
+                                <Truck className="w-4 h-4 text-slate-400" />
+                                {route.cab.vehicleNumber}
+                              </h3>
+                              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                                Vendor: {route.cab.vendor} · {route.stops.length} / {route.cab.capacity} passengers
                               </span>
                             </div>
-                            <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
-                              <Truck className="w-4 h-4 text-slate-400" />
-                              {route.cab.vehicleNumber}
-                            </h3>
-                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-                              Vendor: {route.cab.vendor} · {route.stops.length} / {route.cab.capacity} passengers
-                            </span>
+                            
+                            <div className="flex flex-col items-end gap-0.5 group/score relative">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[8px] uppercase font-bold tracking-widest text-slate-400">Score</span>
+                                <Info className="w-3 h-3 text-slate-400 cursor-help" />
+                              </div>
+                              <span className="text-sm font-bold text-slate-900 font-mono">{route.optimizationScore}/100</span>
+                              
+                              <div className="absolute right-0 top-full mt-2 w-48 p-2.5 bg-slate-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 invisible group-hover/score:opacity-100 group-hover/score:visible transition-all z-10 text-left">
+                                <div className="font-bold mb-1 border-b border-slate-700 pb-1">Score Calculation</div>
+                                <ul className="space-y-1 text-slate-300">
+                                  <li>Start: 100 points</li>
+                                  <li>-10 per safety violation</li>
+                                  <li>-2 per empty seat</li>
+                                  <li>-1 per extra km traveled</li>
+                                </ul>
+                              </div>
+                            </div>
                           </div>
-                          
-                          <div className="flex flex-col items-end gap-0.5">
-                            <span className="text-[8px] uppercase font-bold tracking-widest text-slate-400">Score</span>
-                            <span className="text-sm font-bold text-slate-900 font-mono">{route.optimizationScore}/100</span>
-                          </div>
-                        </div>
 
                         {/* Driver Profile */}
                         <div className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-4">
@@ -1659,6 +1675,18 @@ export default function TransitAdminSPA() {
                       </div>
                     );
                   })}
+                  </div>
+                  
+                  {visibleCabsCount < activeRoutes.length && (
+                    <div className="flex justify-center mt-2 print:hidden">
+                      <button
+                        onClick={() => setVisibleCabsCount(activeRoutes.length)}
+                        className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-md"
+                      >
+                        Load More Cabs ({activeRoutes.length - visibleCabsCount} remaining) &raquo;
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

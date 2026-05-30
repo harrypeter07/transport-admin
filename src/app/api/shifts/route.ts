@@ -14,6 +14,7 @@ export async function GET() {
         _count: {
           select: { employees: true, cabs: true },
         },
+        cabs: true,
       },
       orderBy: { startTime: "asc" },
     });
