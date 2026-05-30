@@ -122,12 +122,22 @@ export async function POST(req: NextRequest) {
       const buffer = Buffer.from(bytes);
       const rows = parseExcelRoster(buffer);
 
+      const settings = await prisma.systemSettings.upsert({
+        where: { id: "default" },
+        update: {},
+        create: { id: "default" }
+      });
+      const depot = makeDepot(settings);
+      const city = settings.defaultCity || "Nagpur";
+      const country = settings.defaultCountry || "India";
+      const maxRadius = settings.maxPickupRadiusKm || 70;
+
       let createdCount = 0;
       let skippedCount = 0;
 
       for (const row of rows) {
         try {
-          const coords = await geocodeNagpurPlace(row.address || row.name);
+          const coords = await geocodePlace(row.address || row.name, city, country, depot, maxRadius);
           const employeeEmail = row.email || `${row.employeeCode.toLowerCase()}@corporate.com`;
 
           await prisma.$transaction(async (tx) => {
