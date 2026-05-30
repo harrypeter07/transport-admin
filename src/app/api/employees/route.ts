@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
         update: {},
         create: { id: "default" }
       });
-      const depot = makeDepot(settings);
+      const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
       const city = settings.defaultCity || "Nagpur";
       const country = settings.defaultCountry || "India";
       const maxRadius = settings.maxPickupRadiusKm || 70;
