@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { verifySession } from "@/lib/dal";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/db";
 
 export async function GET(req: Request) {
   try {
-    const session = await verifySession();
-    if (session.role !== "DRIVER") {
+    const session = await getSession();
+    if (!session?.userId || session.role !== "DRIVER") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

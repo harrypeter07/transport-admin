@@ -15,11 +15,17 @@ export default function DriverDashboardPage() {
     fetchRoutes();
   }, [activeTab]);
 
+  const [sessionError, setSessionError] = useState(false);
+
   async function fetchRoutes() {
     setLoading(true);
     try {
       const isHistory = activeTab === "HISTORY";
       const res = await fetch(`/api/driver/routes${isHistory ? "?history=true" : ""}`);
+      if (res.status === 401) {
+        setSessionError(true);
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         if (isHistory) {
@@ -91,7 +97,14 @@ export default function DriverDashboardPage() {
           </h2>
         </div>
         <div className="p-6">
-          {loading ? (
+          {sessionError ? (
+            <div className="flex flex-col items-center justify-center py-12 rounded-lg border border-amber-200 bg-amber-50 text-center px-4">
+              <span className="text-amber-700 mb-2 font-bold uppercase tracking-widest text-xs">Session Mismatch</span>
+              <p className="text-xs text-amber-700 max-w-xs leading-relaxed">
+                This page requires a Driver account. You appear to be logged in with a different role. Please sign out and log in with a Driver account.
+              </p>
+            </div>
+          ) : loading ? (
             <div className="flex flex-col items-center justify-center py-10">
               <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin"></div>
             </div>
