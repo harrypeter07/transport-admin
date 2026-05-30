@@ -30,7 +30,7 @@ export async function GET(req: Request) {
               { date: { lt: today } }
             ]}
           : { 
-              date: today,
+              date: { gte: today },
               status: { in: ["ASSIGNED", "IN_PROGRESS"] }
             }
         )

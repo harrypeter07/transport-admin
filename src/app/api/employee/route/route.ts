@@ -23,14 +23,18 @@ export async function GET(req: Request) {
       where: {
         employeeId: employee.id,
         route: {
-          date: today,
+          date: { gte: today },
           status: { in: ["PLANNED", "ASSIGNED", "IN_PROGRESS"] }
         }
+      },
+      orderBy: {
+        route: { date: "asc" }
       },
       include: {
         route: {
           include: {
             cab: true,
+            shift: true,
             stops: {
               include: { employee: true },
               orderBy: { stopOrder: "asc" }

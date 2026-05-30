@@ -84,7 +84,7 @@ export default function EmployeeDashboardPage() {
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">
-                Today's Commute ({todayStr})
+                Next Commute {route ? `(${route.date})` : `(${todayStr})`}
               </h2>
               {route && (
                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black tracking-widest uppercase ${
