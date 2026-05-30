@@ -29,7 +29,10 @@ export async function GET(req: Request) {
               { status: { in: ["COMPLETED", "CANCELLED"] } },
               { date: { lt: today } }
             ]}
-          : { date: today }
+          : { 
+              date: today,
+              status: { in: ["ASSIGNED", "IN_PROGRESS"] }
+            }
         )
       },
       include: {

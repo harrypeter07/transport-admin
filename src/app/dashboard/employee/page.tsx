@@ -84,7 +84,7 @@ export default function EmployeeDashboardPage() {
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">
-                Today's Commute Route
+                Today's Commute ({todayStr})
               </h2>
               {route && (
                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black tracking-widest uppercase ${
@@ -99,9 +99,9 @@ export default function EmployeeDashboardPage() {
               <div className="py-10 text-center text-slate-450 text-xs">Loading route data...</div>
             ) : !route ? (
               <div className="flex flex-col items-center justify-center py-12 bg-slate-50 rounded-lg border border-slate-100 border-dashed text-center px-4">
-                <span className="text-slate-400 mb-2 font-bold uppercase tracking-widest text-xs">No Scheduled Route</span>
+                <span className="text-slate-400 mb-2 font-bold uppercase tracking-widest text-xs">No Published Route</span>
                 <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                  You are not scheduled on a route for today. Details appear once matching shift routes are optimized by administration.
+                  You are not assigned to a published route for today. Check back later once administration publishes the fleet plan.
                 </p>
               </div>
             ) : (

@@ -38,7 +38,9 @@ import {
   ShieldOff,
   MessageSquare,
   Sparkles,
-  Info
+  Info,
+  Search,
+  Send
 } from "lucide-react";
 
 export default function TransitAdminSPA() {
@@ -617,24 +619,16 @@ export default function TransitAdminSPA() {
                 <div className="flex items-center gap-1.5 px-1">
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg hover:border-slate-350 transition shadow-2xs">
                     <Calendar className="w-3.5 h-3.5 text-slate-550" />
-                    <select
+                    <input
+                      type="date"
                       value={selectedDate}
                       onChange={(e) => {
                         const newDate = e.target.value;
                         setSelectedDate(newDate);
                         fetchInitialData({ date: newDate });
                       }}
-                      className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer focus:ring-0"
-                    >
-                      {!importSheets.includes(selectedDate) && (
-                        <option value={selectedDate}>{selectedDate}</option>
-                      )}
-                      {importSheets.map((sheet) => (
-                        <option key={sheet} value={sheet}>
-                          {sheet}
-                        </option>
-                      ))}
-                    </select>
+                      className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer focus:ring-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 transition-opacity"
+                    />
                   </div>
                 </div>
 
@@ -695,18 +689,47 @@ export default function TransitAdminSPA() {
                       <option value="BALANCED">Balanced</option>
                     </select>
                   </div>
-                ) : null}
-
-                {!optimizationPlans ? (
-                  <button
-                    onClick={handleGeneratePlans}
-                    disabled={optimizing || previewing || loading}
-                    className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50 shadow-2xs cursor-pointer"
-                  >
-                    <RotateCw className={`w-3.5 h-3.5 ${previewing ? "animate-spin" : ""}`} />
-                    {previewing ? "Solving..." : "Optimize Routing"}
-                  </button>
                 ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleGeneratePlans}
+                      disabled={optimizing || previewing || loading}
+                      className="flex items-center gap-1.5 bg-slate-800 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-900 transition disabled:opacity-50 shadow-2xs cursor-pointer"
+                    >
+                      <RotateCw className={`w-3.5 h-3.5 ${previewing ? "animate-spin" : ""}`} />
+                      {previewing ? "Solving..." : "Optimize Routing"}
+                    </button>
+
+                    {routes.some(r => r.status === "PENDING" || r.status === "PLANNED") && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Are you sure you want to publish these routes to the fleet? Drivers and Employees will immediately see their assignments.")) return;
+                          try {
+                            const res = await fetch("/api/optimization/publish", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ date: selectedDate, shiftId: activeShiftId }),
+                            });
+                            if (res.ok) {
+                              alert("Routes published successfully!");
+                              fetchInitialData({ date: selectedDate, shiftId: activeShiftId });
+                            } else {
+                              alert("Failed to publish routes.");
+                            }
+                          } catch (e) {
+                            alert("Error publishing routes.");
+                          }
+                        }}
+                        className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-2xs cursor-pointer animate-pulse"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        Publish to Fleet
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {optimizationPlans && (
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => previewedStrategy && handleApplyPlan(previewedStrategy)}
