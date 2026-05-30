@@ -4,6 +4,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { Route, RouteStop } from "@/store/useTransportStore";
 import "leaflet/dist/leaflet.css";
 
+// Nagpur bounds constraint helper
+const isWithinBounds = (lat: number, lng: number) => {
+  return lat >= 20.5 && lat <= 21.5 && lng >= 78.5 && lng <= 79.5;
+};
+
 interface LeafletMapProps {
   routes: Route[];
   selectedRouteId: string | null;

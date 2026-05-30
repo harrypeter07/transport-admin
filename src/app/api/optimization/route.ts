@@ -52,30 +52,22 @@ export async function POST(req: NextRequest) {
     const currentDateStr = date || new Date().toISOString().split("T")[0];
 
     // 1. Fetch Employees for this shift and exclude those on leave
-    const dbEmployees = await prisma.employee.findMany({
+    const availableEmployees = await prisma.employee.findMany({
       where: { 
         status: "ACTIVE",
-        ...(shiftId ? { shiftId } : {})
-      },
-      include: {
-        user: {
-          include: {
+        NOT: {
+          user: {
             leaves: {
-              where: {
+              some: {
                 status: "APPROVED",
                 startDate: { lte: currentDateStr },
-                endDate: { gte: currentDateStr }
+                endDate: { gte: currentDateStr },
               }
             }
           }
-        }
-      }
-    });
-
-    // Filter out employees with active approved leaves
-    const availableEmployees = dbEmployees.filter(emp => {
-      const leaves = emp.user?.leaves || [];
-      return leaves.length === 0;
+        },
+        ...(shiftId ? { shiftId } : {})
+      },
     });
 
     if (availableEmployees.length === 0) {
@@ -129,6 +121,13 @@ export async function POST(req: NextRequest) {
     const apiKeyHeader = req.headers.get("x-google-maps-key") || "";
     const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
     const optimizedRoutes = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey, mode, depot);
+
+    console.log(`[OPTIMIZATION API] Mode: ${mode}`);
+    console.log(`[OPTIMIZATION API] Found ${optEmployees.length} active employees and ${optCabs.length} available cabs.`);
+    console.log(`[OPTIMIZATION API] Generated ${optimizedRoutes.length} routes.`);
+    for (const r of optimizedRoutes) {
+      console.log(`  Cab ${r.cabId} assigned ${r.stops.length} stops.`);
+    }
 
     // 5. Use database transaction to wipe old routes for this date and insert new ones
     await prisma.$transaction(async (tx) => {
@@ -189,7 +188,7 @@ export async function POST(req: NextRequest) {
           });
         }
       }
-    });
+    }, { timeout: 20000, maxWait: 10000 });
 
     return NextResponse.json({ success: true, count: optimizedRoutes.length });
   } catch (e) {

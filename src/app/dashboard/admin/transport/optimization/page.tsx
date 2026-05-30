@@ -37,8 +37,10 @@ import {
   CheckCircle2,
   ShieldOff,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  Info
 } from "lucide-react";
+import Preloader from "@/components/Preloader";
 
 export default function TransitAdminSPA() {
   const {
@@ -121,7 +123,7 @@ export default function TransitAdminSPA() {
 
   // State for commute routing
   const [isPickup, setIsPickup] = useState(true);
-  const [optimizationMode, setOptimizationMode] = useState<"MAXIMIZE_UTILIZATION" | "FASTEST_TRAVEL">("FASTEST_TRAVEL");
+  const [optimizationMode, setOptimizationMode] = useState<"MAXIMIZE_UTILIZATION" | "FASTEST_TRAVEL" | "BALANCED">("FASTEST_TRAVEL");
   const [optimizeError, setOptimizeError] = useState<string | null>(null);
   const [optimizing, setOptimizing] = useState(false);
 
@@ -399,7 +401,14 @@ export default function TransitAdminSPA() {
     if (timeA !== timeB) return timeA.localeCompare(timeB);
     return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
   });
-  const selectedRoute = routes.find((r) => r.id === selectedRouteId);
+
+  if (loading && routes.length === 0 && employees.length === 0) {
+    return <Preloader message="Loading Optimization Engine Data..." />;
+  }
+
+  // Find the selected route (ensure we don't crash if routes is empty)
+  const selectedRoute = routes.find((r) => r.id === selectedRouteId) || routes[0] || null;
+
   const totalViolations = routes.reduce(
     (acc, r) => acc + r.violations.filter((v) => !v.resolved).length,
     0
@@ -623,6 +632,7 @@ export default function TransitAdminSPA() {
                     className="bg-transparent border-none text-xs font-bold text-slate-900 outline-none cursor-pointer focus:ring-0"
                   >
                     <option value="FASTEST_TRAVEL">Fastest Travel</option>
+                    <option value="BALANCED">Balanced</option>
                     <option value="MAXIMIZE_UTILIZATION">Maximize Utilization</option>
                   </select>
                 </div>
@@ -654,7 +664,7 @@ export default function TransitAdminSPA() {
              </div>
           )}
 
-          {/* Dual Mode Comparison Helper */}
+          {/* Tri-Mode Comparison Helper */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col gap-3 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <span className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
@@ -662,19 +672,26 @@ export default function TransitAdminSPA() {
                 Optimization Mode Comparison Rationale
               </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div className={`p-4 rounded-xl border transition ${optimizationMode === "FASTEST_TRAVEL" ? "border-slate-850 bg-slate-900 text-white shadow-xs" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
                 <span className="font-bold text-sm block mb-1">Mode A: Fastest Travel (Minimize Commute)</span>
                 <p className="leading-relaxed text-[11px] opacity-90">
-                  Prioritizes employee experience by limiting detours. When grouping employees, it leaves seats empty if a detour would add more than 7 km to the trip. 
-                  <strong className="block mt-1 font-bold">Best for: Night shifts, female safety routing, and employee satisfaction.</strong>
+                  Prioritizes employee experience by limiting detours strictly to 7 km. May leave seats empty to ensure rapid transport for the first pickups. 
+                  <strong className="block mt-1 font-bold">Best for: Night shifts and high employee satisfaction.</strong>
+                </p>
+              </div>
+              <div className={`p-4 rounded-xl border transition ${optimizationMode === "BALANCED" ? "border-slate-850 bg-slate-900 text-white shadow-xs" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                <span className="font-bold text-sm block mb-1">Mode B: Balanced (Mix of Both)</span>
+                <p className="leading-relaxed text-[11px] opacity-90">
+                  A perfect middle ground. Allows moderate detours (up to 12 km) to fill more seats, striking a balance between reasonable commute times and decent fleet utilization.
+                  <strong className="block mt-1 font-bold">Best for: Regular shifts with scattered employee clusters.</strong>
                 </p>
               </div>
               <div className={`p-4 rounded-xl border transition ${optimizationMode === "MAXIMIZE_UTILIZATION" ? "border-slate-850 bg-slate-900 text-white shadow-xs" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
-                <span className="font-bold text-sm block mb-1">Mode B: Maximize Utilization (Minimize Fleet)</span>
+                <span className="font-bold text-sm block mb-1">Mode C: Maximize Utilization (Minimize Fleet)</span>
                 <p className="leading-relaxed text-[11px] opacity-90">
-                  Prioritizes operational efficiency by packing cabs as close to capacity as possible. Disregards detour distance limits to reduce total vehicles and driver counts.
-                  <strong className="block mt-1 font-bold">Best for: General day shifts, fuel conservation, and fleet cost minimization.</strong>
+                  Prioritizes operational efficiency by packing cabs to 100% capacity. Disregards detour distance limits entirely to reduce the total number of dispatched vehicles.
+                  <strong className="block mt-1 font-bold">Best for: Fuel conservation and fleet cost minimization.</strong>
                 </p>
               </div>
             </div>
@@ -742,7 +759,7 @@ export default function TransitAdminSPA() {
                 <div className="flex flex-col text-left">
                   <span className="font-bold text-red-900">No Vehicles Available</span>
                   <span className="mt-0.5 text-red-700 font-medium">
-                    There are no cabs marked as AVAILABLE in the registry. Please go to the **Roster & Cabs Desk** to add and register vehicles.
+                    There are no cabs marked as AVAILABLE in the system. Please go to Operations &gt; Cabs to add and register vehicles.
                   </span>
                 </div>
               </div>
@@ -760,15 +777,6 @@ export default function TransitAdminSPA() {
                     </span>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    setActiveDesk("REGISTRY");
-                    setRegistryTab("CABS");
-                  }}
-                  className="whitespace-nowrap px-3 py-1.5 bg-amber-600 text-white rounded-lg text-[10px] font-bold hover:bg-amber-700 transition self-start md:self-auto cursor-pointer"
-                >
-                  Register More Cabs
-                </button>
               </div>
             ) : null}
 
@@ -880,8 +888,18 @@ export default function TransitAdminSPA() {
                         </span>
                       </div>
                       <div className="flex flex-col items-end">
-                        <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400">
+                        <span className="text-[9px] uppercase font-bold tracking-widest text-slate-400 flex items-center gap-1">
                           Score
+                          <div className="group relative flex items-center cursor-help">
+                            <Info className="w-3 h-3 text-slate-400 hover:text-indigo-500 transition" />
+                            <div className="absolute right-0 bottom-full mb-1.5 w-44 p-2 bg-slate-900 text-white text-[9px] font-medium leading-tight rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 text-left normal-case tracking-normal">
+                              Calculation logic:<br/>
+                              • Base: 100 points<br/>
+                              • Safety Violation: -10 pts<br/>
+                              • Empty Seat: -2 pts<br/>
+                              • Detour Distance: -1 pt/km
+                            </div>
+                          </div>
                         </span>
                         <span className="text-sm font-bold text-slate-900 mt-0.5 font-mono">
                           {selectedRoute.optimizationScore}/100
@@ -1274,7 +1292,19 @@ export default function TransitAdminSPA() {
                           </div>
                           
                           <div className="flex flex-col items-end gap-0.5">
-                            <span className="text-[8px] uppercase font-bold tracking-widest text-slate-400">Score</span>
+                            <span className="text-[8px] uppercase font-bold tracking-widest text-slate-400 flex items-center gap-1">
+                              Score
+                              <div className="group relative flex items-center cursor-help">
+                                <Info className="w-3 h-3 text-slate-400 hover:text-indigo-500 transition" />
+                                <div className="absolute right-0 bottom-full mb-1.5 w-44 p-2 bg-slate-900 text-white text-[9px] font-medium leading-tight rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 text-left normal-case tracking-normal">
+                                  Calculation logic:<br/>
+                                  • Base: 100 points<br/>
+                                  • Safety Violation: -10 pts<br/>
+                                  • Empty Seat: -2 pts<br/>
+                                  • Detour Distance: -1 pt/km
+                                </div>
+                              </div>
+                            </span>
                             <span className="text-sm font-bold text-slate-900 font-mono">{route.optimizationScore}/100</span>
                           </div>
                         </div>
@@ -1556,471 +1586,7 @@ export default function TransitAdminSPA() {
           </div>
         )}
 
-        {/* DESK 2: ROSTER & CABS REGISTRY */}
-        {activeDesk === "REGISTRY" && (
-          <div className="flex flex-col gap-6 text-left animate-fadeIn">
-            {/* Header tab */}
-            <div className="flex gap-4 border-b border-slate-200">
-              <button
-                onClick={() => setRegistryTab("EMPLOYEES")}
-                className={`pb-2 text-xs font-bold tracking-wider uppercase border-b-2 transition-all
-                  ${
-                    registryTab === "EMPLOYEES"
-                      ? "border-slate-950 text-slate-950 font-black"
-                      : "border-transparent text-slate-400 hover:text-slate-600"
-                  }
-                `}
-              >
-                Employee Roster ({employees.length})
-              </button>
-              <button
-                onClick={() => setRegistryTab("CABS")}
-                className={`pb-2 text-xs font-bold tracking-wider uppercase border-b-2 transition-all
-                  ${
-                    registryTab === "CABS"
-                      ? "border-slate-950 text-slate-950 font-black"
-                      : "border-transparent text-slate-400 hover:text-slate-600"
-                  }
-                `}
-              >
-                Cab Fleet & Drivers ({cabs.length})
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search..."
-                className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300 w-64"
-              />
-            </div>
-
-            {registryTab === "EMPLOYEES" ? (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* Employees Table */}
-                <div className="lg:col-span-8 p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-4">
-                  <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <Users className="w-4 h-4 text-slate-400" />
-                    Roster Directory
-                  </h2>
-
-                  <div className="overflow-x-auto border border-slate-100 rounded-lg max-h-[460px] overflow-y-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-mono text-[9px] uppercase tracking-wider">
-                          <th className="p-3">Code</th>
-                          <th className="p-3">Name</th>
-                          <th className="p-3">Gender</th>
-                          <th className="p-3">Address (Nagpur Area)</th>
-                          <th className="p-3">Dept</th>
-                          <th className="p-3 text-center">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                        {filteredEmployees.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="p-8 text-center text-slate-400 bg-slate-50/20">
-                              No employees found. Add or upload roster.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredEmployees.map((emp) => (
-                            <tr key={emp.id} className="hover:bg-slate-50/50 transition">
-                              <td className="p-3 font-mono font-bold text-slate-500">{emp.employeeCode}</td>
-                              <td className="p-3 text-slate-900">{emp.name}</td>
-                              <td className="p-3">
-                                <span
-                                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full border
-                                    ${
-                                      emp.gender === "FEMALE"
-                                        ? "bg-purple-50 text-purple-600 border-purple-200"
-                                        : "bg-slate-50 text-slate-500 border-slate-200"
-                                    }
-                                  `}
-                                >
-                                  {emp.gender}
-                                </span>
-                              </td>
-                              <td className="p-3 text-slate-600">
-                                {emp.address.includes(" | ") ? (
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="font-bold text-slate-900">{emp.address.split(" | ")[0]}</span>
-                                    <span className="text-[10px] text-slate-400 font-medium">{emp.address.split(" | ")[1]}</span>
-                                  </div>
-                                ) : (
-                                  emp.address
-                                )}
-                              </td>
-                              <td className="p-3 text-slate-500">{emp.department}</td>
-                              <td className="p-3 text-center">
-                                <button
-                                  onClick={() => deleteEmployee(emp.id)}
-                                  className="p-1.5 bg-red-50 border border-red-200 rounded-md text-red-600 hover:bg-red-100 transition"
-                                >
-                                  <Trash className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Employee inputs */}
-                <div className="lg:col-span-4 flex flex-col gap-6">
-                  {/* Excel import */}
-                  <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-4">
-                    <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                      <FileSpreadsheet className="w-4.5 h-4.5 text-slate-500" />
-                      Roster Spreadsheet Importer
-                    </h2>
-
-                    {importSheets.length > 0 ? (
-                      <form onSubmit={handleImportSheet} className="flex flex-col gap-3">
-                        <p className="text-[10px] text-slate-500 leading-normal text-left">
-                          We detected <strong>roster.xlsx</strong> in your project root! Select a sheet date to import:
-                        </p>
-                        
-                        <div className="flex flex-col gap-1 text-left">
-                          <label className="text-[8px] font-bold uppercase tracking-wider text-slate-400">
-                            Available Date Sheet
-                          </label>
-                          <select
-                            value={selectedImportSheet}
-                            onChange={(e) => setSelectedImportSheet(e.target.value)}
-                            required
-                            className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                          >
-                            <option value="">-- Choose Date --</option>
-                            {importSheets.map((sheet) => (
-                              <option key={sheet} value={sheet}>
-                                {sheet}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={uploading || !selectedImportSheet}
-                          className="w-full flex items-center justify-center gap-1.5 bg-slate-950 text-white py-2 rounded-lg text-xs font-bold hover:bg-slate-850 transition disabled:opacity-50 cursor-pointer"
-                        >
-                          {uploading ? "Importing..." : "Import & Auto-Optimize"}
-                        </button>
-                      </form>
-                    ) : (
-                      <div className="p-3 bg-amber-50 border border-amber-150 text-[10px] rounded-lg text-amber-800 leading-normal text-left">
-                        No <strong>roster.xlsx</strong> file found at the root of the project workspace. Please copy your spreadsheet to the project root directory.
-                      </div>
-                    )}
-
-                    <div className="border-t border-slate-100 my-1 pt-3 flex flex-col gap-3">
-                      <span className="text-[9px] uppercase font-bold text-slate-400 text-left">
-                        Or Upload New Roster Excel File
-                      </span>
-                      <form onSubmit={handleFileUpload} className="flex flex-col gap-3">
-                        <div className="flex flex-col items-center justify-center p-3 border border-dashed border-slate-200 bg-slate-50 rounded-lg hover:border-slate-350 transition cursor-pointer relative group">
-                          <input
-                            type="file"
-                            id="fileInput"
-                            accept=".xlsx, .xls, .csv"
-                            onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          />
-                          <Upload className="w-4 h-4 text-slate-400 group-hover:text-slate-650 mb-1" />
-                          <span className="text-[9px] text-slate-500 font-medium truncate max-w-[150px]">
-                            {uploadFile ? uploadFile.name : "Select Excel File"}
-                          </span>
-                        </div>
-                        <button
-                          type="submit"
-                          disabled={uploading || !uploadFile}
-                          className="w-full flex items-center justify-center gap-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 py-1.5 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
-                        >
-                          Upload File
-                        </button>
-                      </form>
-                    </div>
-
-                    <div className="border-t border-slate-100 pt-3 flex flex-col gap-2">
-                      <span className="text-[9px] uppercase font-bold text-slate-400 text-left">
-                        Database Administration
-                      </span>
-                      <button
-                        onClick={handleResetDatabase}
-                        disabled={uploading}
-                        className="w-full flex items-center justify-center gap-1.5 bg-red-50 border border-red-200 hover:bg-red-105 hover:border-red-300 text-red-600 py-1.5 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        Clear All Database Data
-                      </button>
-                    </div>
-
-                    <a
-                      href="/api/employees/template"
-                      className="flex items-center gap-1 text-[9px] text-blue-600 hover:text-blue-800 font-bold self-start border-b border-transparent hover:border-blue-800 pb-0.5 transition"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Download Example Excel File
-                    </a>
-
-                    {uploadMsg && (
-                      <div className="p-3 bg-slate-50 border border-slate-200 text-[10px] rounded-lg text-slate-600 flex items-start gap-1.5 text-left animate-fadeIn">
-                        <AlertCircle className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                        <span>{uploadMsg}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Manual employee add */}
-                  <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-4">
-                    <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-slate-500" />
-                      Add Employee Manually
-                    </h2>
-
-                    <form onSubmit={handleAddEmployee} className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2 flex flex-col gap-1">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          Employee Code
-                        </label>
-                        <input
-                          type="text"
-                          name="employeeCode"
-                          required
-                          value={employeeForm.employeeCode}
-                          onChange={handleEmpInputChange}
-                          placeholder="EMP201"
-                          className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                        />
-                      </div>
-
-                      <div className="col-span-2 flex flex-col gap-1">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          Full Name
-                        </label>
-                        <input
-                          type="text"
-                          name="name"
-                          required
-                          value={employeeForm.name}
-                          onChange={handleEmpInputChange}
-                          placeholder="Alice Smith"
-                          className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          Gender
-                        </label>
-                        <select
-                          name="gender"
-                          value={employeeForm.gender}
-                          onChange={handleEmpInputChange}
-                          className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                        >
-                          <option value="MALE">MALE</option>
-                          <option value="FEMALE">FEMALE</option>
-                        </select>
-                      </div>
-
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          Department
-                        </label>
-                        <input
-                          type="text"
-                          name="department"
-                          value={employeeForm.department}
-                          onChange={handleEmpInputChange}
-                          placeholder="Engineering"
-                          className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                        />
-                      </div>
-
-                      <div className="col-span-2 flex flex-col gap-1">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          Nagpur Area / Neighborhood Address
-                        </label>
-                        <input
-                          type="text"
-                          name="address"
-                          required
-                          value={employeeForm.address}
-                          onChange={handleEmpInputChange}
-                          placeholder="Sadar, Nagpur"
-                          className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                        />
-                        <span className="text-[8px] text-slate-400">
-                          Example: Manish Nagar, Dharampeth, Besa, Nandanvan, Sadar, Dhantoli.
-                        </span>
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="col-span-2 mt-2 bg-slate-900 text-white py-2 rounded-lg text-xs font-bold hover:bg-slate-800 transition"
-                      >
-                        Register Employee
-                      </button>
-                      {employeeFormError && (
-                        <div className="col-span-2 p-2.5 bg-red-50 border border-red-200 rounded-lg text-[10px] text-red-700 font-semibold animate-fadeIn">
-                          {employeeFormError}
-                        </div>
-                      )}
-                    </form>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-fadeIn">
-                {/* Cabs Table */}
-                <div className="lg:col-span-8 p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-4">
-                  <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <Truck className="w-4 h-4 text-slate-400" />
-                    Fleet Directory
-                  </h2>
-
-                  <div className="overflow-x-auto border border-slate-100 rounded-lg max-h-[460px] overflow-y-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-mono text-[9px] uppercase tracking-wider">
-                          <th className="p-3">Vehicle Number</th>
-                          <th className="p-3">Capacity</th>
-                          <th className="p-3">Driver Name</th>
-                          <th className="p-3">Contact</th>
-                          <th className="p-3">Vendor</th>
-                          <th className="p-3 text-center">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                        {filteredCabs.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="p-8 text-center text-slate-400 bg-slate-50/20">
-                              No cabs registered. Manual add one below.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredCabs.map((cab) => (
-                            <tr key={cab.id} className="hover:bg-slate-50/50 transition">
-                              <td className="p-3 font-mono font-bold text-slate-900">{cab.vehicleNumber}</td>
-                              <td className="p-3">{cab.capacity} seats</td>
-                              <td className="p-3 text-slate-900">{cab.driverName}</td>
-                              <td className="p-3 font-mono text-slate-500">{cab.driverPhone}</td>
-                              <td className="p-3 text-slate-500">{cab.vendor}</td>
-                              <td className="p-3 text-center">
-                                <button
-                                  onClick={() => deleteCab(cab.id)}
-                                  className="p-1.5 bg-red-50 border border-red-200 rounded-md text-red-600 hover:bg-red-100 transition"
-                                >
-                                  <Trash className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Cab Manual Add */}
-                <div className="lg:col-span-4 p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-4">
-                  <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <Plus className="w-4 h-4 text-slate-500" />
-                    Register Cab & Driver
-                  </h2>
-
-                  <form onSubmit={handleAddCab} className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2 flex flex-col gap-1">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                        Vehicle Number
-                      </label>
-                      <input
-                        type="text"
-                        name="vehicleNumber"
-                        required
-                        value={cabForm.vehicleNumber}
-                        onChange={handleCabInputChange}
-                        placeholder="MH-31-TR-6666"
-                        className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                        Capacity (seats)
-                      </label>
-                      <input
-                        type="number"
-                        name="capacity"
-                        min="1"
-                        max="15"
-                        value={cabForm.capacity}
-                        onChange={handleCabInputChange}
-                        className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                        Vendor
-                      </label>
-                      <input
-                        type="text"
-                        name="vendor"
-                        value={cabForm.vendor}
-                        onChange={handleCabInputChange}
-                        placeholder="Maharaja Transport"
-                        className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                      />
-                    </div>
-
-                    <div className="col-span-2 flex flex-col gap-1">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                        Driver Full Name
-                      </label>
-                      <input
-                        type="text"
-                        name="driverName"
-                        required
-                        value={cabForm.driverName}
-                        onChange={handleCabInputChange}
-                        placeholder="David Miller"
-                        className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                      />
-                    </div>
-
-                    <div className="col-span-2 flex flex-col gap-1">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                        Driver Contact Phone
-                      </label>
-                      <input
-                        type="text"
-                        name="driverPhone"
-                        value={cabForm.driverPhone}
-                        onChange={handleCabInputChange}
-                        placeholder="+91 98765 00000"
-                        className="bg-white border border-slate-200 rounded-lg text-xs py-2 px-3 focus:outline-none focus:border-slate-300"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="col-span-2 mt-2 bg-slate-900 text-white py-2 rounded-lg text-xs font-bold hover:bg-slate-800 transition"
-                    >
-                      Register Vehicle
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* DESK 2: ROSTER & CABS REGISTRY (Removed - moved to dedicated pages) */}
 
         {/* DESK 3: COMPLIANCE WARNINGS */}
         {activeDesk === "COMPLIANCE" && (

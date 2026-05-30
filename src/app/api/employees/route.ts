@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { parseExcelRoster } from "@/lib/excelParser";
-import { geocodePlace, makeDepot } from "@/lib/optimization";
+import { geocodePlace, makeDepot, geocodeNagpurPlace } from "@/lib/optimization";
 
 import bcrypt from "bcryptjs";
 import { verifySession } from "@/lib/dal";
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
 
       for (const row of rows) {
         try {
-          const coords = await geocodeNagpurPlace(row.address || row.name);
+          let coords = await geocodeNagpurPlace(row.address || row.name);
           const employeeEmail = row.email || `${row.employeeCode.toLowerCase()}@corporate.com`;
 
           await prisma.$transaction(async (tx) => {
@@ -200,12 +200,8 @@ export async function POST(req: NextRequest) {
       });
       const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
 
-      const coords = await geocodePlace(
-        address || "Central",
-        settings.defaultCity,
-        settings.defaultCountry,
-        depot,
-        settings.maxPickupRadiusKm
+      let coords = await geocodeNagpurPlace(
+        address || name
       );
 
       if (!coords) {

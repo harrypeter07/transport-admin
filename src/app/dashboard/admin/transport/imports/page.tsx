@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, FileSpreadsheet, Upload, CheckCircle2, AlertCircle } from "lucide-react";
 import { useTransportStore } from "@/store/useTransportStore";
+import Preloader from "@/components/Preloader";
 
 export default function ImportsPage() {
   const {
@@ -45,6 +46,10 @@ export default function ImportsPage() {
       setStatus({ type: "error", message: err.message || "An unexpected error occurred during file upload." });
     }
   };
+
+  if (storeLoading && importSheets.length === 0) {
+    return <Preloader message="Loading System Data..." />;
+  }
 
   return (
     <div className="space-y-6 animate-fadeIn max-w-4xl">
