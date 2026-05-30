@@ -161,12 +161,13 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       // Prefer caller-supplied shiftId, then stored, then first available
       const resolvedShiftId = currentShiftId || shifts[0]?.id || "";
       const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
-      const routes = await resRoutes.json();
+      const routesData = await resRoutes.json();
+      const routes = Array.isArray(routesData) ? routesData : [];
 
       set({
-        employees,
-        cabs,
-        shifts,
+        employees: Array.isArray(employees) ? employees : [],
+        cabs: Array.isArray(cabs) ? cabs : [],
+        shifts: Array.isArray(shifts) ? shifts : [],
         routes,
         activeShiftId: resolvedShiftId,
         selectedDate: dateToFetch,
