@@ -138,6 +138,12 @@ export async function POST(req: NextRequest) {
       for (const row of rows) {
         try {
           const coords = await geocodePlace(row.address || row.name, city, country, depot, maxRadius);
+          
+          if (!coords) {
+            skippedCount++;
+            continue;
+          }
+
           const employeeEmail = row.email || `${row.employeeCode.toLowerCase()}@corporate.com`;
 
           await prisma.$transaction(async (tx) => {
