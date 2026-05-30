@@ -64,7 +64,7 @@ export interface Route {
   isPickup: boolean;
   totalDistance: number;
   totalDuration: number;
-  status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
+  status: "PENDING" | "PLANNED" | "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
   optimizationScore: number;
   stops: RouteStop[];
   violations: Violation[];
