@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 import { prisma } from "@/lib/db";
-import { getDistance, DEPOT } from "@/lib/optimization";
+import { getDistance, makeDepot } from "@/lib/optimization";
 
 export async function GET(req: Request) {
   try {
@@ -194,6 +194,11 @@ export async function GET(req: Request) {
     });
 
     // Calculate ROI Distance savings
+    const settings = await prisma.systemSettings.upsert({
+      where: { id: "default" }, update: {}, create: { id: "default" }
+    });
+    const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
+
     let totalOptimizedDistance = 0;
     let totalUnoptimizedDistance = 0;
 
@@ -204,7 +209,7 @@ export async function GET(req: Request) {
         // Fetch stop coordinates
         const emp = await prisma.employee.findUnique({ where: { id: s.employeeId } });
         if (emp?.x && emp?.y) {
-          totalUnoptimizedDistance += (getDistance(DEPOT, emp) * 2);
+          totalUnoptimizedDistance += (getDistance(depot, emp) * 2);
         }
       }
     }

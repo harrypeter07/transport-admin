@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getDistance, DEPOT } from "@/lib/optimization";
+import { getDistance, makeDepot } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
 
 export async function GET(req: Request) {
@@ -28,9 +28,15 @@ export async function GET(req: Request) {
     const totalCabsInSystem = await prisma.cab.count();
     const totalDriversInSystem = totalCabsInSystem;
 
+    // Load settings for dynamic depot, fuel price, and currency
+    const settings = await prisma.systemSettings.upsert({
+      where: { id: "default" }, update: {}, create: { id: "default" }
+    });
+    const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
+
     const UNIT_TO_KM = 1.2;
-    const FUEL_PRICE = 100; // ₹100 per liter
-    const MILEAGE = 10;     // 10 km per liter
+    const FUEL_PRICE = settings.fuelPricePerLitre;  // from settings
+    const MILEAGE = settings.avgFuelMileageKmL;      // from settings
     const AVG_SPEED = 0.5;  // 30 km/h (0.5 km/min)
 
     let totalOptimizedDistance = 0;
@@ -59,18 +65,15 @@ export async function GET(req: Request) {
       const startPoint = null;
 
       if (route.isPickup) {
-        let prevPoint = startPoint || { x: naiveStops[0].employee.x, y: naiveStops[0].employee.y };
-        for (let i = (startPoint ? 0 : 1); i < naiveStops.length; i++) {
+        let prevPoint = { x: naiveStops[0].employee.x, y: naiveStops[0].employee.y };
+        for (let i = 1; i < naiveStops.length; i++) {
           const empPoint = { x: naiveStops[i].employee.x, y: naiveStops[i].employee.y };
           naiveDist += getDistance(prevPoint, empPoint);
           prevPoint = empPoint;
         }
-        naiveDist += getDistance(prevPoint, DEPOT);
+        naiveDist += getDistance(prevPoint, depot);
       } else {
-        if (startPoint) {
-          naiveDist += getDistance(startPoint, DEPOT);
-        }
-        let prevPoint = DEPOT;
+        let prevPoint = depot;
         for (let i = 0; i < naiveStops.length; i++) {
           const empPoint = { x: naiveStops[i].employee.x, y: naiveStops[i].employee.y };
           naiveDist += getDistance(prevPoint, empPoint);
@@ -145,6 +148,8 @@ export async function GET(req: Request) {
       totalCabsInSystem,
       totalDriversInSystem,
       routeBreakdowns,
+      currencySymbol: settings.currencySymbol,
+      depotName: settings.depotName,
     });
 
   } catch (error) {

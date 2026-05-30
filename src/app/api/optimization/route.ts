@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { optimizeRoutes, OptimizeEmployee, OptimizeCab } from "@/lib/optimization";
+import { optimizeRoutes, OptimizeEmployee, OptimizeCab, makeDepot } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
 
 // GET all routes with details
@@ -119,10 +119,16 @@ export async function POST(req: NextRequest) {
       driverPhone: cab.driverPhone || "N/A",
     }));
 
-    // 4. Run Core Optimizer
+    // 4. Run Core Optimizer — using dynamic depot from system settings
+    const settings = await prisma.systemSettings.upsert({
+      where: { id: "default" },
+      update: {},
+      create: { id: "default" },
+    });
+    const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
     const apiKeyHeader = req.headers.get("x-google-maps-key") || "";
     const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
-    const optimizedRoutes = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey, mode);
+    const optimizedRoutes = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey, mode, depot);
 
     // 5. Use database transaction to wipe old routes for this date and insert new ones
     await prisma.$transaction(async (tx) => {

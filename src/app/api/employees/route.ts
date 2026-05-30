@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { parseExcelRoster } from "@/lib/excelParser";
-import { geocodeNagpurPlace } from "@/lib/optimization";
+import { geocodePlace, makeDepot } from "@/lib/optimization";
 
 import bcrypt from "bcryptjs";
 import { verifySession } from "@/lib/dal";
@@ -188,13 +188,31 @@ export async function POST(req: NextRequest) {
     } else {
       // Create single employee manually
       const body = await req.json();
-      const { employeeCode, name, gender, phone, email, address, department, designation, shiftId } = body;
+      const { employeeCode, name, gender, phone, email, address, department, designation, managerId, shiftId } = body;
 
       if (!employeeCode || !name || !gender) {
         return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
       }
 
-      const coords = await geocodeNagpurPlace(address || "Nagpur");
+      // Fetch settings for dynamic geocoding
+      const settings = await prisma.systemSettings.upsert({
+        where: { id: "default" }, update: {}, create: { id: "default" }
+      });
+      const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
+
+      const coords = await geocodePlace(
+        address || "Central",
+        settings.defaultCity,
+        settings.defaultCountry,
+        depot,
+        settings.maxPickupRadiusKm
+      );
+
+      if (!coords) {
+        return NextResponse.json({
+          error: `Address is outside the configured ${settings.maxPickupRadiusKm}km pickup radius from ${settings.depotName}.`
+        }, { status: 400 });
+      }
       const employeeEmail = email || `${employeeCode.toLowerCase()}@corporate.com`;
 
       const employee = await prisma.$transaction(async (tx) => {
@@ -260,7 +278,23 @@ export async function PATCH(req: NextRequest) {
     // Recalculate coordinates if address is being updated and has changed
     let coords = { x: currentEmp.x, y: currentEmp.y };
     if (address && address !== currentEmp.address) {
-      coords = await geocodeNagpurPlace(address);
+      const settings = await prisma.systemSettings.upsert({
+        where: { id: "default" }, update: {}, create: { id: "default" }
+      });
+      const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
+      const resolved = await geocodePlace(
+        address,
+        settings.defaultCity,
+        settings.defaultCountry,
+        depot,
+        settings.maxPickupRadiusKm
+      );
+      if (!resolved) {
+        return NextResponse.json({
+          error: `Address is outside the configured ${settings.maxPickupRadiusKm}km pickup radius from ${settings.depotName}.`
+        }, { status: 400 });
+      }
+      coords = resolved;
     }
 
     const employee = await prisma.employee.update({

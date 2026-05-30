@@ -166,6 +166,17 @@ model SystemSettings {
   id                           String  @id @default("default")
   leaveApprovalRequired        Boolean @default(true)
   timingChangeApprovalRequired Boolean @default(true)
+  // Location & Depot
+  defaultCity                  String  @default("Nagpur")
+  defaultCountry               String  @default("India")
+  defaultDepotLat              Float   @default(21.0625)
+  defaultDepotLng              Float   @default(79.0526)
+  depotName                    String  @default("MIHAN Depot")
+  maxPickupRadiusKm            Int     @default(70)
+  // Financial
+  currencySymbol               String  @default("₹")
+  fuelPricePerLitre            Float   @default(100.0)
+  avgFuelMileageKmL            Float   @default(10.0)
 }
 
 model OperationalEvent {

@@ -54,8 +54,16 @@ export interface OptimizedRoute {
   hasEscort: boolean;
 }
 
-// Fixed Corporate Depot Location (MIHAN, Nagpur) - Real coordinates
+// Backward-compatible default depot (Nagpur/MIHAN). Callers should use makeDepot() from settings.
 export const DEPOT: Point = { x: 79.0526, y: 21.0625 };
+
+/**
+ * Constructs a depot Point from lat/lng values read from SystemSettings.
+ * Use this instead of the static DEPOT constant wherever settings are available.
+ */
+export function makeDepot(lat: number, lng: number): Point {
+  return { x: lng, y: lat };
+}
 
 // Speed fallback: 30 km/h (0.5 km per minute)
 const AVG_SPEED = 0.5;
@@ -81,7 +89,8 @@ export function getDistance(p1: Point, p2: Point): number {
  */
 export async function fetchOSRMRoute(
   stops: Point[],
-  isPickup: boolean
+  isPickup: boolean,
+  depot: Point = DEPOT
 ): Promise<{ distance: number; duration: number }> {
   if (stops.length === 0) {
     return { distance: 0, duration: 0 };
@@ -89,9 +98,9 @@ export async function fetchOSRMRoute(
 
   let coordsList: Point[] = [];
   if (isPickup) {
-    coordsList = [...stops, DEPOT];
+    coordsList = [...stops, depot];
   } else {
-    coordsList = [DEPOT, ...stops];
+    coordsList = [depot, ...stops];
   }
 
   const coordsString = coordsList.map(p => `${p.x},${p.y}`).join(";");
@@ -315,19 +324,19 @@ export function getOptimalPermutation(
 }
 
 // Calculate the total route distance
-function calculateRouteDistance(route: OptimizeEmployee[], isPickup: boolean): number {
+function calculateRouteDistance(route: OptimizeEmployee[], isPickup: boolean, depot: Point = DEPOT): number {
   if (route.length === 0) return 0;
   let dist = 0;
 
   if (isPickup) {
-    // Pickup: start at Stop_1, end at Office (DEPOT)
+    // Pickup: start at Stop_1, end at Office (depot)
     for (let i = 0; i < route.length - 1; i++) {
       dist += getDistance({ x: route[i].x, y: route[i].y }, { x: route[i + 1].x, y: route[i + 1].y });
     }
-    dist += getDistance({ x: route[route.length - 1].x, y: route[route.length - 1].y }, DEPOT);
+    dist += getDistance({ x: route[route.length - 1].x, y: route[route.length - 1].y }, depot);
   } else {
-    // Drop: start at Office (DEPOT), drop in order
-    dist += getDistance(DEPOT, { x: route[0].x, y: route[0].y });
+    // Drop: start at Office (depot), drop in order
+    dist += getDistance(depot, { x: route[0].x, y: route[0].y });
     for (let i = 0; i < route.length - 1; i++) {
       dist += getDistance({ x: route[i].x, y: route[i].y }, { x: route[i + 1].x, y: route[i + 1].y });
     }
@@ -494,7 +503,8 @@ export async function optimizeRoutes(
   cabs: OptimizeCab[],
   isPickup: boolean = true,
   apiKey: string = "",
-  mode: string = "FASTEST_TRAVEL"
+  mode: string = "FASTEST_TRAVEL",
+  depot: Point = DEPOT
 ): Promise<OptimizedRoute[]> {
   if (employees.length === 0 || cabs.length === 0) return [];
 
@@ -510,11 +520,11 @@ export async function optimizeRoutes(
     const cab = sortedCabs[i];
     const capacity = cab.capacity;
 
-    // Pick a seed employee (furthest from DEPOT to bundle remote areas together)
+    // Pick a seed employee (furthest from depot to bundle remote areas together)
     let seedIdx = 0;
     let maxDist = -1;
     for (let j = 0; j < remainingEmployees.length; j++) {
-      const dist = getDistance({ x: remainingEmployees[j].x, y: remainingEmployees[j].y }, DEPOT);
+      const dist = getDistance({ x: remainingEmployees[j].x, y: remainingEmployees[j].y }, depot);
       if (dist > maxDist) {
         maxDist = dist;
         seedIdx = j;
@@ -569,10 +579,10 @@ export async function optimizeRoutes(
     const stops: OptimizedRouteStop[] = [];
 
     if (isPickup) {
-      // Pickup route stop details: employee pickup order ➔ DEPOT
-      // Start from DEPOT and add distance to first stop so ETA for Stop 1 is non-zero
+      // Pickup route stop details: employee pickup order ➔ depot
+      // Start from depot and add distance to first stop so ETA for Stop 1 is non-zero
       if (safetyCorrectedRoute.length > 0) {
-        currentDistance += getDistance(DEPOT, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
+        currentDistance += getDistance(depot, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
       }
       for (let j = 0; j < safetyCorrectedRoute.length; j++) {
         const emp = safetyCorrectedRoute[j];
@@ -595,12 +605,12 @@ export async function optimizeRoutes(
       // Add final leg to depot
       if (safetyCorrectedRoute.length > 0) {
         const lastEmp = safetyCorrectedRoute[safetyCorrectedRoute.length - 1];
-        currentDistance += getDistance({ x: lastEmp.x, y: lastEmp.y }, DEPOT);
+        currentDistance += getDistance({ x: lastEmp.x, y: lastEmp.y }, depot);
       }
     } else {
-      // Drop route stop details: DEPOT ➔ employee drop order
+      // Drop route stop details: depot ➔ employee drop order
       if (safetyCorrectedRoute.length > 0) {
-        currentDistance += getDistance(DEPOT, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
+        currentDistance += getDistance(depot, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
       }
       for (let j = 0; j < safetyCorrectedRoute.length; j++) {
         const emp = safetyCorrectedRoute[j];
@@ -768,11 +778,11 @@ export async function optimizeRoutes(
       }
       if (safetyCorrectedRoute.length > 0) {
         const lastEmp = safetyCorrectedRoute[safetyCorrectedRoute.length - 1];
-        currentDistance += getDistance({ x: lastEmp.x, y: lastEmp.y }, DEPOT);
+        currentDistance += getDistance({ x: lastEmp.x, y: lastEmp.y }, depot);
       }
     } else {
       if (safetyCorrectedRoute.length > 0) {
-        currentDistance += getDistance(DEPOT, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
+        currentDistance += getDistance(depot, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
       }
       for (let j = 0; j < safetyCorrectedRoute.length; j++) {
         const emp = safetyCorrectedRoute[j];
@@ -799,7 +809,7 @@ export async function optimizeRoutes(
     let duration = 0;
 
     if (apiKey && safetyCorrectedRoute.length > 0) {
-      const pointsList = [DEPOT, ...safetyCorrectedRoute.map(e => ({ x: e.x, y: e.y }))];
+      const pointsList = [depot, ...safetyCorrectedRoute.map(e => ({ x: e.x, y: e.y }))];
       const matrixResult = await fetchGoogleMapsMatrix(pointsList, apiKey);
       const n = safetyCorrectedRoute.length;
       if (isPickup) {
@@ -821,7 +831,8 @@ export async function optimizeRoutes(
     } else {
       const osrmResult = await fetchOSRMRoute(
         safetyCorrectedRoute.map(e => ({ x: e.x, y: e.y })),
-        isPickup
+        isPickup,
+        depot
       );
       distance = osrmResult.distance;
       duration = osrmResult.duration;
@@ -846,60 +857,6 @@ export async function optimizeRoutes(
   return optimizedRoutes;
 }
 
-export const NAGPUR_PLACES: { [key: string]: Point } = {
-  // Corporate hub
-  "mihan": { x: 79.0526, y: 21.0625 },
-  "mihan sez": { x: 79.0526, y: 21.0625 },
-  // Major areas
-  "manish nagar": { x: 79.0832, y: 21.0945 },
-  "wardha road": { x: 79.0712, y: 21.0822 },
-  "besa": { x: 79.1121, y: 21.0872 },
-  "pratap nagar": { x: 79.0560, y: 21.1189 },
-  "dharampeth": { x: 79.0612, y: 21.1432 },
-  "sitabuldi": { x: 79.0880, y: 21.1444 },
-  "sadar": { x: 79.0805, y: 21.1611 },
-  "nandanvan": { x: 79.1220, y: 21.1340 },
-  "dhantoli": { x: 79.0822, y: 21.1232 },
-  "ramdaspeth": { x: 79.0778, y: 21.1325 },
-  "shankar nagar": { x: 79.0655, y: 21.1278 },
-  "khamla": { x: 79.0650, y: 21.1012 },
-  "trimurti nagar": { x: 79.0535, y: 21.1125 },
-  "trimurthi nagar": { x: 79.0535, y: 21.1125 },
-  "sonegaon": { x: 79.0588, y: 21.0845 },
-  "koradi": { x: 79.0985, y: 21.2385 },
-  "mankapur": { x: 79.0755, y: 21.1925 },
-  "mahal": { x: 79.1112, y: 21.1415 },
-  "gandhibagh": { x: 79.1085, y: 21.1525 },
-  // Real pickup points from roster.xlsx
-  "ccd it park": { x: 79.0535, y: 21.1125 },
-  "subhash nagar": { x: 79.0540, y: 21.1140 },
-  "shubhash nagar": { x: 79.0540, y: 21.1140 },
-  "vijaya nagar": { x: 79.0528, y: 21.1275 },
-  "vijaya nagar main gate": { x: 79.0528, y: 21.1275 },
-  "vnit": { x: 79.0528, y: 21.1275 },
-  "kanak car center": { x: 79.0712, y: 21.0822 },
-  "moraj apartments": { x: 79.0526, y: 21.0625 },
-  "shiv kailasa": { x: 79.0526, y: 21.0625 },
-  "sondapar": { x: 79.0526, y: 21.0625 },
-  "kalamna": { x: 79.1400, y: 21.1100 },
-  "kalamna market": { x: 79.1400, y: 21.1100 },
-  "nirvana residency": { x: 79.1400, y: 21.1100 },
-  "ayodhya nagar": { x: 79.0775, y: 21.1600 },
-  "hudkeshwar": { x: 79.1150, y: 21.0720 },
-  "bhandara road": { x: 79.1350, y: 21.1450 },
-  "ajni": { x: 79.1000, y: 21.1100 },
-  "surendra nagar": { x: 79.1000, y: 21.1150 },
-  "somalwada": { x: 79.0800, y: 21.0820 },
-  "somalvada": { x: 79.0800, y: 21.0820 },
-  "apollo pharmacy": { x: 79.0800, y: 21.0822 },
-  "neeri": { x: 79.0900, y: 21.1100 },
-  "parsodi": { x: 79.0535, y: 21.1090 },
-  "pardi": { x: 79.1380, y: 21.1080 },
-  "bharat nagar": { x: 79.1380, y: 21.1080 },
-  "it park": { x: 79.0535, y: 21.1125 },
-  "nagpur it park": { x: 79.0535, y: 21.1125 },
-};
-
 const geocodeCache: { [key: string]: Point } = {};
 let osmDisabled = false;
 let osmFailedCount = 0;
@@ -910,32 +867,32 @@ export function resetOSMCircuitBreaker() {
   console.log("OSM Circuit Breaker manually reset by admin.");
 }
 
-export async function geocodeNagpurPlace(name: string): Promise<Point> {
-  const cleanName = name.toLowerCase().replace(/nagpur/gi, "").trim();
-  
-  // Check in-memory cache first
-  if (geocodeCache[cleanName]) {
-    return geocodeCache[cleanName];
-  }
+/**
+ * Geocodes an address string relative to a specific city and country.
+ * Globally applicable — works for any city in the world.
+ * Returns null if the resolved location is farther than maxRadiusKm from the depot (outlier filter).
+ */
+export async function geocodePlace(
+  name: string,
+  city: string = "Nagpur",
+  country: string = "India",
+  depot: Point = DEPOT,
+  maxRadiusKm: number = 70
+): Promise<Point | null> {
+  const cleanName = name.toLowerCase().trim();
 
-  // Check predefined local cache
-  if (NAGPUR_PLACES[cleanName]) {
-    return NAGPUR_PLACES[cleanName];
-  }
-  
-  // Try partial matching in cache
-  for (const key of Object.keys(NAGPUR_PLACES)) {
-    if (cleanName.includes(key) || key.includes(cleanName)) {
-      return NAGPUR_PLACES[key];
-    }
+  // Check in-memory cache first
+  const cacheKey = `${cleanName}|${city}|${country}`;
+  if (geocodeCache[cacheKey]) {
+    return geocodeCache[cacheKey];
   }
 
   if (!osmDisabled) {
-    // Fallback: Query OpenStreetMap Nominatim with an 800ms abort timeout
+    // Query OpenStreetMap Nominatim with the configured city and country
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 800);
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     try {
-      const query = encodeURIComponent(`${name}, Nagpur, Maharashtra, India`);
+      const query = encodeURIComponent(`${name}, ${city}, ${country}`);
       const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
         signal: controller.signal,
         headers: { "User-Agent": "TransitAdminPOC/1.0" },
@@ -948,15 +905,21 @@ export async function geocodeNagpurPlace(name: string): Promise<Point> {
           if (data && data.length > 0) {
             const lat = parseFloat(data[0].lat);
             const lng = parseFloat(data[0].lon);
-            const point = { x: lng, y: lat };
-            geocodeCache[cleanName] = point;
+            const point: Point = { x: lng, y: lat };
+
+            // 70km outlier filter: skip if too far from depot
+            const distFromDepot = getDistance(point, depot);
+            if (distFromDepot > maxRadiusKm) {
+              console.warn(
+                `[OUTLIER] "${name}" resolved to (${lat}, ${lng}) which is ${distFromDepot.toFixed(1)}km from depot — exceeds ${maxRadiusKm}km limit. Skipping.`
+              );
+              return null;
+            }
+
+            geocodeCache[cacheKey] = point;
             return point;
           }
-        } else {
-          throw new Error("Response is not JSON");
         }
-      } else {
-        throw new Error(`HTTP error ${res.status}`);
       }
     } catch (e) {
       clearTimeout(timeoutId);
@@ -969,13 +932,23 @@ export async function geocodeNagpurPlace(name: string): Promise<Point> {
     }
   }
 
-  // Final fallback: random coordinates in Nagpur sector bounds (lng 79.00-79.16, lat 21.04-21.19)
-  const fallbackPoint = {
-    x: Math.round((79.00 + Math.random() * 0.16) * 10000) / 10000,
-    y: Math.round((21.04 + Math.random() * 0.15) * 10000) / 10000,
+  // Final fallback: use a slight random offset from the depot center
+  // (better than a completely wrong city's coordinates)
+  const fallbackPoint: Point = {
+    x: Math.round((depot.x + (Math.random() - 0.5) * 0.1) * 10000) / 10000,
+    y: Math.round((depot.y + (Math.random() - 0.5) * 0.1) * 10000) / 10000,
   };
-  geocodeCache[cleanName] = fallbackPoint;
+  geocodeCache[cacheKey] = fallbackPoint;
   return fallbackPoint;
+}
+
+/**
+ * Legacy alias kept for backward-compatibility. Prefer geocodePlace() with explicit city/country.
+ * @deprecated Use geocodePlace(name, city, country, depot, maxRadiusKm) instead.
+ */
+export async function geocodeNagpurPlace(name: string): Promise<Point> {
+  const result = await geocodePlace(name, "Nagpur", "India", DEPOT, 9999);
+  return result ?? DEPOT;
 }
 
 /**

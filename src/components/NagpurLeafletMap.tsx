@@ -4,17 +4,17 @@ import React, { useEffect, useRef, useState } from "react";
 import { Route, RouteStop } from "@/store/useTransportStore";
 import "leaflet/dist/leaflet.css";
 
-interface NagpurLeafletMapProps {
+interface LeafletMapProps {
   routes: Route[];
   selectedRouteId: string | null;
   onSelectRoute: (id: string | null) => void;
   mode?: "OPTIMIZER" | "ANALYTICS";
   analysisData?: any;
+  // Dynamic depot from system settings
+  depotLat?: number;
+  depotLng?: number;
+  depotName?: string;
 }
-
-// MIHAN Depot (Nagpur center landmark)
-const DEPOT_LAT = 21.0625;
-const DEPOT_LNG = 79.0526;
 
 // Strategy Colors
 const STRATEGY_COLORS = {
@@ -24,23 +24,19 @@ const STRATEGY_COLORS = {
   NORMAL: "#64748b",   // Slate-gray
 };
 
-// Bounding box for Nagpur & MIHAN area restriction
-const MAP_BOUNDS_MIN_LAT = 20.95;
-const MAP_BOUNDS_MAX_LAT = 21.27;
-const MAP_BOUNDS_MIN_LNG = 78.90;
-const MAP_BOUNDS_MAX_LNG = 79.25;
-
-const isWithinBounds = (lat: number, lng: number) => {
-  return lat >= MAP_BOUNDS_MIN_LAT && lat <= MAP_BOUNDS_MAX_LAT && lng >= MAP_BOUNDS_MIN_LNG && lng <= MAP_BOUNDS_MAX_LNG;
-};
-
-export default function NagpurLeafletMap({
+export default function LeafletMap({
   routes,
   selectedRouteId,
   onSelectRoute,
   mode = "OPTIMIZER",
   analysisData,
-}: NagpurLeafletMapProps) {
+  depotLat = 21.0625,
+  depotLng = 79.0526,
+  depotName = "Depot",
+}: LeafletMapProps) {
+  const DEPOT_LAT = depotLat;
+  const DEPOT_LNG = depotLng;
+
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const layerGroupRef = useRef<any>(null);
@@ -213,14 +209,15 @@ export default function NagpurLeafletMap({
         return;
       }
 
+      // Dynamic bounds around the depot (approx 100km radius box)
       const bounds = L.latLngBounds([
-        [MAP_BOUNDS_MIN_LAT, MAP_BOUNDS_MIN_LNG],
-        [MAP_BOUNDS_MAX_LAT, MAP_BOUNDS_MAX_LNG]
+        [DEPOT_LAT - 1.0, DEPOT_LNG - 1.0],
+        [DEPOT_LAT + 1.0, DEPOT_LNG + 1.0]
       ]);
       const map = L.map(mapContainerRef.current!, {
         center: [DEPOT_LAT, DEPOT_LNG],
         zoom: 13,
-        minZoom: 12,
+        minZoom: 9, // lower min zoom to allow zooming out further
         maxZoom: 18,
         maxBounds: bounds,
         maxBoundsViscosity: 1.0,
@@ -321,15 +318,15 @@ export default function NagpurLeafletMap({
       });
     };
 
-    // 1. Draw MIHAN Depot Marker
+    // 1. Draw Depot Marker
     L.marker([DEPOT_LAT, DEPOT_LNG], { icon: createDepotIcon() })
-      .bindTooltip("MIHAN Depot (Hub)", {
+      .bindTooltip(`${depotName} (Hub)`, {
         permanent: true,
         direction: "top",
-        className: "mihan-tooltip",
-        offset: [0, -8]
+        className: "depot-tooltip",
+        offset: [0, -28],
       })
-      .bindPopup("<strong>MIHAN Office Depot</strong><br/>Nagpur Hub")
+      .bindPopup(`<strong>${depotName}</strong><br/>Central Hub`)
       .addTo(layerGroup);
 
     const fitCoords: [number, number][] = [[DEPOT_LAT, DEPOT_LNG]];
@@ -513,8 +510,8 @@ export default function NagpurLeafletMap({
       if (fitCoords.length > 1) {
         map.fitBounds(L.latLngBounds(fitCoords), { padding: [40, 40] });
       } else {
-        // Reset viewport directly to MIHAN depot when no routes exist, keeping it centered
-        map.setView([DEPOT_LAT, DEPOT_LNG], 13);
+        // Reset viewport directly to depot when no routes exist, keeping it centered
+        map.setView([DEPOT_LAT, DEPOT_LNG], 13, { animate: true });
       }
     }
   }, [routes, selectedRouteId, variationGeometries, analyticsOptimizedGeom, analyticsNormalGeom, mode]);

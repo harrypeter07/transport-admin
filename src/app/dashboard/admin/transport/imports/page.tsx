@@ -17,6 +17,7 @@ export default function ImportsPage() {
   const [selectedImportSheet, setSelectedImportSheet] = useState<string>("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [status, setStatus] = useState<{ type: "idle" | "loading" | "success" | "error"; message: string }>({ type: "idle", message: "" });
+  const [outliers, setOutliers] = useState<{ count: number; list: string[] } | null>(null);
 
   useEffect(() => {
     fetchImportSheets();
@@ -28,11 +29,15 @@ export default function ImportsPage() {
     if (!uploadFile) return;
 
     setStatus({ type: "loading", message: "Uploading Excel file..." });
+    setOutliers(null);
     try {
       const res = await uploadRosterFile(uploadFile);
       if (res.success) {
         setStatus({ type: "success", message: res.message || "Master data imported successfully." });
         setUploadFile(null);
+        if (res.outlierCount > 0) {
+          setOutliers({ count: res.outlierCount, list: res.outlierList || [] });
+        }
       } else {
         setStatus({ type: "error", message: res.error || "Failed to upload file." });
       }
@@ -71,6 +76,29 @@ export default function ImportsPage() {
           {status.type === "success" && <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
           {status.type === "error" && <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />}
           <div className="flex-1 text-sm font-medium">{status.message}</div>
+        </div>
+      )}
+
+      {/* Outlier Warning Panel */}
+      {outliers && outliers.count > 0 && (
+        <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 flex items-start gap-3">
+          <span className="text-lg">⚠️</span>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-amber-800">
+              {outliers.count} employee{outliers.count > 1 ? "s" : ""} skipped — address outside pickup radius
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5 mb-2">
+              These addresses could not be resolved within the configured maximum pickup radius and were excluded from import.
+            </p>
+            <ul className="text-xs text-amber-800 space-y-0.5 font-mono">
+              {outliers.list.map((name, i) => (
+                <li key={i} className="flex items-center gap-1">• {name}</li>
+              ))}
+            </ul>
+            <p className="text-[10px] text-amber-600 mt-2 font-medium">
+              Tip: Adjust the Max Pickup Radius in <a href="/dashboard/admin/settings" className="underline font-bold">Settings</a> if these employees should be included.
+            </p>
+          </div>
         </div>
       )}
 

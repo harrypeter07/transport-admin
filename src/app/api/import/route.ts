@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { geocodeNagpurPlace, getDistance, checkSafetyViolations, DEPOT } from "@/lib/optimization";
+import { geocodePlace, makeDepot } from "@/lib/optimization";
 import * as xlsx from "xlsx";
 import * as path from "path";
 import * as fs from "fs";
@@ -126,6 +126,15 @@ export async function POST(req: NextRequest) {
     let importedEmployeesCount = 0;
     let importedCabsCount = 0;
     let firstShiftId: string | null = null;
+    const outlierEmployees: string[] = [];
+
+    // Load system settings for dynamic geocoding
+    const settings = await prisma.systemSettings.upsert({
+      where: { id: "default" },
+      update: {},
+      create: { id: "default" },
+    });
+    const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
 
     let dateStr = new Date().toISOString().split("T")[0];
 
@@ -278,8 +287,20 @@ export async function POST(req: NextRequest) {
           if (sameAddressEmp && sameAddressEmp.x && sameAddressEmp.y) {
             coords = { x: sameAddressEmp.x, y: sameAddressEmp.y };
           } else {
-            coords = await geocodeNagpurPlace(pickupPoint);
+            coords = await geocodePlace(
+              pickupPoint,
+              settings.defaultCity,
+              settings.defaultCountry,
+              depot,
+              settings.maxPickupRadiusKm
+            );
           }
+        }
+
+        // Skip outliers — too far from depot
+        if (!coords) {
+          outlierEmployees.push(`${empName} (${empCode}) @ "${pickupPoint}"`);
+          continue;
         }
 
         const dbAddress = pickupPoint === address ? address : `${pickupPoint} | ${address}`;
@@ -345,6 +366,8 @@ export async function POST(req: NextRequest) {
       message: `Roster import completed. Imported ${importedEmployeesCount} employee records and ${importedCabsCount} cab profiles.`,
       date: dateStr,
       shiftId: firstShiftId,
+      outlierCount: outlierEmployees.length,
+      outlierList: outlierEmployees,
     });
   } catch (e) {
     console.error("Failed Excel import:", e);

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Search, Plus, Edit, Trash2, ChevronRight, X } from "lucide-react";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
 
 type Shift = { id: string; name: string };
 
@@ -293,7 +294,18 @@ export default function EmployeesPage() {
                 <Field label="Phone" name="phone" placeholder="+91 98765 43210" defaultValue={editingEmployee?.phone} />
               </div>
               <Field label="Department" name="department" placeholder="Engineering" defaultValue={editingEmployee?.department} />
-              <Field label="Address / Locality" name="address" required placeholder="Sadar, Nagpur" defaultValue={editingEmployee?.address} />
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Address / Locality<span className="text-red-500 ml-0.5">*</span></label>
+                <LocationAutocomplete
+                  name="address"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500 transition-all placeholder:text-slate-400 text-slate-900"
+                  defaultValue={editingEmployee?.address}
+                  placeholder="e.g. Sadar, Nagpur"
+                  required={true}
+                />
+              </div>
+
               <SelectField label="Shift" name="shiftId" defaultValue={editingEmployee?.shiftId || ""}>
                 <option value="">-- No shift --</option>
                 {shifts.map((s) => (
