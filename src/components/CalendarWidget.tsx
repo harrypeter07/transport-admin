@@ -25,7 +25,7 @@ export default function CalendarWidget() {
       
       {loading ? (
         <div className="flex-grow flex items-center justify-center py-10">
-          <div className="w-6 h-6 rounded-full border-2 border-slate-200 border-t-slate-800 animate-spin"></div>
+          <div className="w-6 h-6 rounded-full border-2 border-slate-200 border-t-slate-800 animate-spin-fast"></div>
         </div>
       ) : (
         <div className="flex flex-col gap-4">

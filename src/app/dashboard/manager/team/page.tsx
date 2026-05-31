@@ -99,7 +99,7 @@ export default function ManagerTeamPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center p-20"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin"></div></div>
+        <div className="flex justify-center p-20"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin-fast"></div></div>
       ) : team.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center">
           <span className="text-slate-400 mb-2 font-bold uppercase tracking-widest text-xs">No Direct Reports</span>

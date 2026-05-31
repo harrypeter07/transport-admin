@@ -509,7 +509,7 @@ export default function TransitAdminSPA() {
         <div className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6 animate-fadeIn">
           <div className="relative flex items-center justify-center">
             {/* Outer ring spinner */}
-            <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-t-slate-800 animate-spin" />
+            <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-t-slate-800 animate-spin-fast" />
             {/* Inner icon */}
             <div className="absolute w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-sm">
               TA
@@ -695,7 +695,7 @@ export default function TransitAdminSPA() {
                       disabled={optimizing || previewing || loading}
                       className="flex items-center gap-1.5 bg-slate-800 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-900 transition disabled:opacity-50 shadow-2xs cursor-pointer"
                     >
-                      <RotateCw className={`w-3.5 h-3.5 ${previewing ? "animate-spin" : ""}`} />
+                      <RotateCw className={`w-3.5 h-3.5 ${previewing ? "animate-spin-fast" : ""}`} />
                       {previewing ? "Solving..." : "Optimize Routing"}
                     </button>
 
@@ -735,7 +735,7 @@ export default function TransitAdminSPA() {
                       className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 transition disabled:opacity-50 shadow-2xs cursor-pointer"
                     >
                       {applyingStrategy ? (
-                        <><RotateCw className="w-3.5 h-3.5 animate-spin" /> Applying...</>
+                        <><RotateCw className="w-3.5 h-3.5 animate-spin-fast" /> Applying...</>
                       ) : (
                         <><CheckCircle2 className="w-3.5 h-3.5" /> Confirm & Apply</>
                       )}
@@ -1470,7 +1470,7 @@ export default function TransitAdminSPA() {
                               }}
                               className="text-[9px] font-extrabold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
                             >
-                              <RefreshCw className={`w-3 h-3 ${isLoadingVars ? "animate-spin" : ""}`} />
+                              <RefreshCw className={`w-3 h-3 ${isLoadingVars ? "animate-spin-fast" : ""}`} />
                               {routeVariations.length > 0 ? "Recalculate Variations" : "Load Google Matrix"}
                             </button>
                           </div>
@@ -2318,7 +2318,7 @@ export default function TransitAdminSPA() {
                 disabled={analysisLoading}
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${analysisLoading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${analysisLoading ? "animate-spin-fast" : ""}`} />
                 {analysisLoading ? "Recalculating..." : "Refresh Report"}
               </button>
             </div>
@@ -2327,7 +2327,7 @@ export default function TransitAdminSPA() {
               if (analysisLoading) {
                 return (
                   <div className="py-20 flex flex-col items-center justify-center bg-white border border-slate-200 rounded-2xl">
-                    <div className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin-fast"></div>
                     <p className="mt-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Compiling Optimization Dataset...</p>
                   </div>
                 );

@@ -80,7 +80,7 @@ function ResetPasswordForm() {
               className="w-full flex items-center justify-center gap-2 rounded-lg bg-slate-900 hover:bg-slate-800 active:bg-slate-950 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-bold text-white transition-all"
             >
               {pending ? (
-                <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Updating…</>
+                <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin-fast" /> Updating…</>
               ) : (
                 "Reset Password"
               )}
@@ -95,7 +95,7 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans antialiased">
-      <Suspense fallback={<div className="w-8 h-8 rounded-full border-4 border-slate-900/30 border-t-slate-900 animate-spin" />}>
+      <Suspense fallback={<div className="w-8 h-8 rounded-full border-4 border-slate-900/30 border-t-slate-900 animate-spin-fast" />}>
         <ResetPasswordForm />
       </Suspense>
     </main>

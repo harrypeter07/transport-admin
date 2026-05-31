@@ -120,7 +120,7 @@ export default function DriverDashboardPage() {
             </div>
           ) : loading ? (
             <div className="flex flex-col items-center justify-center py-10">
-              <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin"></div>
+              <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin-fast"></div>
             </div>
           ) : routesToRender.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 rounded-lg border border-slate-100 border-dashed text-center px-4">

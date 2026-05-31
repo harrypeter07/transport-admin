@@ -84,7 +84,7 @@ export default function HierarchyPage() {
       <div className="space-y-8">
         {loading ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs">
-            <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-indigo-600 animate-spin mx-auto mb-4" />
+            <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-indigo-600 animate-spin-fast mx-auto mb-4" />
             <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Mapping Organization...</p>
           </div>
         ) : levels.length === 0 ? (

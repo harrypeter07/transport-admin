@@ -46,7 +46,7 @@ export default function ManagerApprovalsPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center p-10"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin"></div></div>
+        <div className="flex justify-center p-10"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin-fast"></div></div>
       ) : (
         <div className="space-y-6">
           <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">

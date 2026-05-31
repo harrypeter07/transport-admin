@@ -77,7 +77,7 @@ export default function ImportsPage() {
           status.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" :
           "bg-red-50 border-red-200 text-red-800"
         }`}>
-          {status.type === "loading" && <div className="w-5 h-5 rounded-full border-2 border-blue-600/30 border-t-blue-600 animate-spin flex-shrink-0" />}
+          {status.type === "loading" && <div className="w-5 h-5 rounded-full border-2 border-blue-600/30 border-t-blue-600 animate-spin-fast flex-shrink-0" />}
           {status.type === "success" && <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
           {status.type === "error" && <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />}
           <div className="flex-1 text-sm font-medium">{status.message}</div>

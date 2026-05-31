@@ -135,7 +135,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+        <Loader2 className="w-6 h-6 animate-spin-fast text-slate-400" />
       </div>
     );
   }
@@ -252,7 +252,7 @@ export default function SettingsPage() {
             disabled={saving === "location"}
             className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 shadow-sm"
           >
-            {saving === "location" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            {saving === "location" ? <Loader2 className="w-3.5 h-3.5 animate-spin-fast" /> : <Save className="w-3.5 h-3.5" />}
             Save Location Settings
           </button>
         </div>
@@ -354,7 +354,7 @@ export default function SettingsPage() {
             disabled={saving === "financial"}
             className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 shadow-sm"
           >
-            {saving === "financial" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            {saving === "financial" ? <Loader2 className="w-3.5 h-3.5 animate-spin-fast" /> : <Save className="w-3.5 h-3.5" />}
             Save Financial Settings
           </button>
         </div>

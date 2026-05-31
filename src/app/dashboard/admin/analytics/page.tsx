@@ -127,7 +127,7 @@ export default function AnalyticsPage() {
             disabled={loading}
             className="p-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-slate-500 transition shadow-xs"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin-fast" : ""}`} />
           </button>
         </div>
       </div>
@@ -136,7 +136,7 @@ export default function AnalyticsPage() {
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold">{error}</div>
       ) : loading ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-200 rounded-2xl">
-          <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin" />
+          <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin-fast" />
           <p className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest">Compiling ROI Ledger...</p>
         </div>
       ) : !hasRouteData ? (
