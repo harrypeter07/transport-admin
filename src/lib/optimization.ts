@@ -273,38 +273,65 @@ function isPermutationSafe(route: OptimizeEmployee[], isPickup: boolean): boolea
 }
 
 /**
- * 2. Brute Force Route Optimization with Safety Constraints
- * Since cluster size is small (<= 6), we can check all permutations
- * to find the absolute mathematically optimal route.
+ * 2. Route Ordering
+ * For small clusters (≤7): brute-force all permutations to find the optimal route.
+ * For large clusters (>7): use greedy nearest-neighbor heuristic (fast, ~10-15% from optimal).
  */
 export function getOptimalPermutation(
   employees: OptimizeEmployee[],
-  isPickup: boolean // true = pickup (end at office), false = drop (start at office)
+  isPickup: boolean
 ): OptimizeEmployee[] {
   if (employees.length <= 1) return employees;
 
+  // For large clusters use greedy nearest-neighbor — O(n²) instead of O(n!)
+  if (employees.length > 7) {
+    const remaining = [...employees];
+    const ordered: OptimizeEmployee[] = [];
+
+    // Start with the employee furthest from the depot (handles remote areas first)
+    let seedIdx = 0;
+    let maxDist = -1;
+    for (let i = 0; i < remaining.length; i++) {
+      const d = getDistance({ x: remaining[i].x, y: remaining[i].y }, DEPOT);
+      if (d > maxDist) { maxDist = d; seedIdx = i; }
+    }
+    ordered.push(remaining.splice(seedIdx, 1)[0]);
+
+    // Greedily pick the nearest unvisited employee
+    while (remaining.length > 0) {
+      const last = ordered[ordered.length - 1];
+      let nearIdx = 0, minD = Infinity;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = getDistance({ x: last.x, y: last.y }, { x: remaining[i].x, y: remaining[i].y });
+        if (d < minD) { minD = d; nearIdx = i; }
+      }
+      ordered.push(remaining.splice(nearIdx, 1)[0]);
+    }
+
+    // Apply safety correction on the greedy result
+    const mockStops = ordered.map(r => ({ name: r.name, gender: r.gender }));
+    const violations = checkSafetyViolations(mockStops, isPickup, false);
+    if (violations.length > 0) {
+      const { route } = enforceSafetyRules(ordered, isPickup, false);
+      return route;
+    }
+    return ordered;
+  }
+
+  // Brute-force for small clusters (≤7 stops = max 5040 permutations)
   let bestSafeRoute: OptimizeEmployee[] = [];
   let minSafeDistance = Infinity;
-
   let bestUnsafeRoute: OptimizeEmployee[] = [];
   let minUnsafeDistance = Infinity;
 
-  // Helper to generate permutations
   function permute(arr: OptimizeEmployee[], memo: OptimizeEmployee[] = []) {
     if (arr.length === 0) {
       const dist = calculateRouteDistance(memo, isPickup);
       const safe = isPermutationSafe(memo, isPickup);
-
       if (safe) {
-        if (dist < minSafeDistance) {
-          minSafeDistance = dist;
-          bestSafeRoute = [...memo];
-        }
+        if (dist < minSafeDistance) { minSafeDistance = dist; bestSafeRoute = [...memo]; }
       } else {
-        if (dist < minUnsafeDistance) {
-          minUnsafeDistance = dist;
-          bestUnsafeRoute = [...memo];
-        }
+        if (dist < minUnsafeDistance) { minUnsafeDistance = dist; bestUnsafeRoute = [...memo]; }
       }
       return;
     }
@@ -316,11 +343,7 @@ export function getOptimalPermutation(
   }
 
   permute(employees);
-
-  if (bestSafeRoute.length > 0) {
-    return bestSafeRoute;
-  }
-  return bestUnsafeRoute;
+  return bestSafeRoute.length > 0 ? bestSafeRoute : bestUnsafeRoute;
 }
 
 // Calculate the total route distance

@@ -882,15 +882,14 @@ export default function TransitAdminSPA() {
  </span>
  </div>
  </div>
- ) : unassignedEmployees.length > 0 ? (
+ ) : (optimizationPlans && optimizationPlans.capacityShortfall > 0) ? (
  <div className="p-4 bg-[#f7f7f7] border border-[#e8e8e8] rounded-none flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-[#1c1b1f] animate-fadeIn">
  <div className="flex items-start gap-2.5">
  <AlertTriangle className="w-5 h-5 text-[#6b6b6b] flex-shrink-0 mt-0.5 animate-pulse" />
  <div className="flex flex-col text-left">
  <span className="font-bold text-[#1c1b1f]">Fleet Capacity Exceeded — Overflow Alert</span>
  <span className="mt-0.5 text-[#1c1b1f] font-medium">
- {unassignedEmployees.length} employee(s) could not be accommodated on this shift due to insufficient available cab capacity.
- </span>
+ {optimizationPlans.capacityShortfall} employee(s) could not be accommodated on this shift due to insufficient available cab capacity.</span>
  <span className="mt-1.5 text-[10px] text-[#1c1b1f] font-mono font-bold">
  Waitlisted: {unassignedEmployees.map((emp) => `${emp.name} (${emp.address.split(",")[0]})`).join(", ")}
  </span>
@@ -2749,3 +2748,6 @@ export default function TransitAdminSPA() {
  </div>
  );
 }
+
+
+
