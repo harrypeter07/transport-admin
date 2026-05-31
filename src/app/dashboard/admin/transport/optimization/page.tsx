@@ -637,48 +637,6 @@ export default function TransitAdminSPA() {
 
  <div className="h-4 w-px bg-slate-200"></div>
 
- {/* Import & Optimize Button */}
- <button
- type="button"
- onClick={async () => {
- if (!selectedDate) return;
- setUploading(true);
- setOptimizeError(null);
- setAutoOptimizingOverlay("uploading");
- try {
- const res = await importSheet(selectedDate);
- if (res.success) {
- setUploadMsg(res.message || "Roster imported and optimized successfully!");
- } else {
- setOptimizeError(`Error: ${res.error}`);
- }
- } catch (err: any) {
- setOptimizeError(`Error: ${err.message || "Import failed"}`);
- } finally {
- setUploading(false);
- setAutoOptimizingOverlay("idle");
- }
- }}
- disabled={uploading || loading}
- className="flex items-center gap-1.5 bg-[#1c1b1f] text-white px-3 py-1.5 rounded-none text-xs font-bold hover:bg-slate-850 transition disabled:opacity-50 cursor-pointer shadow-2xs"
- >
- <FileSpreadsheet className="w-3.5 h-3.5" />
- {uploading ? "Importing..." : "Import & Auto-Optimize"}
- </button>
-
- <div className="h-4 w-px bg-slate-200"></div>
- 
- <div className="flex items-center gap-2">
- <button
- onClick={() => setIsPickup(!isPickup)}
- className={`px-3 py-1.5 rounded-none text-xs font-bold transition shadow-2xs border ${isPickup ? "bg-black border-slate-950 text-white" : "bg-white border-[#e8e8e8] text-[#6b6b6b] hover:bg-[#f7f7f7]"}`}
- >
- {isPickup ? "Pickup (To Office)" : "Drop (From Office)"}
- </button>
- </div>
-
- <div className="h-4 w-px bg-slate-200"></div>
-
  {optimizationPlans ? (
  <div className="flex items-center gap-1.5 px-2 py-1 bg-white border border-[#e8e8e8] rounded-none shadow-2xs">
  <span className="text-xs font-bold text-[#6b6b6b]">Preview:</span>

@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/**/*": ["./prisma/dev.db"],
   },
+  turbopack: {},
 };
 
 export default withPWA(nextConfig);
