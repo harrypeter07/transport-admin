@@ -7,6 +7,7 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: process.cwd(),
   outputFileTracingIncludes: {
     "/api/**/*": ["./prisma/dev.db"],
   },
