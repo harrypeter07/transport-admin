@@ -116,7 +116,7 @@ function formatExcelTime(val) {
 }
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var filePath, buffer, workbook, defaultPassword, routeBlocks, uniqueEmployeeCodes, _loop_1, _i, _a, sheetName, importedEmployeesCount, importedCabsCount, _b, _c, _d, routeNo, rRows, driverDetailsColumn, _e, vehicleNumber, driverName, driverPhone, finalVehicleNumber, finalDriverName, finalDriverPhone, existingCab, capacity, firstEmpRow, excelShiftTime, formattedShiftTime, cleanTime, shift, isPM, hours, mins, endHours, _f, rRows_1, r, empCode, empName, phone, email, address, phoneDigits, finalEmpCode, finalEmail, employeeStatus, gender, user, employee, xVal, yVal, dummyShift, _g, mUser, mEmp, eUser, dUser;
+        var filePath, buffer, workbook, defaultPassword, routeBlocks, uniqueEmployeeCodes, _loop_1, _i, _a, sheetName, importedEmployeesCount, importedCabsCount, _b, _c, _d, routeNo, rRows, driverDetailsColumn, _e, vehicleNumber, driverName, driverPhone, finalVehicleNumber, finalDriverName, finalDriverPhone, existingCab, capacity, shift, _f, rRows_1, r, empCode, empName, phone, email, address, phoneDigits, finalEmpCode, finalEmail, employeeStatus, gender, user, employee, xVal, yVal, dummyShift, _g, mUser, mEmp, eUser, dUser;
         var _h;
         return __generator(this, function (_j) {
             switch (_j.label) {
@@ -189,28 +189,15 @@ function main() {
                     existingCab = _j.sent();
                     importedCabsCount++;
                     _j.label = 5;
-                case 5:
-                    firstEmpRow = rRows.find(function (r) { return r[3] && String(r[3]).toLowerCase() !== 'escort'; });
-                    excelShiftTime = firstEmpRow ? firstEmpRow[8] : null;
-                    formattedShiftTime = formatExcelTime(excelShiftTime) || '09:00 AM';
-                    cleanTime = formattedShiftTime.replace(/\s*[AP]M/gi, '').trim();
-                    return [4 /*yield*/, prisma.shift.findFirst({ where: { startTime: cleanTime } })];
+                case 5: return [4 /*yield*/, prisma.shift.findFirst()];
                 case 6:
                     shift = _j.sent();
                     if (!!shift) return [3 /*break*/, 8];
-                    isPM = formattedShiftTime.toLowerCase().includes('pm');
-                    hours = parseInt(cleanTime.split(':')[0]);
-                    mins = cleanTime.split(':')[1] || '00';
-                    if (isPM && hours < 12)
-                        hours += 12;
-                    if (!isPM && hours === 12)
-                        hours = 0;
-                    endHours = (hours + 9) % 24;
                     return [4 /*yield*/, prisma.shift.create({
                             data: {
-                                name: 'Shift ' + formattedShiftTime,
-                                startTime: String(hours).padStart(2, '0') + ':' + mins,
-                                endTime: String(endHours).padStart(2, '0') + ':' + mins,
+                                name: 'Standard Day Shift',
+                                startTime: '09:00',
+                                endTime: '18:00',
                             },
                         })];
                 case 7:

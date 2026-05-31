@@ -90,24 +90,13 @@ async function main() {
       importedCabsCount++;
     }
 
-    const firstEmpRow = rRows.find((r) => r[3] && String(r[3]).toLowerCase() !== 'escort');
-    const excelShiftTime = firstEmpRow ? firstEmpRow[8] : null;
-    const formattedShiftTime = formatExcelTime(excelShiftTime) || '09:00 AM';
-
-    const cleanTime = formattedShiftTime.replace(/\s*[AP]M/gi, '').trim();
-    let shift = await prisma.shift.findFirst({ where: { startTime: cleanTime } });
+    let shift = await prisma.shift.findFirst();
     if (!shift) {
-      const isPM = formattedShiftTime.toLowerCase().includes('pm');
-      let hours = parseInt(cleanTime.split(':')[0]);
-      const mins = cleanTime.split(':')[1] || '00';
-      if (isPM && hours < 12) hours += 12;
-      if (!isPM && hours === 12) hours = 0;
-      const endHours = (hours + 9) % 24;
       shift = await prisma.shift.create({
         data: {
-          name: 'Shift ' + formattedShiftTime,
-          startTime: String(hours).padStart(2, '0') + ':' + mins,
-          endTime: String(endHours).padStart(2, '0') + ':' + mins,
+          name: 'Standard Day Shift',
+          startTime: '09:00',
+          endTime: '18:00',
         },
       });
     }
