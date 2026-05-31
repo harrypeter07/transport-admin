@@ -70,7 +70,6 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string) 
  const dbCabs = await prisma.cab.findMany({
  where: {
  status: "AVAILABLE",
- ...(fallbackShiftId ? { shiftId: fallbackShiftId } : {}),
  },
  });
 
