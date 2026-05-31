@@ -77,7 +77,7 @@ export default function ChangePasswordPage() {
  >
  {pending ? (
  <>
- <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin-fast" />
+ <div className="w-3.5 h-3.5 rounded-none border-2 border-white/30 border-t-white animate-spin-fast" />
  Updating…
  </>
  ) : (

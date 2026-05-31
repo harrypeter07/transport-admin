@@ -54,12 +54,19 @@ export default function ShiftsPage() {
  }
  };
 
- const handleDelete = async (id: string, name: string) => {
- if (!confirm(`Delete shift "${name}"? This will unassign all employees, drivers, and cabs.`)) return;
+ const handleDelete = async (id: string) => {
+ if (!confirm("Delete this shift?")) return;
  try {
  const res = await fetch(`/api/shifts/${id}`, { method: "DELETE" });
  if (res.ok) fetchShifts();
- } catch (e) { console.error(e); }
+ else {
+ const err = await res.json();
+ alert(err.error || "Failed to delete shift");
+ }
+ } catch (e) {
+ console.error(e);
+ alert("Network error while deleting");
+ }
  };
 
  return (

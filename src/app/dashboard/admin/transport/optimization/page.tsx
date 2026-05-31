@@ -84,7 +84,7 @@ export default function TransitAdminSPA() {
 
  const router = useRouter();
 
-  const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "COMPLIANCE" | "ANALYSIS">("OPTIMIZER");
+ const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "COMPLIANCE" | "ANALYSIS">("OPTIMIZER");
  
 
  // Analysis Dashboard State
@@ -513,7 +513,7 @@ export default function TransitAdminSPA() {
  <div className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6 animate-fadeIn">
  <div className="relative flex items-center justify-center">
  {/* Outer ring spinner */}
- <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-t-slate-800 animate-spin-fast" />
+ <div className="w-16 h-16 rounded-none border-4 border-slate-100 border-t-slate-800 animate-spin-fast" />
  {/* Inner icon */}
  <div className="absolute w-9 h-9 rounded-none bg-[#1c1b1f] flex items-center justify-center text-white font-black text-sm">
  TA
@@ -542,8 +542,8 @@ export default function TransitAdminSPA() {
  )}
  {/* Module Tab Bar — embedded inside platform shell */}
  <div className="sticky top-14 z-40 w-full border-b border-[#e8e8e8] bg-white/95 backdrop-blur-md">
- <div className="px-6 h-11 flex items-center justify-between">
- <nav className="flex items-center gap-1">
+ <div className="px-4 md:px-6 min-h-[44px] flex items-center justify-between overflow-x-auto no-scrollbar">
+ <nav className="flex items-center gap-1 w-max flex-nowrap py-1.5">
  <button
  onClick={() => setActiveDesk("OPTIMIZER")}
  className={`px-3.5 py-1.5 rounded-none text-xs font-bold tracking-wide transition-all
@@ -608,7 +608,7 @@ export default function TransitAdminSPA() {
  {activeDesk === "OPTIMIZER" && (
  <div className="flex flex-col gap-6 text-left animate-fadeIn">
  {/* Top Workspace Bar */}
- <div className="flex flex-wrap items-center justify-between gap-4">
+ <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-[100px] z-30 bg-[#f7f7f7] py-2 -mx-2 px-2">
  <div>
  <h1 className="text-lg font-bold text-[#1c1b1f]">Transit Optimization Workspace</h1>
  <p className="text-xs text-[#6b6b6b]">
@@ -1354,8 +1354,8 @@ export default function TransitAdminSPA() {
  Vehicle Assignment Details
  </span>
  <span className="bg-black text-white font-mono text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
- {route.shift?.name || "Shift"}
- </span>
+  {route.shift?.name || "Shift"} A Trip {route.tripSequence || 1}
+</span>
  </div>
  <h3 className="text-base font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
  <Truck className="w-4 h-4 text-[#9a9a9a]" />
@@ -1821,7 +1821,7 @@ export default function TransitAdminSPA() {
  if (analysisLoading) {
  return (
  <div className="py-20 flex flex-col items-center justify-center bg-white border border-[#e8e8e8] rounded-none">
- <div className="w-8 h-8 border-4 border-[#1c1b1f] border-t-transparent rounded-full animate-spin-fast"></div>
+ <div className="w-8 h-8 border-4 border-[#1c1b1f] border-t-transparent rounded-none animate-spin-fast"></div>
  <p className="mt-4 text-xs font-bold text-[#9a9a9a] uppercase tracking-widest">Compiling Optimization Dataset...</p>
  </div>
  );

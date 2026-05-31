@@ -98,8 +98,13 @@ export default function EmployeesPage() {
  try {
  const res = await fetch(`/api/employees?id=${id}`, { method: "DELETE" });
  if (res.ok) fetchEmployees();
+ else {
+ const err = await res.json();
+ alert(err.error || "Failed to delete employee");
+ }
  } catch (e) {
  console.error(e);
+ alert("Network error while deleting");
  }
  };
 
@@ -315,7 +320,7 @@ export default function EmployeesPage() {
  <SelectField label="Manager" name="managerId" defaultValue={editingEmployee?.managerId || ""}>
  <option value="">-- No manager --</option>
  {employees
- .filter((emp) => emp.id !== editingEmployee?.id)
+ .filter((emp) => emp.id !== editingEmployee?.id && (emp.designation === "Manager" || emp.designation === "Senior Manager"))
  .map((emp) => (
  <option key={emp.id} value={emp.id}>{emp.name} ({emp.designation})</option>
  ))}

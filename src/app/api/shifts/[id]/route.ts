@@ -31,6 +31,25 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
  try {
  const { id } = await params;
+ 
+ const routeCount = await prisma.route.count({ where: { shiftId: id } });
+ if (routeCount > 0) {
+ return NextResponse.json(
+ { error: "This shift is used in existing routes. Archive or reassign those routes first." },
+ { status: 409 }
+ );
+ }
+
+ // Unassign from employees and cabs
+ await prisma.employee.updateMany({
+ where: { shiftId: id },
+ data: { shiftId: null },
+ });
+ await prisma.cab.updateMany({
+ where: { shiftId: id },
+ data: { shiftId: null },
+ });
+
  await prisma.shift.delete({ where: { id } });
  return NextResponse.json({ success: true });
  } catch (error: any) {

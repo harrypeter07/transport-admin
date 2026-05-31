@@ -1413,6 +1413,7 @@ async function buildRoutesFromAssignments(
   const routes: OptimizedRoute[] = [];
 
   for (const { cab, cluster } of assignments) {
+      const startPoint = cab.startPoint || depot;
     if (cluster.length === 0) continue;
 
     // Hard cap: never assign more stops than the cab's stated capacity
@@ -1427,9 +1428,9 @@ async function buildRoutesFromAssignments(
     const stops: OptimizedRouteStop[] = [];
 
     if (isPickup && safeRoute.length > 0) {
-      cumulativeDist += getDistance(depot, { x: safeRoute[0].x, y: safeRoute[0].y });
+      cumulativeDist += getDistance(startPoint, { x: safeRoute[0].x, y: safeRoute[0].y });
     } else if (!isPickup && safeRoute.length > 0) {
-      cumulativeDist += getDistance(depot, { x: safeRoute[0].x, y: safeRoute[0].y });
+      cumulativeDist += getDistance(startPoint, { x: safeRoute[0].x, y: safeRoute[0].y });
     }
 
     for (let j = 0; j < safeRoute.length; j++) {
@@ -1453,14 +1454,14 @@ async function buildRoutesFromAssignments(
 
     if (isPickup && safeRoute.length > 0) {
       const last = safeRoute[safeRoute.length - 1];
-      cumulativeDist += getDistance({ x: last.x, y: last.y }, depot);
+      cumulativeDist += getDistance({ x: last.x, y: last.y }, startPoint);
     }
 
     // Accurate road distance via Google Maps or OSRM
     let distance = 0, duration = 0;
 
     if (apiKey && safeRoute.length > 0) {
-      const points = [depot, ...safeRoute.map(e => ({ x: e.x, y: e.y }))];
+      const points = [startPoint, ...safeRoute.map(e => ({ x: e.x, y: e.y }))];
       const { distanceMatrix, durationMatrix } = await fetchGoogleMapsMatrix(points, apiKey);
       const n = safeRoute.length;
 
@@ -1483,7 +1484,7 @@ async function buildRoutesFromAssignments(
 
     // Fall back to OSRM if Google Maps gave us 0 or key was absent
     if (distance === 0) {
-      const osrm = await fetchOSRMRoute(safeRoute.map(e => ({ x: e.x, y: e.y })), isPickup, depot);
+      const osrm = await fetchOSRMRoute(safeRoute.map(e => ({ x: e.x, y: e.y })), isPickup, startPoint);
       distance = osrm.distance;
       duration = osrm.duration;
     }

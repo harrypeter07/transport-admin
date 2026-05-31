@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
 
  try {
  const whereClause: any = {
+ status: "ACTIVE",
  ...(search && {
  OR: [
  { name: { contains: search, mode: "insensitive" } },

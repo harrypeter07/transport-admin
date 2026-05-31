@@ -48,9 +48,11 @@ model Cab {
   driverName    String
   driverPhone   String
   licenseNumber String
+  driverAddress String?
+  driverX       Float?
+  driverY       Float?
   routes        Route[]
-  shiftId       String?
-  shift         Shift?  @relation(fields: [shiftId], references: [id])
+  shifts        Shift[]
 }
 
 model Employee {
@@ -88,6 +90,7 @@ model Route {
   totalDistance     Float       
   totalDuration     Float       
   status            String      // PLANNED, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELLED
+  tripSequence      Int         @default(1)
   startedAt         DateTime?
   completedAt       DateTime?
   currentLat        Float?
