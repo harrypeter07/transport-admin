@@ -45,10 +45,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
  where: { shiftId: id },
  data: { shiftId: null },
  });
- await prisma.cab.updateMany({
- where: { shiftId: id },
- data: { shiftId: null },
- });
+ 
 
  await prisma.shift.delete({ where: { id } });
  return NextResponse.json({ success: true });
