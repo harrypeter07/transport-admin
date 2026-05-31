@@ -191,42 +191,18 @@ export async function POST(req: NextRequest) {
       });
 
       // Parse shift time from first employee row
-      const firstEmpRow = rRows.find((r) => r[3] && String(r[3]).toLowerCase() !== "escort");
-      const excelShiftTime = firstEmpRow ? firstEmpRow[8] : null;
-      const formattedShiftTime = formatExcelTime(excelShiftTime) || "09:00 AM";
-
-      // 2. Find or create Shift
-      let shift = await prisma.shift.findFirst({
-        where: {
-          startTime: formattedShiftTime.replace(/\s*[AP]M/gi, "").trim(),
-          // Match full-day shifts by name to avoid duplicates when same time appears in different routes
-        },
-      });
-
+      let shift = await prisma.shift.findFirst();
       if (!shift) {
-        // Create new Shift
-        const cleanTime = formattedShiftTime.replace(/\s*[AP]M/gi, "").trim();
-        const isPM = formattedShiftTime.toLowerCase().includes("pm");
-        let hours = parseInt(cleanTime.split(":")[0]);
-        const mins = cleanTime.split(":")[1] || "00";
-        if (isPM && hours < 12) hours += 12;
-        if (!isPM && hours === 12) hours = 0;
-        
-        // End time is roughly +9 hours
-        const endHours = (hours + 9) % 24;
-        const formattedEndTime = `${String(endHours).padStart(2, "0")}:${mins}`;
-        const formattedStartTime = `${String(hours).padStart(2, "0")}:${mins}`;
-
         shift = await prisma.shift.create({
           data: {
-            name: `Shift ${formattedShiftTime}`,
-            startTime: formattedStartTime,
-            endTime: formattedEndTime,
+            name: "Standard Day Shift",
+            startTime: "09:00",
+            endTime: "18:00",
           },
         });
       }
 
-      // Track the first shiftId created/found during import
+      // Track the first shiftId found during import
       if (!firstShiftId) {
         firstShiftId = shift.id;
       }
