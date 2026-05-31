@@ -115,14 +115,14 @@ export default function LeaveManagementPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Leaves & Approvals</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">Leaves & Approvals</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             Manage employee absence and time-off requests.
           </p>
         </div>
         <button 
           onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-[#1c1b1f] text-white rounded-lg text-sm font-bold hover:bg-black transition shadow-none"
         >
           <Plus size={16} />
           Log Manual Leave
@@ -130,20 +130,20 @@ export default function LeaveManagementPage() {
       </div>
 
       {showForm && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm mb-6 animate-fadeIn">
-          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">
+        <div className="bg-white border border-[#e8e8e8] rounded-xl p-6 shadow-none mb-6 animate-fadeIn">
+          <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">
             Log Manual Leave
           </h2>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             {error && <div className="col-span-full text-red-600 text-xs font-bold">{error}</div>}
             
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-700 mb-1">Employee *</label>
+              <label className="block text-xs font-bold text-[#4a4a4a] mb-1">Employee *</label>
               <select 
                 required
                 value={form.applicantId}
                 onChange={(e) => setForm({...form, applicantId: e.target.value})}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+                className="w-full bg-[#f7f7f7] border border-[#e8e8e8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
               >
                 <option value="">Select Employee...</option>
                 {users.map(u => (
@@ -153,35 +153,35 @@ export default function LeaveManagementPage() {
             </div>
             
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-700 mb-1">Start Date *</label>
+              <label className="block text-xs font-bold text-[#4a4a4a] mb-1">Start Date *</label>
               <input 
                 type="date" 
                 required
                 value={form.startDate}
                 onChange={(e) => setForm({...form, startDate: e.target.value})}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+                className="w-full bg-[#f7f7f7] border border-[#e8e8e8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
               />
             </div>
 
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-700 mb-1">End Date *</label>
+              <label className="block text-xs font-bold text-[#4a4a4a] mb-1">End Date *</label>
               <input 
                 type="date" 
                 required
                 value={form.endDate}
                 onChange={(e) => setForm({...form, endDate: e.target.value})}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+                className="w-full bg-[#f7f7f7] border border-[#e8e8e8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
               />
             </div>
 
             <div className="lg:col-span-1">
-              <label className="block text-xs font-bold text-slate-700 mb-1">Reason (Optional)</label>
+              <label className="block text-xs font-bold text-[#4a4a4a] mb-1">Reason (Optional)</label>
               <input 
                 type="text" 
                 value={form.comments}
                 onChange={(e) => setForm({...form, comments: e.target.value})}
                 placeholder="e.g. Sick Leave"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+                className="w-full bg-[#f7f7f7] border border-[#e8e8e8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
               />
             </div>
 
@@ -189,7 +189,7 @@ export default function LeaveManagementPage() {
               <button 
                 type="submit" 
                 disabled={submitting}
-                className="w-full bg-slate-900 hover:bg-slate-800 shadow-md shadow-slate-900/20 text-white font-bold text-sm py-2 px-4 rounded-lg transition disabled:opacity-50"
+                className="w-full bg-[#1c1b1f] hover:bg-black shadow-none shadow-slate-900/20 text-white font-bold text-sm py-2 px-4 rounded-lg transition disabled:opacity-50"
               >
                 {submitting ? "Saving..." : "Log Leave (Auto-Approve)"}
               </button>
@@ -198,12 +198,12 @@ export default function LeaveManagementPage() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
+      <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-[#e8e8e8] bg-[#f7f7f7] flex items-center justify-between gap-4">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            className="rounded-lg border border-[#e8e8e8] bg-white px-3.5 py-2 text-sm text-[#1c1b1f] focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20"
           >
             <option value="ALL">All Leaves</option>
             <option value="PENDING">Pending Approvals</option>
@@ -213,8 +213,8 @@ export default function LeaveManagementPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
+          <table className="w-full text-left text-sm text-[#6b6b6b]">
+            <thead className="bg-[#f7f7f7] text-xs uppercase text-[#6b6b6b] border-b border-[#e8e8e8]">
               <tr>
                 <th className="px-6 py-4 font-bold">Applicant</th>
                 <th className="px-6 py-4 font-bold">Duration</th>
@@ -226,34 +226,34 @@ export default function LeaveManagementPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400 font-medium">
+                  <td colSpan={5} className="px-6 py-8 text-center text-[#9a9a9a] font-medium">
                     Loading leave requests...
                   </td>
                 </tr>
               ) : leaves.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400 font-medium">
+                  <td colSpan={5} className="px-6 py-8 text-center text-[#9a9a9a] font-medium">
                     No leave requests found matching the current filter.
                   </td>
                 </tr>
               ) : (
                 leaves.map((leave) => (
-                  <tr key={leave.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={leave.id} className="hover:bg-[#f7f7f7]/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                        <div className="w-8 h-8 rounded-full bg-[#f7f7f7] flex items-center justify-center text-[#6b6b6b]">
                           <UserIcon size={14} />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900">{leave.applicant?.name || "Unknown"}</p>
-                          <p className="text-xs text-slate-500">{leave.applicant?.email || "N/A"}</p>
+                          <p className="font-bold text-[#1c1b1f]">{leave.applicant?.name || "Unknown"}</p>
+                          <p className="text-xs text-[#6b6b6b]">{leave.applicant?.email || "N/A"}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
-                        <span className="text-slate-900 font-bold font-mono">{leave.startDate}</span>
-                        <span className="text-xs text-slate-400">to <span className="text-slate-600 font-mono">{leave.endDate}</span></span>
+                        <span className="text-[#1c1b1f] font-bold font-mono">{leave.startDate}</span>
+                        <span className="text-xs text-[#9a9a9a]">to <span className="text-[#6b6b6b] font-mono">{leave.endDate}</span></span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -274,9 +274,9 @@ export default function LeaveManagementPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-xs">
-                      <p className="text-slate-700">{leave.comments || "-"}</p>
+                      <p className="text-[#4a4a4a]">{leave.comments || "-"}</p>
                       {leave.approver && (
-                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider font-bold">
+                        <p className="text-[10px] text-[#9a9a9a] mt-1 uppercase tracking-wider font-bold">
                           By: {leave.approver.name}
                         </p>
                       )}
@@ -298,7 +298,7 @@ export default function LeaveManagementPage() {
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mr-2">Actioned</span>
+                        <span className="text-xs font-bold text-[#9a9a9a] uppercase tracking-widest mr-2">Actioned</span>
                       )}
                     </td>
                   </tr>

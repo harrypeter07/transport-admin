@@ -128,20 +128,20 @@ export default function LocationAutocomplete({
           className={className}
         />
         {loading && (
-          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin-fast text-slate-400" />
+          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin-fast text-[#9a9a9a]" />
         )}
       </div>
 
       {showDropdown && results.length > 0 && (
-        <ul className="absolute z-[100] w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto divide-y divide-slate-50">
+        <ul className="absolute z-[100] w-full mt-1 bg-white border border-[#e8e8e8] rounded-xl shadow-sm max-h-60 overflow-y-auto divide-y divide-slate-50">
           {results.map((item) => (
             <li
               key={item.place_id}
               onClick={() => handleSelect(item)}
-              className="px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-start gap-2.5 transition"
+              className="px-4 py-2.5 hover:bg-[#f7f7f7] cursor-pointer flex items-start gap-2.5 transition"
             >
-              <MapPin className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-slate-700 font-medium leading-tight line-clamp-2">
+              <MapPin className="w-4 h-4 text-[#9a9a9a] mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-[#4a4a4a] font-medium leading-tight line-clamp-2">
                 {item.display_name}
               </div>
             </li>

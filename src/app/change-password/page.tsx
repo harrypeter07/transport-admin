@@ -10,24 +10,24 @@ export default function ChangePasswordPage() {
   );
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans antialiased">
+    <main className="min-h-screen flex items-center justify-center bg-[#f7f7f7] p-4 font-sans antialiased">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-slate-900 mb-5">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#1c1b1f] mb-5">
             <span className="text-white font-black text-lg tracking-tighter select-none">TA</span>
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Set Your Password</h1>
-          <p className="mt-1.5 text-sm text-slate-500">
+          <h1 className="text-2xl font-extrabold text-[#1c1b1f] tracking-tight">Set Your Password</h1>
+          <p className="mt-1.5 text-sm text-[#6b6b6b]">
             For security reasons, you must change your temporary password before accessing the system.
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl shadow-xs p-7">
+        <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs p-7">
           <form action={action} className="space-y-5">
             <div>
               <label
                 htmlFor="new-password"
-                className="block text-xs font-black text-slate-700 uppercase tracking-widest mb-1.5"
+                className="block text-xs font-black text-[#4a4a4a] uppercase tracking-widest mb-1.5"
               >
                 New Password
               </label>
@@ -37,14 +37,14 @@ export default function ChangePasswordPage() {
                 type="password"
                 required
                 placeholder="••••••••"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500 focus:bg-white transition-all"
+                className="w-full rounded-lg border border-[#e8e8e8] bg-[#f7f7f7] px-3.5 py-2.5 text-sm text-[#1c1b1f] placeholder:text-[#9a9a9a] focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] focus:bg-white transition-all"
               />
             </div>
 
             <div>
               <label
                 htmlFor="confirm-password"
-                className="block text-xs font-black text-slate-700 uppercase tracking-widest mb-1.5"
+                className="block text-xs font-black text-[#4a4a4a] uppercase tracking-widest mb-1.5"
               >
                 Confirm New Password
               </label>
@@ -54,7 +54,7 @@ export default function ChangePasswordPage() {
                 type="password"
                 required
                 placeholder="••••••••"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500 focus:bg-white transition-all"
+                className="w-full rounded-lg border border-[#e8e8e8] bg-[#f7f7f7] px-3.5 py-2.5 text-sm text-[#1c1b1f] placeholder:text-[#9a9a9a] focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] focus:bg-white transition-all"
               />
             </div>
 
@@ -73,7 +73,7 @@ export default function ChangePasswordPage() {
             <button
               type="submit"
               disabled={pending}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-slate-900 hover:bg-slate-800 active:bg-slate-950 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-bold text-white transition-all"
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#1c1b1f] hover:bg-black active:bg-black disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-bold text-white transition-all"
             >
               {pending ? (
                 <>

@@ -52,31 +52,31 @@ export default function NotificationCenter() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Notification Center</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">Notification Center</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             View and manage your alerts.
           </p>
         </div>
         {unreadCount > 0 && (
           <button
             onClick={markAllAsRead}
-            className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-[#1c1b1f] text-white text-sm font-bold rounded-lg hover:bg-black transition-colors flex items-center gap-2"
           >
             <CheckCircle2 size={16} /> Mark All Read
           </button>
         )}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center gap-2 overflow-x-auto">
+      <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-[#e8e8e8] bg-[#f7f7f7] flex items-center gap-2 overflow-x-auto">
           {["ALL", "UNREAD", "ROUTE", "LEAVE", "APPROVAL", "SYSTEM"].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap transition-colors ${
                 filter === f
-                  ? "bg-slate-900 text-white"
-                  : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
+                  ? "bg-[#1c1b1f] text-white"
+                  : "bg-white border border-[#e8e8e8] text-[#6b6b6b] hover:bg-[#f7f7f7]"
               }`}
             >
               {f}
@@ -86,14 +86,14 @@ export default function NotificationCenter() {
 
         <div className="divide-y divide-slate-100">
           {loading ? (
-            <div className="p-10 text-center text-slate-400">Loading notifications...</div>
+            <div className="p-10 text-center text-[#9a9a9a]">Loading notifications...</div>
           ) : notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-16 text-center">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
+              <div className="w-16 h-16 bg-[#f7f7f7] rounded-full flex items-center justify-center text-[#b0b0b0] mb-4">
                 <BellRing size={24} />
               </div>
-              <span className="text-slate-900 font-bold">No notifications found</span>
-              <p className="text-sm text-slate-500 mt-1">You're all caught up!</p>
+              <span className="text-[#1c1b1f] font-bold">No notifications found</span>
+              <p className="text-sm text-[#6b6b6b] mt-1">You're all caught up!</p>
             </div>
           ) : (
             notifications.map((n) => (
@@ -108,17 +108,17 @@ export default function NotificationCenter() {
                 )}
                 <div className={`flex-1 ${n.read ? "pl-6" : ""}`}>
                   <div className="flex justify-between items-start mb-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#9a9a9a]">
                       {n.category}
                     </span>
-                    <span className="text-xs text-slate-500 font-medium">
+                    <span className="text-xs text-[#6b6b6b] font-medium">
                       {new Date(n.createdAt).toLocaleString()}
                     </span>
                   </div>
-                  <h3 className={`text-base ${!n.read ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>
+                  <h3 className={`text-base ${!n.read ? "font-bold text-[#1c1b1f]" : "font-semibold text-[#4a4a4a]"}`}>
                     {n.title}
                   </h3>
-                  <p className={`text-sm mt-1 ${!n.read ? "text-slate-700 font-medium" : "text-slate-500"}`}>
+                  <p className={`text-sm mt-1 ${!n.read ? "text-[#4a4a4a] font-medium" : "text-[#6b6b6b]"}`}>
                     {n.message}
                   </p>
                   
@@ -129,7 +129,7 @@ export default function NotificationCenter() {
                           if (!n.read) markAsRead(n.id);
                           router.push(n.actionUrl);
                         }}
-                        className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                        className="text-sm font-bold text-[#ff4f00] hover:text-blue-800 transition-colors"
                       >
                         View Details →
                       </button>
@@ -137,7 +137,7 @@ export default function NotificationCenter() {
                     {!n.read && (
                       <button 
                         onClick={() => markAsRead(n.id)}
-                        className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1"
+                        className="text-sm font-bold text-[#6b6b6b] hover:text-[#1c1b1f] transition-colors flex items-center gap-1"
                       >
                         <Check size={14} /> Mark as read
                       </button>

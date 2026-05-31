@@ -277,7 +277,7 @@ export default function LeafletMap({
     const createDepotIcon = () => {
       return L.divIcon({
         html: `
-          <div class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-950 border-2 border-white shadow-md text-white">
+          <div class="flex items-center justify-center w-8 h-8 rounded-full bg-black border-2 border-white shadow-none text-white">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4.5 h-4.5 text-yellow-400">
               <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z" clip-rule="evenodd" />
             </svg>
@@ -529,21 +529,21 @@ export default function LeafletMap({
   return (
     <div className="relative w-full h-full">
       {/* Leaflet Map Div */}
-      <div ref={mapContainerRef} className="w-full h-full z-0 bg-slate-50" />
+      <div ref={mapContainerRef} className="w-full h-full z-0 bg-[#f7f7f7]" />
 
       {/* Map Legend Overlay */}
       {selectedRouteId && (
         mode === "ANALYTICS" ? (
-          <div className="absolute top-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-xs border border-slate-200 rounded-xl shadow-md flex flex-col gap-2.5 text-xs text-left animate-fadeIn">
-            <div className="font-bold text-slate-800 border-b border-slate-100 pb-1.5 uppercase tracking-wider text-[10px]">
+          <div className="absolute top-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-xs border border-[#e8e8e8] rounded-xl shadow-none flex flex-col gap-2.5 text-xs text-left animate-fadeIn">
+            <div className="font-bold text-[#1c1b1f] border-b border-slate-100 pb-1.5 uppercase tracking-wider text-[10px]">
               Optimization Comparison
             </div>
             
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 font-semibold">
                 <span className="w-4 h-1.5 rounded-full bg-emerald-500"></span>
-                <span className="text-slate-700 w-24">Optimized Route</span>
-                <span className="text-slate-500 font-mono text-[10px] ml-auto font-bold text-emerald-700">
+                <span className="text-[#4a4a4a] w-24">Optimized Route</span>
+                <span className="text-[#6b6b6b] font-mono text-[10px] ml-auto font-bold text-emerald-700">
                   {(() => {
                     const breakdown = analysisData?.routeBreakdowns?.find((rb: any) => rb.routeId === selectedRouteId);
                     return breakdown ? `${breakdown.optimizedKm} km` : "";
@@ -552,8 +552,8 @@ export default function LeafletMap({
               </div>
               <div className="flex items-center gap-2 font-semibold">
                 <span className="w-4 h-1.5 rounded-full bg-slate-400"></span>
-                <span className="text-slate-700 w-24">Normal (Naive)</span>
-                <span className="text-slate-500 font-mono text-[10px] ml-auto font-bold text-slate-600">
+                <span className="text-[#4a4a4a] w-24">Normal (Naive)</span>
+                <span className="text-[#6b6b6b] font-mono text-[10px] ml-auto font-bold text-[#6b6b6b]">
                   {(() => {
                     const breakdown = analysisData?.routeBreakdowns?.find((rb: any) => rb.routeId === selectedRouteId);
                     return breakdown ? `${breakdown.unoptimizedKm} km` : "";
@@ -563,7 +563,7 @@ export default function LeafletMap({
             </div>
 
             {analyticsLoading && (
-              <div className="text-[9px] text-slate-400 italic mt-1 flex items-center gap-1">
+              <div className="text-[9px] text-[#9a9a9a] italic mt-1 flex items-center gap-1">
                 <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin-fast"></span>
                 Fetching Nagpur road curves...
               </div>
@@ -571,8 +571,8 @@ export default function LeafletMap({
           </div>
         ) : (
           variationsData.length > 0 && (
-            <div className="absolute top-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-xs border border-slate-200 rounded-xl shadow-md flex flex-col gap-2.5 text-xs text-left animate-fadeIn">
-              <div className="font-bold text-slate-800 border-b border-slate-100 pb-1.5 uppercase tracking-wider text-[10px]">
+            <div className="absolute top-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-xs border border-[#e8e8e8] rounded-xl shadow-none flex flex-col gap-2.5 text-xs text-left animate-fadeIn">
+              <div className="font-bold text-[#1c1b1f] border-b border-slate-100 pb-1.5 uppercase tracking-wider text-[10px]">
                 Route Variation Comparison
               </div>
               
@@ -582,8 +582,8 @@ export default function LeafletMap({
                   return (
                     <div key={v.strategy} className="flex items-center gap-2 font-semibold">
                       <span className="w-4 h-1.5 rounded-full" style={{ backgroundColor: color }}></span>
-                      <span className="text-slate-700 capitalize w-16">{v.strategy.toLowerCase()}</span>
-                      <span className="text-slate-500 font-mono text-[10px] ml-auto">
+                      <span className="text-[#4a4a4a] capitalize w-16">{v.strategy.toLowerCase()}</span>
+                      <span className="text-[#6b6b6b] font-mono text-[10px] ml-auto">
                         {v.totalDistance} km · {v.totalDuration}m
                       </span>
                     </div>
@@ -592,7 +592,7 @@ export default function LeafletMap({
               </div>
 
               {loadingGeometries && (
-                <div className="text-[9px] text-slate-400 italic mt-1 flex items-center gap-1">
+                <div className="text-[9px] text-[#9a9a9a] italic mt-1 flex items-center gap-1">
                   <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin-fast"></span>
                   Fetching Nagpur road curves...
                 </div>

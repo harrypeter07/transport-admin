@@ -31,7 +31,7 @@ type Settings = {
 function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg text-sm font-bold border animate-fadeIn ${
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-sm text-sm font-bold border animate-fadeIn ${
         type === "success"
           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
           : "bg-red-50 text-red-700 border-red-200"
@@ -57,12 +57,12 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs">
+    <div className="bg-white rounded-2xl border border-[#e8e8e8] shadow-xs">
       <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2.5">
-        <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100">
-          <Icon className="w-4 h-4 text-slate-600" />
+        <div className="p-1.5 rounded-lg bg-[#f7f7f7] border border-slate-100">
+          <Icon className="w-4 h-4 text-[#6b6b6b]" />
         </div>
-        <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">{title}</h2>
+        <h2 className="text-sm font-extrabold text-[#1c1b1f] tracking-tight">{title}</h2>
       </div>
       <div className="p-6 space-y-5">{children}</div>
     </div>
@@ -80,15 +80,15 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs font-bold text-slate-700 mb-1">{label}</label>
+      <label className="block text-xs font-bold text-[#4a4a4a] mb-1">{label}</label>
       {children}
-      {note && <p className="text-[10px] text-slate-400 mt-1 font-medium">{note}</p>}
+      {note && <p className="text-[10px] text-[#9a9a9a] mt-1 font-medium">{note}</p>}
     </div>
   );
 }
 
 const inputClass =
-  "w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all placeholder:text-slate-400";
+  "w-full border border-[#e8e8e8] rounded-xl px-3.5 py-2.5 text-sm text-[#1c1b1f] bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all placeholder:text-[#9a9a9a]";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -135,7 +135,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin-fast text-slate-400" />
+        <Loader2 className="w-6 h-6 animate-spin-fast text-[#9a9a9a]" />
       </div>
     );
   }
@@ -147,18 +147,18 @@ export default function SettingsPage() {
       {toast && <Toast msg={toast.msg} type={toast.type} />}
 
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-slate-500">
-        <Link href="/dashboard/admin" className="hover:text-slate-900 transition">
+      <nav className="flex items-center gap-1.5 text-xs text-[#6b6b6b]">
+        <Link href="/dashboard/admin" className="hover:text-[#1c1b1f] transition">
           Dashboard
         </Link>
         <ChevronRight className="w-3 h-3" />
-        <span className="font-semibold text-slate-900">Settings</span>
+        <span className="font-semibold text-[#1c1b1f]">Settings</span>
       </nav>
 
       {/* Header */}
       <div>
-        <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">System Settings</h1>
-        <p className="text-slate-500 text-sm mt-0.5">
+        <h1 className="text-xl font-extrabold text-[#1c1b1f] tracking-tight">System Settings</h1>
+        <p className="text-[#6b6b6b] text-sm mt-0.5">
           Configure location, routing, approvals, and financial parameters.
         </p>
       </div>
@@ -231,9 +231,9 @@ export default function SettingsPage() {
               setSettings((s) => s ? { ...s, maxPickupRadiusKm: Number(e.target.value) } : s)
             }
           />
-          <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-0.5">
+          <div className="flex justify-between text-[10px] text-[#9a9a9a] font-bold mt-0.5">
             <span>10 km</span>
-            <span className="text-slate-700 font-black">{settings.maxPickupRadiusKm} km selected</span>
+            <span className="text-[#4a4a4a] font-black">{settings.maxPickupRadiusKm} km selected</span>
             <span>150 km</span>
           </div>
         </Field>
@@ -250,7 +250,7 @@ export default function SettingsPage() {
               })
             }
             disabled={saving === "location"}
-            className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#1c1b1f] hover:bg-black text-white text-xs font-bold rounded-xl transition disabled:opacity-50 shadow-none"
           >
             {saving === "location" ? <Loader2 className="w-3.5 h-3.5 animate-spin-fast" /> : <Save className="w-3.5 h-3.5" />}
             Save Location Settings
@@ -261,10 +261,10 @@ export default function SettingsPage() {
       {/* Panel 2 — Approval Workflows */}
       <Panel title="Approval Workflows" icon={CheckSquare}>
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+          <div className="flex items-center justify-between p-4 bg-[#f7f7f7] rounded-xl border border-slate-100">
             <div>
-              <p className="text-sm font-bold text-slate-900">Leave Approval Required</p>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-sm font-bold text-[#1c1b1f]">Leave Approval Required</p>
+              <p className="text-xs text-[#6b6b6b] mt-0.5">
                 Managers must approve leave requests before they take effect.
               </p>
             </div>
@@ -273,7 +273,7 @@ export default function SettingsPage() {
                 saveSection("approvals", { leaveApprovalRequired: !settings.leaveApprovalRequired })
               }
               className={`relative w-11 h-6 rounded-full transition-colors ${
-                settings.leaveApprovalRequired ? "bg-slate-900" : "bg-slate-300"
+                settings.leaveApprovalRequired ? "bg-[#1c1b1f]" : "bg-slate-300"
               }`}
             >
               <span
@@ -284,10 +284,10 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+          <div className="flex items-center justify-between p-4 bg-[#f7f7f7] rounded-xl border border-slate-100">
             <div>
-              <p className="text-sm font-bold text-slate-900">Timing Change Approval Required</p>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-sm font-bold text-[#1c1b1f]">Timing Change Approval Required</p>
+              <p className="text-xs text-[#6b6b6b] mt-0.5">
                 Employee pickup/drop time change requests need manager sign-off.
               </p>
             </div>
@@ -298,7 +298,7 @@ export default function SettingsPage() {
                 })
               }
               className={`relative w-11 h-6 rounded-full transition-colors ${
-                settings.timingChangeApprovalRequired ? "bg-slate-900" : "bg-slate-300"
+                settings.timingChangeApprovalRequired ? "bg-[#1c1b1f]" : "bg-slate-300"
               }`}
             >
               <span
@@ -352,7 +352,7 @@ export default function SettingsPage() {
               })
             }
             disabled={saving === "financial"}
-            className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#1c1b1f] hover:bg-black text-white text-xs font-bold rounded-xl transition disabled:opacity-50 shadow-none"
           >
             {saving === "financial" ? <Loader2 className="w-3.5 h-3.5 animate-spin-fast" /> : <Save className="w-3.5 h-3.5" />}
             Save Financial Settings

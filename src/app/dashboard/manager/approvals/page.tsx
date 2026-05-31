@@ -38,38 +38,38 @@ export default function ManagerApprovalsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Approvals</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">Approvals</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             Review and approve leave and timing change requests from your team.
           </p>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center p-10"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin-fast"></div></div>
+        <div className="flex justify-center p-10"><div className="w-8 h-8 rounded-full border-4 border-[#e8e8e8] border-t-slate-800 animate-spin-fast"></div></div>
       ) : (
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-200 bg-slate-50">
-              <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">
+          <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-[#e8e8e8] bg-[#f7f7f7]">
+              <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest">
                 Pending Leave Requests ({leaves.length})
               </h2>
             </div>
             <div className="p-0">
               {leaves.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 bg-white">
-                  <span className="text-slate-400 mb-2 font-medium">No pending leave requests</span>
+                  <span className="text-[#9a9a9a] mb-2 font-medium">No pending leave requests</span>
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {leaves.map((l: any) => (
-                    <li key={l.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                    <li key={l.id} className="p-4 flex items-center justify-between hover:bg-[#f7f7f7]">
                       <div>
-                        <p className="font-bold text-slate-900">{l.applicant?.name}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="font-bold text-[#1c1b1f]">{l.applicant?.name}</p>
+                        <p className="text-xs text-[#6b6b6b]">
                           {l.startDate} to {l.endDate}
                         </p>
-                        {l.description && <p className="text-xs text-slate-400 mt-1">"{l.description}"</p>}
+                        {l.description && <p className="text-xs text-[#9a9a9a] mt-1">"{l.description}"</p>}
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => handleAction(l.id, "LEAVE", "APPROVED")} className="flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-100 transition cursor-pointer">
@@ -86,24 +86,24 @@ export default function ManagerApprovalsPage() {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-200 bg-slate-50">
-              <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">
+          <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-[#e8e8e8] bg-[#f7f7f7]">
+              <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest">
                 Pending Timing Changes ({timingChanges.length})
               </h2>
             </div>
             <div className="p-0">
               {timingChanges.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 bg-white">
-                  <span className="text-slate-400 mb-2 font-medium">No pending timing changes</span>
+                  <span className="text-[#9a9a9a] mb-2 font-medium">No pending timing changes</span>
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {timingChanges.map((t: any) => (
-                    <li key={t.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                    <li key={t.id} className="p-4 flex items-center justify-between hover:bg-[#f7f7f7]">
                       <div>
-                        <p className="font-bold text-slate-900">{t.employee?.name}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="font-bold text-[#1c1b1f]">{t.employee?.name}</p>
+                        <p className="text-xs text-[#6b6b6b]">
                           Change {t.requestType} to {t.requestedTime} (Currently: {t.currentTime})
                         </p>
                       </div>

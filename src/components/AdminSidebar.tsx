@@ -44,9 +44,9 @@ export default function AdminSidebar() {
   ];
 
   return (
-    <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between py-6">
+    <aside className="w-64 border-r border-[#e8e8e8] bg-white flex flex-col justify-between py-6">
       <div className="flex flex-col gap-6 px-4">
-        <div className="text-[10px] uppercase font-bold tracking-widest text-slate-400 px-3">
+        <div className="text-[10px] uppercase font-bold tracking-widest text-[#9a9a9a] px-3">
           Navigation Desk
         </div>
         <nav className="flex flex-col gap-1">
@@ -61,8 +61,8 @@ export default function AdminSidebar() {
                 className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200
                   ${
                     isActive
-                      ? "bg-slate-100 text-slate-900 border border-slate-200"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      ? "bg-[#f7f7f7] text-[#1c1b1f] border border-[#e8e8e8]"
+                      : "text-[#6b6b6b] hover:text-[#1c1b1f] hover:bg-[#f7f7f7]"
                   }
                 `}
               >
@@ -94,13 +94,13 @@ export default function AdminSidebar() {
           </div>
         )}
 
-        <div className="border-t border-slate-200 pt-4 flex items-center gap-3 px-3">
-          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-700">
+        <div className="border-t border-[#e8e8e8] pt-4 flex items-center gap-3 px-3">
+          <div className="w-8 h-8 rounded-full bg-[#f7f7f7] border border-[#e8e8e8] flex items-center justify-center font-bold text-xs text-[#4a4a4a]">
             AM
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-xs font-semibold text-slate-900">Admin Mgr</span>
-            <span className="text-[10px] text-slate-500 font-mono">admin@transitadmin.com</span>
+            <span className="text-xs font-semibold text-[#1c1b1f]">Admin Mgr</span>
+            <span className="text-[10px] text-[#6b6b6b] font-mono">admin@transitadmin.com</span>
           </div>
         </div>
       </div>

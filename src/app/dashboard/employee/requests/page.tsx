@@ -148,8 +148,8 @@ export default function EmployeeRequestsPage() {
     <div className="space-y-6 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">My Requests</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">My Requests</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             Apply for leaves and request changes to your transportation timings.
           </p>
         </div>
@@ -158,8 +158,8 @@ export default function EmployeeRequestsPage() {
             onClick={() => setActiveForm(activeForm === "LEAVE" ? null : "LEAVE")}
             className={`px-4 py-2 border rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
               activeForm === "LEAVE"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                ? "bg-[#1c1b1f] text-white border-slate-900"
+                : "bg-white text-[#4a4a4a] border-[#e8e8e8] hover:bg-[#f7f7f7]"
             }`}
           >
             <CalendarRange size={14} />
@@ -169,8 +169,8 @@ export default function EmployeeRequestsPage() {
             onClick={() => setActiveForm(activeForm === "TIMING" ? null : "TIMING")}
             className={`px-4 py-2 border rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
               activeForm === "TIMING"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                ? "bg-[#1c1b1f] text-white border-slate-900"
+                : "bg-white text-[#4a4a4a] border-[#e8e8e8] hover:bg-[#f7f7f7]"
             }`}
           >
             <Clock3 size={14} />
@@ -190,53 +190,53 @@ export default function EmployeeRequestsPage() {
 
       {/* Leave Application Form */}
       {activeForm === "LEAVE" && (
-        <form onSubmit={handleLeaveSubmit} className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs animate-fadeIn space-y-4 max-w-xl">
-          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
-            <CalendarRange size={16} className="text-slate-500" /> Apply For Leave
+        <form onSubmit={handleLeaveSubmit} className="bg-white border border-[#e8e8e8] rounded-xl p-6 shadow-xs animate-fadeIn space-y-4 max-w-xl">
+          <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
+            <CalendarRange size={16} className="text-[#6b6b6b]" /> Apply For Leave
           </h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
+              <label className="block text-xs font-bold text-[#6b6b6b] uppercase mb-1">Start Date</label>
               <input
                 type="date"
                 required
                 value={leaveStart}
                 onChange={(e) => setLeaveStart(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 px-3 focus:outline-none focus:border-slate-350"
+                className="w-full bg-white border border-[#e8e8e8] rounded-lg text-sm p-2 px-3 focus:outline-none focus:border-slate-350"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">End Date</label>
+              <label className="block text-xs font-bold text-[#6b6b6b] uppercase mb-1">End Date</label>
               <input
                 type="date"
                 required
                 value={leaveEnd}
                 onChange={(e) => setLeaveEnd(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 px-3 focus:outline-none focus:border-slate-350"
+                className="w-full bg-white border border-[#e8e8e8] rounded-lg text-sm p-2 px-3 focus:outline-none focus:border-slate-350"
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reason / Comments</label>
+            <label className="block text-xs font-bold text-[#6b6b6b] uppercase mb-1">Reason / Comments</label>
             <textarea
               placeholder="Provide a brief explanation for your leave..."
               value={leaveReason}
               onChange={(e) => setLeaveReason(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 px-3 h-20 focus:outline-none focus:border-slate-350"
+              className="w-full bg-white border border-[#e8e8e8] rounded-lg text-sm p-2 px-3 h-20 focus:outline-none focus:border-slate-350"
             />
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button
               type="button"
               onClick={() => setActiveForm(null)}
-              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+              className="px-4 py-2 border border-[#e8e8e8] text-[#6b6b6b] rounded-lg text-xs font-bold hover:bg-[#f7f7f7] transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition cursor-pointer disabled:opacity-50"
+              className="px-4 py-2 bg-[#1c1b1f] text-white rounded-lg text-xs font-bold hover:bg-black transition cursor-pointer disabled:opacity-50"
             >
               {submitting ? "Submitting..." : "Submit Leave Request"}
             </button>
@@ -246,61 +246,61 @@ export default function EmployeeRequestsPage() {
 
       {/* Timing Change Request Form */}
       {activeForm === "TIMING" && (
-        <form onSubmit={handleTimingSubmit} className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs animate-fadeIn space-y-4 max-w-xl">
-          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
-            <Clock3 size={16} className="text-slate-500" /> Request Timing Change
+        <form onSubmit={handleTimingSubmit} className="bg-white border border-[#e8e8e8] rounded-xl p-6 shadow-xs animate-fadeIn space-y-4 max-w-xl">
+          <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
+            <Clock3 size={16} className="text-[#6b6b6b]" /> Request Timing Change
           </h2>
           {employee?.shift && (
-            <div className="bg-slate-50 border border-slate-150 rounded-lg p-3 text-xs text-slate-600">
-              <span className="font-bold text-slate-700">Current Shift: </span>
+            <div className="bg-[#f7f7f7] border border-slate-150 rounded-lg p-3 text-xs text-[#6b6b6b]">
+              <span className="font-bold text-[#4a4a4a]">Current Shift: </span>
               {employee.shift.name} ({employee.shift.startTime} - {employee.shift.endTime})
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Request Type</label>
+              <label className="block text-xs font-bold text-[#6b6b6b] uppercase mb-1">Request Type</label>
               <select
                 value={timingType}
                 onChange={(e) => setTimingType(e.target.value as any)}
-                className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 px-3 focus:outline-none focus:border-slate-350 cursor-pointer"
+                className="w-full bg-white border border-[#e8e8e8] rounded-lg text-sm p-2 px-3 focus:outline-none focus:border-slate-350 cursor-pointer"
               >
                 <option value="PICKUP">Pickup Timing</option>
                 <option value="DROP">Drop Timing</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Requested Time (HH:MM)</label>
+              <label className="block text-xs font-bold text-[#6b6b6b] uppercase mb-1">Requested Time (HH:MM)</label>
               <input
                 type="text"
                 required
                 placeholder="e.g. 08:30"
                 value={requestedTime}
                 onChange={(e) => setRequestedTime(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 px-3 focus:outline-none focus:border-slate-350"
+                className="w-full bg-white border border-[#e8e8e8] rounded-lg text-sm p-2 px-3 focus:outline-none focus:border-slate-350"
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reason / Comments</label>
+            <label className="block text-xs font-bold text-[#6b6b6b] uppercase mb-1">Reason / Comments</label>
             <textarea
               placeholder="Provide a reason for the timing change..."
               value={timingReason}
               onChange={(e) => setTimingReason(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 px-3 h-20 focus:outline-none focus:border-slate-350"
+              className="w-full bg-white border border-[#e8e8e8] rounded-lg text-sm p-2 px-3 h-20 focus:outline-none focus:border-slate-350"
             />
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button
               type="button"
               onClick={() => setActiveForm(null)}
-              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+              className="px-4 py-2 border border-[#e8e8e8] text-[#6b6b6b] rounded-lg text-xs font-bold hover:bg-[#f7f7f7] transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition cursor-pointer disabled:opacity-50"
+              className="px-4 py-2 bg-[#1c1b1f] text-white rounded-lg text-xs font-bold hover:bg-black transition cursor-pointer disabled:opacity-50"
             >
               {submitting ? "Submitting..." : "Submit Timing Request"}
             </button>
@@ -309,24 +309,24 @@ export default function EmployeeRequestsPage() {
       )}
 
       {/* Leave Requests Log */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-xs font-black text-slate-700 uppercase tracking-widest">
+      <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-[#e8e8e8] bg-[#f7f7f7]">
+          <h2 className="text-xs font-black text-[#4a4a4a] uppercase tracking-widest">
             My Leave Requests
           </h2>
         </div>
         <div>
           {loading ? (
-            <div className="p-10 text-center text-slate-400">Loading leave requests...</div>
+            <div className="p-10 text-center text-[#9a9a9a]">Loading leave requests...</div>
           ) : leaves.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-slate-400 bg-slate-50/50">
+            <div className="flex flex-col items-center justify-center py-10 text-[#9a9a9a] bg-[#f7f7f7]/50">
               <span className="font-semibold text-sm">No leave requests submitted</span>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500 uppercase tracking-wider">
+                  <tr className="border-b border-[#e8e8e8] bg-[#f7f7f7] font-bold text-[#6b6b6b] uppercase tracking-wider">
                     <th className="p-3 pl-4">Duration</th>
                     <th className="p-3">Reason</th>
                     <th className="p-3">Status</th>
@@ -335,18 +335,18 @@ export default function EmployeeRequestsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {leaves.map((l) => (
-                    <tr key={l.id} className="hover:bg-slate-50">
+                    <tr key={l.id} className="hover:bg-[#f7f7f7]">
                       <td className="p-3 pl-4 font-bold text-slate-850">
                         {l.startDate} to {l.endDate}
                       </td>
-                      <td className="p-3 text-slate-500 max-w-xs truncate" title={l.comments}>
+                      <td className="p-3 text-[#6b6b6b] max-w-xs truncate" title={l.comments}>
                         {l.comments || "—"}
                       </td>
                       <td className="p-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                           l.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
                           l.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
-                          l.status === 'CANCELLED' ? 'bg-slate-100 text-slate-400' :
+                          l.status === 'CANCELLED' ? 'bg-[#f7f7f7] text-[#9a9a9a]' :
                           'bg-amber-100 text-amber-700'
                         }`}>
                           {l.status}
@@ -372,24 +372,24 @@ export default function EmployeeRequestsPage() {
       </div>
 
       {/* Timing Changes Log */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-xs font-black text-slate-700 uppercase tracking-widest">
+      <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-[#e8e8e8] bg-[#f7f7f7]">
+          <h2 className="text-xs font-black text-[#4a4a4a] uppercase tracking-widest">
             My Timing Change Requests
           </h2>
         </div>
         <div>
           {loading ? (
-            <div className="p-10 text-center text-slate-400">Loading timing requests...</div>
+            <div className="p-10 text-center text-[#9a9a9a]">Loading timing requests...</div>
           ) : timingChanges.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-slate-400 bg-slate-50/50">
+            <div className="flex flex-col items-center justify-center py-10 text-[#9a9a9a] bg-[#f7f7f7]/50">
               <span className="font-semibold text-sm">No timing requests submitted</span>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500 uppercase tracking-wider">
+                  <tr className="border-b border-[#e8e8e8] bg-[#f7f7f7] font-bold text-[#6b6b6b] uppercase tracking-wider">
                     <th className="p-3 pl-4">Change Type</th>
                     <th className="p-3">Current Time</th>
                     <th className="p-3">Requested Time</th>
@@ -400,20 +400,20 @@ export default function EmployeeRequestsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {timingChanges.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50">
+                    <tr key={t.id} className="hover:bg-[#f7f7f7]">
                       <td className="p-3 pl-4 font-bold text-slate-850">
                         {t.requestType}
                       </td>
-                      <td className="p-3 text-slate-500 font-semibold">{t.currentTime}</td>
-                      <td className="p-3 font-bold text-slate-900">{t.requestedTime}</td>
-                      <td className="p-3 text-slate-500 max-w-xs truncate" title={t.comments}>
+                      <td className="p-3 text-[#6b6b6b] font-semibold">{t.currentTime}</td>
+                      <td className="p-3 font-bold text-[#1c1b1f]">{t.requestedTime}</td>
+                      <td className="p-3 text-[#6b6b6b] max-w-xs truncate" title={t.comments}>
                         {t.comments || "—"}
                       </td>
                       <td className="p-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                           t.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
                           t.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
-                          t.status === 'CANCELLED' ? 'bg-slate-100 text-slate-400' :
+                          t.status === 'CANCELLED' ? 'bg-[#f7f7f7] text-[#9a9a9a]' :
                           'bg-amber-100 text-amber-700'
                         }`}>
                           {t.status}

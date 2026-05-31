@@ -59,26 +59,26 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">User Management</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             Provisioned accounts for the ETMS platform.
           </p>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
+      <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-[#e8e8e8] bg-[#f7f7f7] flex items-center justify-between gap-4">
           <input
             type="text"
             placeholder="Search users by name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500"
+            className="w-full max-w-sm rounded-lg border border-[#e8e8e8] bg-white px-3.5 py-2 text-sm text-[#1c1b1f] placeholder:text-[#9a9a9a] focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00]"
           />
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            className="rounded-lg border border-[#e8e8e8] bg-white px-3.5 py-2 text-sm text-[#1c1b1f] focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20"
           >
             <option value="">All Roles</option>
             <option value="ADMIN">Admin</option>
@@ -89,8 +89,8 @@ export default function UsersPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
+          <table className="w-full text-left text-sm text-[#6b6b6b]">
+            <thead className="bg-[#f7f7f7] text-xs uppercase text-[#6b6b6b] border-b border-[#e8e8e8]">
               <tr>
                 <th className="px-6 py-4 font-bold">User</th>
                 <th className="px-6 py-4 font-bold">Role</th>
@@ -102,32 +102,32 @@ export default function UsersPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-6 py-8 text-center text-[#9a9a9a]">
                     Loading users...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-6 py-8 text-center text-[#9a9a9a]">
                     No users found
                   </td>
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={user.id} className="hover:bg-[#f7f7f7]/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                        <div className="w-8 h-8 rounded-full bg-[#f7f7f7] flex items-center justify-center text-[#6b6b6b]">
                           <User size={14} />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900">{user.name}</p>
-                          <p className="text-xs text-slate-500">{user.email}</p>
+                          <p className="font-bold text-[#1c1b1f]">{user.name}</p>
+                          <p className="text-xs text-[#6b6b6b]">{user.email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#f7f7f7] text-[#4a4a4a]">
                         {user.role}
                       </span>
                     </td>
@@ -157,7 +157,7 @@ export default function UsersPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleAction(user.id, "RESET_PASSWORD")}
-                          className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="px-3 py-1.5 text-xs font-bold text-[#6b6b6b] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded-lg transition-colors"
                         >
                           Reset Pass
                         </button>

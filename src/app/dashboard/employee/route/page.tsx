@@ -27,7 +27,7 @@ export default function EmployeeRoutePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
-        <span className="text-slate-400">Loading your route...</span>
+        <span className="text-[#9a9a9a]">Loading your route...</span>
       </div>
     );
   }
@@ -35,11 +35,11 @@ export default function EmployeeRoutePage() {
   if (!routeData?.route) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-slate-900">My Route</h1>
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs h-[500px] flex items-center justify-center">
+        <h1 className="text-2xl font-bold text-[#1c1b1f]">My Route</h1>
+        <div className="bg-white border border-[#e8e8e8] rounded-xl p-6 shadow-xs h-[500px] flex items-center justify-center">
           <div className="text-center">
-            <span className="text-slate-400 block mb-2 font-bold uppercase tracking-widest text-xs">No Active Route</span>
-            <p className="text-sm text-slate-500">You do not have a route scheduled or in progress for today.</p>
+            <span className="text-[#9a9a9a] block mb-2 font-bold uppercase tracking-widest text-xs">No Active Route</span>
+            <p className="text-sm text-[#6b6b6b]">You do not have a route scheduled or in progress for today.</p>
           </div>
         </div>
       </div>
@@ -58,8 +58,8 @@ export default function EmployeeRoutePage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Route Progress</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">Route Progress</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             Follow your assigned cab status from the driver worksheet.
           </p>
         </div>
@@ -67,21 +67,21 @@ export default function EmployeeRoutePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Status Card */}
-        <div className="md:col-span-2 bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-slate-200 flex-1">
+        <div className="md:col-span-2 bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-[#e8e8e8] flex-1">
             <div className="flex items-center justify-between mb-8">
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-widest uppercase ${
-                isInProgress ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+                isInProgress ? 'bg-blue-100 text-blue-700' : 'bg-[#f7f7f7] text-[#4a4a4a]'
               }`}>
                 {route.status.replace("_", " ")}
               </span>
-              <span className="text-xs font-bold text-slate-500">
+              <span className="text-xs font-bold text-[#6b6b6b]">
                 {route.isPickup ? "Home to Office" : "Office to Home"}
               </span>
             </div>
 
             <div className="text-center py-6">
-              <h2 className="text-4xl font-black text-slate-900 tracking-tight">
+              <h2 className="text-4xl font-black text-[#1c1b1f] tracking-tight">
                 {myStop.status === "BOARDED" ? "You are on board" :
                  myStop.status === "SKIPPED" ? "You were skipped" :
                  !isInProgress ? "Waiting for driver..." :
@@ -91,7 +91,7 @@ export default function EmployeeRoutePage() {
               </h2>
               {myStop.expectedTime && !["BOARDED", "SKIPPED"].includes(myStop.status) && (
                 <div className="mt-4 flex flex-col items-center gap-1">
-                  <p className="text-slate-500 font-medium">
+                  <p className="text-[#6b6b6b] font-medium">
                     Scheduled: {new Date(myStop.expectedTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                   </p>
                 </div>
@@ -99,7 +99,7 @@ export default function EmployeeRoutePage() {
             </div>
           </div>
           
-          <div className="bg-slate-50 p-4 border-t border-slate-200">
+          <div className="bg-[#f7f7f7] p-4 border-t border-[#e8e8e8]">
             {/* Minimal Progress Bar */}
             <div className="w-full bg-slate-200 rounded-full h-2.5 mb-2 overflow-hidden flex">
               {route.stops.map((s: any) => {
@@ -113,7 +113,7 @@ export default function EmployeeRoutePage() {
                 );
               })}
             </div>
-            <div className="flex justify-between text-xs font-bold text-slate-400 px-1">
+            <div className="flex justify-between text-xs font-bold text-[#9a9a9a] px-1">
               <span>Start</span>
               <span>Destination</span>
             </div>
@@ -122,22 +122,22 @@ export default function EmployeeRoutePage() {
 
         {/* Info Sidebar */}
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <div className="bg-white border border-[#e8e8e8] rounded-xl p-6 shadow-xs">
+            <h3 className="text-xs font-black text-[#6b6b6b] uppercase tracking-widest mb-4 flex items-center gap-2">
               <Car size={14} /> Vehicle Details
             </h3>
             <div className="space-y-4">
               <div>
-                <p className="text-xs text-slate-500">Cab Registration</p>
-                <p className="font-bold text-slate-900">{route.cab?.vehicleNumber}</p>
+                <p className="text-xs text-[#6b6b6b]">Cab Registration</p>
+                <p className="font-bold text-[#1c1b1f]">{route.cab?.vehicleNumber}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Driver Name</p>
-                <p className="font-bold text-slate-900">{route.cab?.driver?.name || "Unassigned"}</p>
+                <p className="text-xs text-[#6b6b6b]">Driver Name</p>
+                <p className="font-bold text-[#1c1b1f]">{route.cab?.driver?.name || "Unassigned"}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Driver Phone</p>
-                <p className="font-bold text-slate-900">{route.cab?.driver?.phone || "N/A"}</p>
+                <p className="text-xs text-[#6b6b6b]">Driver Phone</p>
+                <p className="font-bold text-[#1c1b1f]">{route.cab?.driver?.phone || "N/A"}</p>
               </div>
             </div>
           </div>

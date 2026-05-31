@@ -126,7 +126,7 @@ export default function AdminHolidayManagement() {
   const daysArray = [];
   // Empty slots for days before the 1st of the month
   for (let i = 0; i < firstDay; i++) {
-    daysArray.push(<div key={`empty-${i}`} className="h-24 bg-slate-50 border border-slate-100/50 rounded-lg opacity-50"></div>);
+    daysArray.push(<div key={`empty-${i}`} className="h-24 bg-[#f7f7f7] border border-slate-100/50 rounded-lg opacity-50"></div>);
   }
   
   // Actual days
@@ -140,10 +140,10 @@ export default function AdminHolidayManagement() {
         key={`day-${day}`}
         onClick={() => handleDateClick(day)}
         className={`h-24 p-2 rounded-lg border transition-all cursor-pointer flex flex-col gap-1
-          ${isSelected ? 'border-slate-800 bg-slate-100 shadow-inner' : 'border-slate-200 bg-white hover:border-slate-400 hover:shadow-xs'}
+          ${isSelected ? 'border-[#1c1b1f] bg-[#f7f7f7] shadow-inner' : 'border-[#e8e8e8] bg-white hover:border-slate-400 hover:shadow-xs'}
         `}
       >
-        <span className={`text-xs font-bold ${holiday ? 'text-indigo-700' : 'text-slate-600'}`}>{day}</span>
+        <span className={`text-xs font-bold ${holiday ? 'text-indigo-700' : 'text-[#6b6b6b]'}`}>{day}</span>
         {holiday && (
           <div className="bg-indigo-100 text-indigo-800 text-[10px] font-bold px-1.5 py-1 rounded truncate shadow-xs">
             {holiday.name}
@@ -157,8 +157,8 @@ export default function AdminHolidayManagement() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Holiday Management</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">Holiday Management</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             Interactive calendar to manage company holidays. Click on any date to add or edit a holiday.
           </p>
         </div>
@@ -168,21 +168,21 @@ export default function AdminHolidayManagement() {
         
         {/* Calendar Grid View */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
+          <div className="bg-white border border-[#e8e8e8] rounded-xl p-6 shadow-xs">
             {/* Header / Controls */}
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                <CalendarIcon size={20} className="text-slate-500" />
+              <h2 className="text-lg font-black text-[#1c1b1f] flex items-center gap-2">
+                <CalendarIcon size={20} className="text-[#6b6b6b]" />
                 {monthNames[month]} {year}
               </h2>
               <div className="flex gap-2">
-                <button onClick={prevMonth} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition text-slate-600">
+                <button onClick={prevMonth} className="p-2 border border-[#e8e8e8] rounded-lg hover:bg-[#f7f7f7] transition text-[#6b6b6b]">
                   <ChevronLeft size={16} />
                 </button>
-                <button onClick={() => setCurrentMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))} className="px-3 py-2 text-xs font-bold border border-slate-200 rounded-lg hover:bg-slate-50 transition text-slate-600">
+                <button onClick={() => setCurrentMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))} className="px-3 py-2 text-xs font-bold border border-[#e8e8e8] rounded-lg hover:bg-[#f7f7f7] transition text-[#6b6b6b]">
                   Today
                 </button>
-                <button onClick={nextMonth} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition text-slate-600">
+                <button onClick={nextMonth} className="p-2 border border-[#e8e8e8] rounded-lg hover:bg-[#f7f7f7] transition text-[#6b6b6b]">
                   <ChevronRight size={16} />
                 </button>
               </div>
@@ -191,7 +191,7 @@ export default function AdminHolidayManagement() {
             {/* Days of Week Row */}
             <div className="grid grid-cols-7 gap-2 mb-2">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                <div key={d} className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">{d}</div>
+                <div key={d} className="text-center text-[10px] font-black text-[#9a9a9a] uppercase tracking-widest">{d}</div>
               ))}
             </div>
 
@@ -200,15 +200,15 @@ export default function AdminHolidayManagement() {
               {daysArray}
             </div>
             
-            {loading && <div className="mt-4 text-center text-xs text-slate-400 font-bold animate-pulse">Syncing calendar data...</div>}
+            {loading && <div className="mt-4 text-center text-xs text-[#9a9a9a] font-bold animate-pulse">Syncing calendar data...</div>}
           </div>
         </div>
 
         {/* Dynamic Form Panel */}
         <div className="lg:col-span-1 space-y-6">
-          <div className={`bg-white border rounded-xl p-6 shadow-xs transition-colors duration-300 ${isEditMode ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200'}`}>
-            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-              {isEditMode ? <Edit2 size={16} className="text-indigo-600" /> : <Plus size={16} />} 
+          <div className={`bg-white border rounded-xl p-6 shadow-xs transition-colors duration-300 ${isEditMode ? 'border-indigo-200 bg-indigo-50/30' : 'border-[#e8e8e8]'}`}>
+            <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest mb-4 flex items-center gap-2">
+              {isEditMode ? <Edit2 size={16} className="text-[#ff4f00]" /> : <Plus size={16} />} 
               {isEditMode ? "Edit Holiday" : "Add Holiday"}
             </h2>
             
@@ -216,35 +216,35 @@ export default function AdminHolidayManagement() {
               {error && <div className="text-red-600 text-xs font-bold">{error}</div>}
               
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Date *</label>
+                <label className="block text-xs font-bold text-[#4a4a4a] mb-1">Date *</label>
                 <input 
                   type="date" 
                   required
                   value={form.date}
                   onChange={e => setForm({...form, date: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400 font-mono"
+                  className="w-full bg-[#f7f7f7] border border-[#e8e8e8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400 font-mono"
                 />
               </div>
               
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Name *</label>
+                <label className="block text-xs font-bold text-[#4a4a4a] mb-1">Name *</label>
                 <input 
                   type="text" 
                   required
                   placeholder="e.g. Diwali"
                   value={form.name}
                   onChange={e => setForm({...form, name: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+                  className="w-full bg-[#f7f7f7] border border-[#e8e8e8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Description (Optional)</label>
+                <label className="block text-xs font-bold text-[#4a4a4a] mb-1">Description (Optional)</label>
                 <input 
                   type="text" 
                   value={form.description}
                   onChange={e => setForm({...form, description: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
+                  className="w-full bg-[#f7f7f7] border border-[#e8e8e8] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400"
                 />
               </div>
               
@@ -252,7 +252,7 @@ export default function AdminHolidayManagement() {
                 <button 
                   type="submit" 
                   disabled={submitting}
-                  className={`flex-1 text-white font-bold text-sm py-2 rounded-lg transition disabled:opacity-50 bg-slate-900 hover:bg-slate-800 shadow-sm`}
+                  className={`flex-1 text-white font-bold text-sm py-2 rounded-lg transition disabled:opacity-50 bg-[#1c1b1f] hover:bg-black shadow-none`}
                 >
                   {submitting ? "Saving..." : (isEditMode ? "Update Holiday" : "Save Holiday")}
                 </button>

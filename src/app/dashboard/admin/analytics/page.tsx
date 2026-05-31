@@ -71,14 +71,14 @@ export default function AnalyticsPage() {
       label: "Distance Conserved",
       value: `${(data?.kmSaved || 0).toLocaleString()} km`,
       badge: period,
-      badgeCls: "bg-slate-50 text-slate-600 border-slate-100",
+      badgeCls: "bg-[#f7f7f7] text-[#6b6b6b] border-slate-100",
     },
     {
       icon: Fuel,
       label: "Fuel Conserved",
       value: `${(data?.fuelSaved || 0).toLocaleString()} L`,
       badge: "Fuel",
-      badgeCls: "bg-blue-50 text-blue-600 border-blue-100",
+      badgeCls: "bg-blue-50 text-[#ff4f00] border-blue-100",
     },
     {
       icon: Clock,
@@ -92,30 +92,30 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-slate-500">
-        <Link href="/dashboard/admin" className="hover:text-slate-900 transition">Dashboard</Link>
+      <nav className="flex items-center gap-1.5 text-xs text-[#6b6b6b]">
+        <Link href="/dashboard/admin" className="hover:text-[#1c1b1f] transition">Dashboard</Link>
         <ChevronRight className="w-3 h-3" />
-        <span className="font-semibold text-slate-900">Analytics</span>
+        <span className="font-semibold text-[#1c1b1f]">Analytics</span>
       </nav>
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Executive Analytics</h1>
-          <p className="text-slate-500 text-sm mt-0.5">
+          <h1 className="text-xl font-extrabold text-[#1c1b1f] tracking-tight">Executive Analytics</h1>
+          <p className="text-[#6b6b6b] text-sm mt-0.5">
             Fleet-wide financial calculations, fuel tracking, and routing effectiveness.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-xl border border-slate-200 p-0.5 bg-white shadow-xs">
+          <div className="inline-flex rounded-xl border border-[#e8e8e8] p-0.5 bg-white shadow-xs">
             {(["DAILY", "WEEKLY", "MONTHLY", "ANNUAL"] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
                 className={`px-3 py-1.5 text-xs font-black rounded-lg cursor-pointer transition ${
                   period === p
-                    ? "bg-slate-950 text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                    ? "bg-black text-white shadow-none"
+                    : "text-[#6b6b6b] hover:text-[#1c1b1f] hover:bg-[#f7f7f7]"
                 }`}
               >
                 {p}
@@ -125,7 +125,7 @@ export default function AnalyticsPage() {
           <button
             onClick={fetchAnalytics}
             disabled={loading}
-            className="p-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-slate-500 transition shadow-xs"
+            className="p-2 border border-[#e8e8e8] bg-white hover:bg-[#f7f7f7] rounded-xl text-[#6b6b6b] transition shadow-xs"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin-fast" : ""}`} />
           </button>
@@ -135,23 +135,23 @@ export default function AnalyticsPage() {
       {error ? (
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold">{error}</div>
       ) : loading ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-200 rounded-2xl">
-          <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin-fast" />
-          <p className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest">Compiling ROI Ledger...</p>
+        <div className="flex flex-col items-center justify-center py-20 bg-white border border-[#e8e8e8] rounded-2xl">
+          <div className="w-8 h-8 rounded-full border-4 border-[#e8e8e8] border-t-slate-800 animate-spin-fast" />
+          <p className="mt-4 text-xs font-black text-[#9a9a9a] uppercase tracking-widest">Compiling ROI Ledger...</p>
         </div>
       ) : !hasRouteData ? (
         /* EMPTY STATE */
-        <div className="flex flex-col items-center justify-center py-24 bg-white border border-slate-200 rounded-2xl shadow-xs">
-          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-            <BarChart2 className="w-8 h-8 text-slate-400" />
+        <div className="flex flex-col items-center justify-center py-24 bg-white border border-[#e8e8e8] rounded-2xl shadow-xs">
+          <div className="w-16 h-16 rounded-2xl bg-[#f7f7f7] flex items-center justify-center mb-4">
+            <BarChart2 className="w-8 h-8 text-[#9a9a9a]" />
           </div>
-          <h3 className="font-bold text-slate-900 text-sm mb-1">No Route Data Yet</h3>
-          <p className="text-xs text-slate-500 text-center max-w-xs mb-5">
+          <h3 className="font-bold text-[#1c1b1f] text-sm mb-1">No Route Data Yet</h3>
+          <p className="text-xs text-[#6b6b6b] text-center max-w-xs mb-5">
             Generate optimized routes first. Analytics will automatically populate with real savings data.
           </p>
           <Link
             href="/dashboard/admin/transport/optimization"
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition"
+            className="flex items-center gap-2 px-4 py-2 bg-[#1c1b1f] text-white text-xs font-bold rounded-xl hover:bg-black transition"
           >
             <Zap className="w-3.5 h-3.5" /> Open Route Optimizer
           </Link>
@@ -161,42 +161,42 @@ export default function AnalyticsPage() {
           {/* KPI GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {kpis.map((kpi) => (
-              <div key={kpi.label} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-sm transition-shadow">
+              <div key={kpi.label} className="bg-white rounded-2xl border border-[#e8e8e8] p-5 shadow-xs hover:shadow-none transition-shadow">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-slate-50 border border-slate-100 rounded-xl">
-                    <kpi.icon className="w-4 h-4 text-slate-600" />
+                  <div className="p-2 bg-[#f7f7f7] border border-slate-100 rounded-xl">
+                    <kpi.icon className="w-4 h-4 text-[#6b6b6b]" />
                   </div>
                   <span className={`text-[10px] font-black uppercase tracking-wider border px-1.5 py-0.5 rounded ${kpi.badgeCls}`}>
                     {kpi.badge}
                   </span>
                 </div>
-                <div className="text-2xl font-black text-slate-900 tracking-tight">{kpi.value}</div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">{kpi.label}</div>
+                <div className="text-2xl font-black text-[#1c1b1f] tracking-tight">{kpi.value}</div>
+                <div className="text-[10px] text-[#9a9a9a] font-bold uppercase tracking-wider mt-1">{kpi.label}</div>
               </div>
             ))}
           </div>
 
           {/* SECONDARY METRICS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 flex flex-col justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Cab Reduction</span>
+            <div className="bg-[#1c1b1f] text-white rounded-2xl p-5 border border-[#1c1b1f] flex flex-col justify-between">
+              <span className="text-[10px] font-black text-[#9a9a9a] uppercase tracking-widest block mb-2">Cab Reduction</span>
               <div>
                 <span className="text-3xl font-extrabold text-emerald-400">+{data?.cabReduction || 0}</span>
-                <span className="text-xs text-slate-400 block mt-1">Fewer vehicles needed through geographic employee grouping</span>
+                <span className="text-xs text-[#9a9a9a] block mt-1">Fewer vehicles needed through geographic employee grouping</span>
               </div>
             </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Cab Capacity Utilization</span>
+            <div className="bg-white border border-[#e8e8e8] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+              <span className="text-[10px] font-black text-[#9a9a9a] uppercase tracking-widest block mb-2">Cab Capacity Utilization</span>
               <div>
-                <span className="text-3xl font-extrabold text-slate-900">{data?.cabUtilization || 0}%</span>
-                <span className="text-xs text-slate-500 block mt-1">Average seat booking efficiency across all routes</span>
+                <span className="text-3xl font-extrabold text-[#1c1b1f]">{data?.cabUtilization || 0}%</span>
+                <span className="text-xs text-[#6b6b6b] block mt-1">Average seat booking efficiency across all routes</span>
               </div>
             </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Driver Allocation Rate</span>
+            <div className="bg-white border border-[#e8e8e8] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+              <span className="text-[10px] font-black text-[#9a9a9a] uppercase tracking-widest block mb-2">Driver Allocation Rate</span>
               <div>
-                <span className="text-3xl font-extrabold text-slate-900">{data?.driverUtilization || 0}%</span>
-                <span className="text-xs text-slate-500 block mt-1">Active drivers deployed vs total registered drivers</span>
+                <span className="text-3xl font-extrabold text-[#1c1b1f]">{data?.driverUtilization || 0}%</span>
+                <span className="text-xs text-[#6b6b6b] block mt-1">Active drivers deployed vs total registered drivers</span>
               </div>
             </div>
           </div>
@@ -204,12 +204,12 @@ export default function AnalyticsPage() {
           {/* CHARTS GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Bar Chart — Route Comparison */}
-            <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+            <div className="lg:col-span-2 bg-white border border-[#e8e8e8] rounded-2xl p-6 shadow-xs space-y-4">
               <div>
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                <h3 className="text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">
                   Route Distance Comparison (km)
                 </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">
+                <p className="text-[10px] text-[#9a9a9a] mt-0.5">
                   Manual sequences vs AI-optimized routes per cab
                 </p>
               </div>
@@ -232,10 +232,10 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Donut — Seat Utilization */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+            <div className="bg-white border border-[#e8e8e8] rounded-2xl p-6 shadow-xs space-y-4">
               <div>
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Seat Utilization</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">Seat occupancy across all active routes</p>
+                <h3 className="text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">Seat Utilization</h3>
+                <p className="text-[10px] text-[#9a9a9a] mt-0.5">Seat occupancy across all active routes</p>
               </div>
               <div className="h-[200px] flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
@@ -261,7 +261,7 @@ export default function AnalyticsPage() {
               </div>
               <div className="flex gap-4 justify-center">
                 {pieData.map((entry: any, idx: number) => (
-                  <div key={entry.name} className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
+                  <div key={entry.name} className="flex items-center gap-1.5 text-[10px] font-bold text-[#6b6b6b]">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[idx % COLORS.length] }} />
                     {entry.name}: {entry.value}%
                   </div>

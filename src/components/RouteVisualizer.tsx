@@ -19,7 +19,7 @@ interface RouteVisualizerProps {
 const LeafletMap = dynamic(() => import("./NagpurLeafletMap"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-400 font-medium text-xs">
+    <div className="w-full h-full flex items-center justify-center bg-[#f7f7f7] text-[#9a9a9a] font-medium text-xs">
       Loading interactive map...
     </div>
   ),
@@ -46,7 +46,7 @@ export default function RouteVisualizer({
 
   if (!settings) {
     return (
-      <div className="relative w-full h-[520px] bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex items-center justify-center text-xs font-bold text-slate-400">
+      <div className="relative w-full h-[520px] bg-[#f7f7f7] border border-[#e8e8e8] rounded-2xl overflow-hidden shadow-xs flex items-center justify-center text-xs font-bold text-[#9a9a9a]">
         Loading interactive map...
       </div>
     );
@@ -57,7 +57,7 @@ export default function RouteVisualizer({
   const finalName = depotName ?? settings?.depotName ?? "Depot";
 
   return (
-    <div className="relative w-full h-[520px] bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex flex-col">
+    <div className="relative w-full h-[520px] bg-white border border-[#e8e8e8] rounded-2xl overflow-hidden shadow-xs flex flex-col">
       {/* Render Leaflet Map */}
       <div className="w-full h-full flex-grow relative z-0">
         <LeafletMap

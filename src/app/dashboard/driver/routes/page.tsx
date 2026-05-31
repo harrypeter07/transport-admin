@@ -54,7 +54,7 @@ export default function DriverRoutesExecutionPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
-        <span className="text-slate-400">Loading active route...</span>
+        <span className="text-[#9a9a9a]">Loading active route...</span>
       </div>
     );
   }
@@ -64,12 +64,12 @@ export default function DriverRoutesExecutionPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Active Route</h1>
-            <p className="text-sm text-slate-500 mt-1">You currently have no active route in progress.</p>
+            <h1 className="text-2xl font-bold text-[#1c1b1f]">Active Route</h1>
+            <p className="text-sm text-[#6b6b6b] mt-1">You currently have no active route in progress.</p>
           </div>
           <button 
             onClick={() => router.push("/dashboard/driver")}
-            className="px-4 py-2 border border-slate-200 text-slate-600 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors bg-white"
+            className="px-4 py-2 border border-[#e8e8e8] text-[#6b6b6b] text-sm font-bold rounded-lg hover:bg-[#f7f7f7] transition-colors bg-white"
           >
             Go Back
           </button>
@@ -84,8 +84,8 @@ export default function DriverRoutesExecutionPage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Route Execution</h1>
-          <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">Route Execution</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1 flex items-center gap-2">
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-blue-700 tracking-widest uppercase">
               In Progress
             </span>
@@ -104,9 +104,9 @@ export default function DriverRoutesExecutionPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">
+      <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-[#e8e8e8] bg-[#f7f7f7]">
+          <h2 className="text-xs font-black text-[#6b6b6b] uppercase tracking-widest">
             Passenger Sequence
           </h2>
         </div>
@@ -118,13 +118,13 @@ export default function DriverRoutesExecutionPage() {
               const isCompleted = stop.status === "BOARDED" || stop.status === "SKIPPED";
               
               return (
-                <li key={stop.id} className={`p-6 transition-colors ${isCompleted ? 'bg-slate-50/50' : 'bg-white'}`}>
+                <li key={stop.id} className={`p-6 transition-colors ${isCompleted ? 'bg-[#f7f7f7]/50' : 'bg-white'}`}>
                   <div className="flex items-start gap-4">
                     <div className="flex flex-col items-center mt-1">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-xs ${
-                        isCompleted ? 'bg-slate-200 text-slate-500' : 
+                        isCompleted ? 'bg-slate-200 text-[#6b6b6b]' : 
                         isReached ? 'bg-blue-100 text-blue-700 border-2 border-blue-500' : 
-                        'bg-slate-900 text-white'
+                        'bg-[#1c1b1f] text-white'
                       }`}>
                         {stop.stopOrder}
                       </div>
@@ -136,14 +136,14 @@ export default function DriverRoutesExecutionPage() {
                     <div className="flex-1">
                       <div className="flex items-start justify-between">
                         <div>
-                          <h3 className={`text-lg font-bold ${isCompleted ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'}`}>
+                          <h3 className={`text-lg font-bold ${isCompleted ? 'text-[#6b6b6b] line-through decoration-slate-300' : 'text-[#1c1b1f]'}`}>
                             {stop.employee?.name}
                           </h3>
-                          <p className="text-sm text-slate-500 mt-1 flex items-start gap-1">
+                          <p className="text-sm text-[#6b6b6b] mt-1 flex items-start gap-1">
                             <MapPin size={14} className="mt-0.5 flex-shrink-0" />
                             <span>{stop.employee?.address}</span>
                           </p>
-                          <p className="text-sm font-medium text-slate-600 mt-1">
+                          <p className="text-sm font-medium text-[#6b6b6b] mt-1">
                             📞 {stop.employee?.phone}
                           </p>
                         </div>
@@ -153,13 +153,13 @@ export default function DriverRoutesExecutionPage() {
                             stop.status === 'BOARDED' ? 'bg-emerald-100 text-emerald-700' :
                             stop.status === 'SKIPPED' ? 'bg-red-100 text-red-700' :
                             stop.status === 'REACHED' ? 'bg-blue-100 text-blue-700' :
-                            'bg-slate-100 text-slate-600'
+                            'bg-[#f7f7f7] text-[#6b6b6b]'
                           }`}>
                             {stop.status}
                           </span>
                           
                           {stop.expectedTime && !isCompleted && (
-                            <span className="text-xs font-semibold text-slate-400">
+                            <span className="text-xs font-semibold text-[#9a9a9a]">
                               Expected: {new Date(stop.expectedTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                             </span>
                           )}
@@ -179,11 +179,11 @@ export default function DriverRoutesExecutionPage() {
 
                       {/* Action Buttons */}
                       {!isCompleted && (
-                        <div className="mt-5 flex items-center gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <div className="mt-5 flex items-center gap-3 bg-[#f7f7f7] p-3 rounded-lg border border-slate-100">
                           {isPending && (
                             <button
                               onClick={() => handleStopAction(stop.id, "REACH_STOP")}
-                              className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-all flex items-center gap-2"
+                              className="px-4 py-2 bg-[#1c1b1f] text-white text-sm font-bold rounded-lg hover:bg-black transition-all flex items-center gap-2"
                             >
                               <Navigation size={16} /> Reached Stop
                             </button>

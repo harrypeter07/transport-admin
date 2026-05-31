@@ -56,11 +56,11 @@ export default function TopNav() {
   const unreadCount = notifications.length;
 
   return (
-    <div className="h-16 border-b border-slate-200 bg-white flex items-center justify-end px-6 relative z-50">
+    <div className="h-16 border-b border-[#e8e8e8] bg-white flex items-center justify-end px-6 relative z-50">
       <div className="relative">
         <button
           onClick={() => setShowDropdown(!showDropdown)}
-          className="relative p-2 text-slate-500 hover:text-slate-900 transition-colors focus:outline-none"
+          className="relative p-2 text-[#6b6b6b] hover:text-[#1c1b1f] transition-colors focus:outline-none"
         >
           <Bell size={20} />
           {unreadCount > 0 && (
@@ -69,13 +69,13 @@ export default function TopNav() {
         </button>
 
         {showDropdown && (
-          <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 shadow-xl rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
-              <h3 className="font-bold text-slate-900">Notifications</h3>
+          <div className="absolute right-0 mt-2 w-80 bg-white border border-[#e8e8e8] shadow-xl rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-[#f7f7f7]">
+              <h3 className="font-bold text-[#1c1b1f]">Notifications</h3>
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  className="text-xs font-semibold text-[#ff4f00] hover:text-blue-800 flex items-center gap-1"
                 >
                   <Check size={12} /> Mark all read
                 </button>
@@ -84,7 +84,7 @@ export default function TopNav() {
             
             <div className="max-h-96 overflow-y-auto">
               {notifications.length === 0 ? (
-                <div className="p-6 text-center text-slate-500 text-sm">
+                <div className="p-6 text-center text-[#6b6b6b] text-sm">
                   You have no new notifications.
                 </div>
               ) : (
@@ -92,31 +92,31 @@ export default function TopNav() {
                   {notifications.slice(0, 5).map((n) => (
                     <li
                       key={n.id}
-                      className="p-4 hover:bg-slate-50 cursor-pointer transition-colors relative group"
+                      className="p-4 hover:bg-[#f7f7f7] cursor-pointer transition-colors relative group"
                       onClick={() => handleNotificationClick(n)}
                     >
                       <div className="flex justify-between items-start mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#9a9a9a]">
                           {n.category}
                         </span>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-[#9a9a9a]">
                           {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <p className="font-bold text-slate-900 text-sm">{n.title}</p>
-                      <p className="text-slate-600 text-sm mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="font-bold text-[#1c1b1f] text-sm">{n.title}</p>
+                      <p className="text-[#6b6b6b] text-sm mt-0.5 line-clamp-2">{n.message}</p>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
-            <div className="p-3 border-t border-slate-100 bg-slate-50 text-center">
+            <div className="p-3 border-t border-slate-100 bg-[#f7f7f7] text-center">
               <button
                 onClick={() => {
                   setShowDropdown(false);
                   router.push(`/dashboard/${role}/notifications`);
                 }}
-                className="text-xs font-bold text-slate-700 hover:text-slate-900 uppercase tracking-widest"
+                className="text-xs font-bold text-[#4a4a4a] hover:text-[#1c1b1f] uppercase tracking-widest"
               >
                 View All History
               </button>

@@ -75,18 +75,18 @@ export default function DriverDashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Driver Portal</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">Driver Portal</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             Access your active shift worksheets and log sheets.
           </p>
         </div>
-        <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-white">
+        <div className="inline-flex rounded-lg border border-[#e8e8e8] p-0.5 bg-white">
           <button
             onClick={() => setActiveTab("ACTIVE")}
             className={`px-4 py-2 text-xs font-bold rounded-md cursor-pointer transition ${
               activeTab === "ACTIVE"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-650 hover:text-slate-900 hover:bg-slate-50"
+                ? "bg-black text-white shadow-xs"
+                : "text-slate-650 hover:text-[#1c1b1f] hover:bg-[#f7f7f7]"
             }`}
           >
             Today's Assignments
@@ -95,8 +95,8 @@ export default function DriverDashboardPage() {
             onClick={() => setActiveTab("HISTORY")}
             className={`px-4 py-2 text-xs font-bold rounded-md cursor-pointer transition ${
               activeTab === "HISTORY"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-650 hover:text-slate-900 hover:bg-slate-50"
+                ? "bg-black text-white shadow-xs"
+                : "text-slate-650 hover:text-[#1c1b1f] hover:bg-[#f7f7f7]"
             }`}
           >
             Route History
@@ -104,9 +104,9 @@ export default function DriverDashboardPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="p-6 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+      <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+        <div className="p-6 border-b border-[#e8e8e8] bg-[#f7f7f7]">
+          <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest flex items-center gap-2">
             {activeTab === "ACTIVE" ? "Current Assignments" : "Historical Commute Records"}
           </h2>
         </div>
@@ -120,12 +120,12 @@ export default function DriverDashboardPage() {
             </div>
           ) : loading ? (
             <div className="flex flex-col items-center justify-center py-10">
-              <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin-fast"></div>
+              <div className="w-8 h-8 rounded-full border-4 border-[#e8e8e8] border-t-slate-800 animate-spin-fast"></div>
             </div>
           ) : routesToRender.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 rounded-lg border border-slate-100 border-dashed text-center px-4">
-              <span className="text-slate-400 mb-2 font-bold uppercase tracking-widest text-xs">No Routes Recorded</span>
-              <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+              <span className="text-[#9a9a9a] mb-2 font-bold uppercase tracking-widest text-xs">No Routes Recorded</span>
+              <p className="text-xs text-[#6b6b6b] max-w-xs leading-relaxed">
                 {activeTab === "ACTIVE" 
                   ? "You do not have any active routes assigned for today's shifts."
                   : "No historical commute route entries found in your driver profile."}
@@ -134,30 +134,30 @@ export default function DriverDashboardPage() {
           ) : (
             <div className="space-y-4">
               {routesToRender.map((route: any) => (
-                <div key={route.id} className="border border-slate-200 rounded-xl p-5 hover:border-slate-350 transition duration-200">
+                <div key={route.id} className="border border-[#e8e8e8] rounded-xl p-5 hover:border-slate-350 transition duration-200">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-start sm:items-center gap-3">
                       <div className={`w-10 h-10 rounded-full flex flex-shrink-0 items-center justify-center ${
                         route.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' :
-                        route.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-600' :
-                        'bg-slate-100 text-slate-655'
+                        route.status === 'IN_PROGRESS' ? 'bg-blue-100 text-[#ff4f00]' :
+                        'bg-[#f7f7f7] text-slate-655'
                       }`}>
                         {route.status === 'COMPLETED' ? <CheckCircle size={20} /> :
                          route.status === 'IN_PROGRESS' ? <PlayCircle size={20} /> :
                          <Map size={20} />}
                       </div>
                       <div className="space-y-0.5">
-                        <h3 className="font-bold text-slate-900 text-sm">
+                        <h3 className="font-bold text-[#1c1b1f] text-sm">
                           {route.isPickup ? "Morning Pickup (To Office)" : "Evening Drop (To Home)"}
                         </h3>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 font-semibold">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#6b6b6b] font-semibold">
                           <span className="flex items-center gap-1"><Users size={12} /> {route.stops.length} Stops</span>
                           <span>•</span>
                           <span>{route.totalDistance.toFixed(1)} km</span>
                           {route.shift && (
                             <>
                               <span>•</span>
-                              <span className="bg-slate-100 border border-slate-150 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-600 uppercase">
+                              <span className="bg-[#f7f7f7] border border-slate-150 rounded px-1.5 py-0.5 text-[10px] font-bold text-[#6b6b6b] uppercase">
                                 {route.shift.name} ({route.shift.startTime} - {route.shift.endTime})
                               </span>
                             </>
@@ -174,7 +174,7 @@ export default function DriverDashboardPage() {
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
                         route.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
                         route.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
-                        'bg-slate-150 text-slate-700'
+                        'bg-slate-150 text-[#4a4a4a]'
                       }`}>
                         {route.status.replace("_", " ")}
                       </span>
@@ -182,8 +182,8 @@ export default function DriverDashboardPage() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-slate-100 pt-4 mt-4 gap-4">
-                    <div className="text-xs text-slate-600 leading-relaxed max-w-xl">
-                      <strong className="text-slate-800 font-bold block sm:inline">Manifest sequence:</strong>{" "}
+                    <div className="text-xs text-[#6b6b6b] leading-relaxed max-w-xl">
+                      <strong className="text-[#1c1b1f] font-bold block sm:inline">Manifest sequence:</strong>{" "}
                       {route.stops.map((s: any, idx: number) => (
                         <span key={s.id}>
                           {s.employee?.name} {idx !== route.stops.length - 1 ? "→ " : ""}
@@ -196,7 +196,7 @@ export default function DriverDashboardPage() {
                         {route.status === "PLANNED" || route.status === "ASSIGNED" || route.status === "PENDING" ? (
                           <button 
                             onClick={() => startRoute(route.id)}
-                            className="w-full sm:w-auto px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-850 transition cursor-pointer flex items-center justify-center gap-1.5"
+                            className="w-full sm:w-auto px-4 py-2 bg-[#1c1b1f] text-white text-xs font-bold rounded-lg hover:bg-slate-850 transition cursor-pointer flex items-center justify-center gap-1.5"
                           >
                             <PlayCircle size={15} /> Start Route
                           </button>
@@ -204,7 +204,7 @@ export default function DriverDashboardPage() {
                           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                             <button 
                               onClick={() => router.push(`/dashboard/driver/routes`)}
-                              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition cursor-pointer flex items-center justify-center gap-1.5"
+                              className="w-full sm:w-auto px-4 py-2 bg-[#ff4f00] text-white text-xs font-bold rounded-lg hover:bg-[#e64500] transition cursor-pointer flex items-center justify-center gap-1.5"
                             >
                               Resume Execution
                             </button>
@@ -216,7 +216,7 @@ export default function DriverDashboardPage() {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-xs font-bold text-slate-400">Archived</span>
+                          <span className="text-xs font-bold text-[#9a9a9a]">Archived</span>
                         )}
                       </div>
                     )}

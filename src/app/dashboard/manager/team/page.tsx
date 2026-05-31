@@ -68,19 +68,19 @@ export default function ManagerTeamPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">My Team</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">My Team</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             Manage your reporting lines, view shifts, and monitor calendar schedules.
           </p>
         </div>
         
-        <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-white">
+        <div className="inline-flex rounded-lg border border-[#e8e8e8] p-0.5 bg-white">
           <button
             onClick={() => setActiveTab("ROSTER")}
             className={`px-4 py-2 text-xs font-bold rounded-md cursor-pointer transition ${
               activeTab === "ROSTER"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-655 hover:text-slate-900 hover:bg-slate-50"
+                ? "bg-black text-white shadow-xs"
+                : "text-slate-655 hover:text-[#1c1b1f] hover:bg-[#f7f7f7]"
             }`}
           >
             Team Roster
@@ -89,8 +89,8 @@ export default function ManagerTeamPage() {
             onClick={() => setActiveTab("CALENDAR")}
             className={`px-4 py-2 text-xs font-bold rounded-md cursor-pointer transition ${
               activeTab === "CALENDAR"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-655 hover:text-slate-900 hover:bg-slate-50"
+                ? "bg-black text-white shadow-xs"
+                : "text-slate-655 hover:text-[#1c1b1f] hover:bg-[#f7f7f7]"
             }`}
           >
             Coverage Calendar
@@ -99,24 +99,24 @@ export default function ManagerTeamPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center p-20"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin-fast"></div></div>
+        <div className="flex justify-center p-20"><div className="w-8 h-8 rounded-full border-4 border-[#e8e8e8] border-t-slate-800 animate-spin-fast"></div></div>
       ) : team.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center">
-          <span className="text-slate-400 mb-2 font-bold uppercase tracking-widest text-xs">No Direct Reports</span>
-          <p className="text-sm text-slate-500 max-w-xs">There are no employees reporting to your profile in the database.</p>
+        <div className="bg-white border border-[#e8e8e8] rounded-xl p-8 flex flex-col items-center justify-center text-center">
+          <span className="text-[#9a9a9a] mb-2 font-bold uppercase tracking-widest text-xs">No Direct Reports</span>
+          <p className="text-sm text-[#6b6b6b] max-w-xs">There are no employees reporting to your profile in the database.</p>
         </div>
       ) : activeTab === "ROSTER" ? (
         /* Team Roster Tab */
-        <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-            <h2 className="text-xs font-black text-slate-700 uppercase tracking-widest">
+        <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-[#e8e8e8] bg-[#f7f7f7] flex justify-between items-center">
+            <h2 className="text-xs font-black text-[#4a4a4a] uppercase tracking-widest">
               Team Roster ({team.length} Members)
             </h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500 uppercase tracking-wider">
+                <tr className="border-b border-[#e8e8e8] bg-[#f7f7f7] font-bold text-[#6b6b6b] uppercase tracking-wider">
                   <th className="p-3 pl-4">Name</th>
                   <th className="p-3">Employee Code</th>
                   <th className="p-3">Designation</th>
@@ -127,34 +127,34 @@ export default function ManagerTeamPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {team.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-slate-50">
-                    <td className="p-3 pl-4 font-bold text-slate-900">
+                  <tr key={emp.id} className="hover:bg-[#f7f7f7]">
+                    <td className="p-3 pl-4 font-bold text-[#1c1b1f]">
                       {emp.name}
-                      <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">{emp.department}</span>
+                      <span className="text-[10px] text-[#9a9a9a] font-semibold block mt-0.5">{emp.department}</span>
                     </td>
-                    <td className="p-3 font-mono text-slate-600">{emp.employeeCode}</td>
-                    <td className="p-3 font-medium text-slate-700">{emp.designation || "Engineer"}</td>
+                    <td className="p-3 font-mono text-[#6b6b6b]">{emp.employeeCode}</td>
+                    <td className="p-3 font-medium text-[#4a4a4a]">{emp.designation || "Engineer"}</td>
                     <td className="p-3">
                       {emp.shift ? (
-                        <span className="font-semibold text-slate-700 flex items-center gap-1">
-                          <Clock size={12} className="text-slate-400" />
+                        <span className="font-semibold text-[#4a4a4a] flex items-center gap-1">
+                          <Clock size={12} className="text-[#9a9a9a]" />
                           {emp.shift.name} ({emp.shift.startTime} - {emp.shift.endTime})
                         </span>
                       ) : (
-                        <span className="text-slate-400 italic">No shift assigned</span>
+                        <span className="text-[#9a9a9a] italic">No shift assigned</span>
                       )}
                     </td>
                     <td className="p-3 space-y-1">
-                      <div className="flex items-center gap-1.5 text-slate-500">
+                      <div className="flex items-center gap-1.5 text-[#6b6b6b]">
                         <Mail size={12} /> {emp.email}
                       </div>
-                      <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                      <div className="flex items-center gap-1.5 text-[#6b6b6b] font-semibold">
                         <Phone size={12} /> {emp.phone}
                       </div>
                     </td>
                     <td className="p-3 pr-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                        emp.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                        emp.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-[#f7f7f7] text-[#9a9a9a]'
                       }`}>
                         {emp.status}
                       </span>
@@ -167,26 +167,26 @@ export default function ManagerTeamPage() {
         </div>
       ) : (
         /* Team Calendar Coverage Tab */
-        <div className="bg-white border border-slate-200 rounded-xl shadow-xs p-6 space-y-6">
+        <div className="bg-white border border-[#e8e8e8] rounded-xl shadow-xs p-6 space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
-              <Calendar size={15} className="text-slate-500" /> Team Coverage Calendar
+            <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest flex items-center gap-1.5">
+              <Calendar size={15} className="text-[#6b6b6b]" /> Team Coverage Calendar
             </h2>
             
             <div className="flex items-center gap-3">
-              <button onClick={handlePrevMonth} className="p-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-655 cursor-pointer">
+              <button onClick={handlePrevMonth} className="p-1.5 border border-[#e8e8e8] hover:bg-[#f7f7f7] rounded-lg text-slate-655 cursor-pointer">
                 <ChevronLeft size={16} />
               </button>
-              <span className="text-sm font-black text-slate-800 uppercase tracking-wide min-w-[120px] text-center">
+              <span className="text-sm font-black text-[#1c1b1f] uppercase tracking-wide min-w-[120px] text-center">
                 {months[month]} {year}
               </span>
-              <button onClick={handleNextMonth} className="p-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-655 cursor-pointer">
+              <button onClick={handleNextMonth} className="p-1.5 border border-[#e8e8e8] hover:bg-[#f7f7f7] rounded-lg text-slate-655 cursor-pointer">
                 <ChevronRight size={16} />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 text-center font-bold text-slate-400 text-[10px] uppercase tracking-widest mb-1">
+          <div className="grid grid-cols-7 gap-1 text-center font-bold text-[#9a9a9a] text-[10px] uppercase tracking-widest mb-1">
             <span>Sun</span>
             <span>Mon</span>
             <span>Tue</span>
@@ -199,7 +199,7 @@ export default function ManagerTeamPage() {
           <div className="grid grid-cols-7 gap-1.5 min-h-[300px]">
             {/* Blank offset days */}
             {Array.from({ length: firstDayOfMonth }).map((_, idx) => (
-              <div key={`offset-${idx}`} className="bg-slate-50/50 rounded-xl border border-slate-100 border-dashed" />
+              <div key={`offset-${idx}`} className="bg-[#f7f7f7]/50 rounded-xl border border-slate-100 border-dashed" />
             ))}
 
             {/* Days in Month */}
@@ -213,10 +213,10 @@ export default function ManagerTeamPage() {
                 <div 
                   key={day} 
                   className={`border rounded-xl p-2 flex flex-col text-left justify-between min-h-[70px] transition-colors ${
-                    isToday ? "border-slate-850 bg-slate-50 shadow-2xs" : "border-slate-200 hover:bg-slate-50/50"
+                    isToday ? "border-slate-850 bg-[#f7f7f7] shadow-2xs" : "border-[#e8e8e8] hover:bg-[#f7f7f7]/50"
                   }`}
                 >
-                  <span className={`text-[10px] font-black tracking-wide ${isToday ? "text-slate-900" : "text-slate-450"}`}>
+                  <span className={`text-[10px] font-black tracking-wide ${isToday ? "text-[#1c1b1f]" : "text-slate-450"}`}>
                     {day}
                   </span>
                   

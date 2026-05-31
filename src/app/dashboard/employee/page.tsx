@@ -61,8 +61,8 @@ export default function EmployeeDashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Employee Portal</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1c1b1f]">Employee Portal</h1>
+          <p className="text-sm text-[#6b6b6b] mt-1">
             Welcome to your transportation hub.
           </p>
         </div>
@@ -81,9 +81,9 @@ export default function EmployeeDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Column */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
+          <div className="bg-white border border-[#e8e8e8] rounded-xl p-6 shadow-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">
+              <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest">
                 Next Commute {route ? `(${route.date})` : `(${todayStr})`}
               </h2>
               {route && (
@@ -98,16 +98,16 @@ export default function EmployeeDashboardPage() {
             {loading ? (
               <div className="py-10 text-center text-slate-450 text-xs">Loading route data...</div>
             ) : !route ? (
-              <div className="flex flex-col items-center justify-center py-12 bg-slate-50 rounded-lg border border-slate-100 border-dashed text-center px-4">
-                <span className="text-slate-400 mb-2 font-bold uppercase tracking-widest text-xs">No Published Route</span>
-                <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+              <div className="flex flex-col items-center justify-center py-12 bg-[#f7f7f7] rounded-lg border border-slate-100 border-dashed text-center px-4">
+                <span className="text-[#9a9a9a] mb-2 font-bold uppercase tracking-widest text-xs">No Published Route</span>
+                <p className="text-xs text-[#6b6b6b] max-w-xs leading-relaxed">
                   You are not assigned to a published route for today. Check back later once administration publishes the fleet plan.
                 </p>
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="text-center py-4 bg-slate-50 border border-slate-100 rounded-xl">
-                  <h3 className="text-3xl font-black text-slate-900 tracking-tight">
+                <div className="text-center py-4 bg-[#f7f7f7] border border-slate-100 rounded-xl">
+                  <h3 className="text-3xl font-black text-[#1c1b1f] tracking-tight">
                     {myStop?.status === "BOARDED" ? "On Board" :
                      myStop?.status === "SKIPPED" ? "Skipped" :
                      !isInProgress ? "Driver Dispatch Pending" :
@@ -116,7 +116,7 @@ export default function EmployeeDashboardPage() {
                      `${stopsAway} Stop${stopsAway > 1 ? 's' : ''} Away`}
                   </h3>
                   {myStop?.expectedTime && !["BOARDED", "SKIPPED"].includes(myStop?.status) && (
-                    <p className="text-slate-500 text-xs font-semibold mt-2 flex items-center justify-center gap-1">
+                    <p className="text-[#6b6b6b] text-xs font-semibold mt-2 flex items-center justify-center gap-1">
                       <Clock size={12} /> Expected Pickup: {new Date(myStop.expectedTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </p>
                   )}
@@ -125,20 +125,20 @@ export default function EmployeeDashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Cab & Driver details */}
                   <div className="border border-slate-150 rounded-xl p-4 flex gap-3 items-start">
-                    <Car className="text-slate-400 mt-0.5 flex-shrink-0" size={18} />
+                    <Car className="text-[#9a9a9a] mt-0.5 flex-shrink-0" size={18} />
                     <div className="text-xs space-y-1">
-                      <span className="font-bold text-slate-400 uppercase tracking-widest text-[9px] block">Vehicle Details</span>
-                      <p className="text-sm font-bold text-slate-800">{route.cab?.vehicleNumber || "No vehicle assigned"}</p>
-                      <p className="text-slate-500">{route.cab?.vendor || "Vendor details N/A"}</p>
+                      <span className="font-bold text-[#9a9a9a] uppercase tracking-widest text-[9px] block">Vehicle Details</span>
+                      <p className="text-sm font-bold text-[#1c1b1f]">{route.cab?.vehicleNumber || "No vehicle assigned"}</p>
+                      <p className="text-[#6b6b6b]">{route.cab?.vendor || "Vendor details N/A"}</p>
                     </div>
                   </div>
 
                   <div className="border border-slate-150 rounded-xl p-4 flex gap-3 items-start">
-                    <User className="text-slate-400 mt-0.5 flex-shrink-0" size={18} />
+                    <User className="text-[#9a9a9a] mt-0.5 flex-shrink-0" size={18} />
                     <div className="text-xs space-y-1">
-                      <span className="font-bold text-slate-400 uppercase tracking-widest text-[9px] block">Driver Details</span>
-                      <p className="text-sm font-bold text-slate-800">{route.cab?.driver?.name || "Driver details N/A"}</p>
-                      <p className="text-slate-500 font-semibold flex items-center gap-1 mt-0.5">
+                      <span className="font-bold text-[#9a9a9a] uppercase tracking-widest text-[9px] block">Driver Details</span>
+                      <p className="text-sm font-bold text-[#1c1b1f]">{route.cab?.driver?.name || "Driver details N/A"}</p>
+                      <p className="text-[#6b6b6b] font-semibold flex items-center gap-1 mt-0.5">
                         <Phone size={11} /> {route.cab?.driver?.phone || "—"}
                       </p>
                     </div>
@@ -146,8 +146,8 @@ export default function EmployeeDashboardPage() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="bg-slate-50 p-4 border border-slate-150 rounded-xl">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Manifest Progress</span>
+                <div className="bg-[#f7f7f7] p-4 border border-slate-150 rounded-xl">
+                  <span className="text-[10px] font-black text-[#6b6b6b] uppercase tracking-widest block mb-3">Manifest Progress</span>
                   <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden flex">
                     {route.stops.map((s: any) => {
                       let color = "bg-slate-200";
@@ -160,7 +160,7 @@ export default function EmployeeDashboardPage() {
                       );
                     })}
                   </div>
-                  <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-1 px-0.5 uppercase tracking-wide">
+                  <div className="flex justify-between text-[10px] font-bold text-[#9a9a9a] mt-1 px-0.5 uppercase tracking-wide">
                     <span>Departure</span>
                     <span>MIHAN Depot</span>
                   </div>
@@ -172,33 +172,33 @@ export default function EmployeeDashboardPage() {
 
         {/* Sidebar Column */}
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
-            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4">
+          <div className="bg-white border border-[#e8e8e8] rounded-xl p-6 shadow-xs">
+            <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest mb-4">
               Quick Actions
             </h2>
             <div className="flex flex-col gap-2">
-              <a href="/dashboard/employee/requests" className="w-full text-center px-4 py-3 rounded-lg border border-slate-200 hover:border-slate-350 hover:bg-slate-50 transition text-xs font-bold text-slate-700 block">
+              <a href="/dashboard/employee/requests" className="w-full text-center px-4 py-3 rounded-lg border border-[#e8e8e8] hover:border-slate-350 hover:bg-[#f7f7f7] transition text-xs font-bold text-[#4a4a4a] block">
                 Apply for Leave
               </a>
-              <a href="/dashboard/employee/requests" className="w-full text-center px-4 py-3 rounded-lg border border-slate-200 hover:border-slate-350 hover:bg-slate-50 transition text-xs font-bold text-slate-700 block">
+              <a href="/dashboard/employee/requests" className="w-full text-center px-4 py-3 rounded-lg border border-[#e8e8e8] hover:border-slate-350 hover:bg-[#f7f7f7] transition text-xs font-bold text-[#4a4a4a] block">
                 Request Time Change
               </a>
             </div>
           </div>
 
           {/* Upcoming Holidays */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
-            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-1.5">
-              <Calendar size={15} className="text-slate-500" /> Upcoming Holidays
+          <div className="bg-white border border-[#e8e8e8] rounded-xl p-6 shadow-xs">
+            <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest mb-4 flex items-center gap-1.5">
+              <Calendar size={15} className="text-[#6b6b6b]" /> Upcoming Holidays
             </h2>
             {upcomingHolidays.length === 0 ? (
-              <p className="text-xs text-slate-400">No upcoming holidays scheduled.</p>
+              <p className="text-xs text-[#9a9a9a]">No upcoming holidays scheduled.</p>
             ) : (
               <div className="space-y-3">
                 {upcomingHolidays.map((h: any) => (
-                  <div key={h.id} className="flex justify-between items-center text-xs p-2 bg-slate-50 rounded border border-slate-100">
-                    <span className="font-bold text-slate-800">{h.name}</span>
-                    <span className="text-[10px] text-slate-400 font-bold font-mono">{h.date}</span>
+                  <div key={h.id} className="flex justify-between items-center text-xs p-2 bg-[#f7f7f7] rounded border border-slate-100">
+                    <span className="font-bold text-[#1c1b1f]">{h.name}</span>
+                    <span className="text-[10px] text-[#9a9a9a] font-bold font-mono">{h.date}</span>
                   </div>
                 ))}
               </div>

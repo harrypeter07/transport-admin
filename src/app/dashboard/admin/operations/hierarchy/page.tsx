@@ -64,51 +64,51 @@ export default function HierarchyPage() {
   return (
     <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-slate-500">
-        <Link href="/dashboard/admin" className="hover:text-slate-900 transition">Dashboard</Link>
+      <nav className="flex items-center gap-1.5 text-xs text-[#6b6b6b]">
+        <Link href="/dashboard/admin" className="hover:text-[#1c1b1f] transition">Dashboard</Link>
         <ChevronRight className="w-3 h-3" />
-        <span className="font-semibold text-slate-900">Hierarchy</span>
+        <span className="font-semibold text-[#1c1b1f]">Hierarchy</span>
       </nav>
 
       {/* Page Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Organization Hierarchy</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Workforce distributed by management levels.</p>
+          <h1 className="text-xl font-extrabold text-[#1c1b1f] tracking-tight">Organization Hierarchy</h1>
+          <p className="text-[#6b6b6b] text-sm mt-0.5">Workforce distributed by management levels.</p>
         </div>
         <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-          <Network className="w-6 h-6 text-indigo-600" />
+          <Network className="w-6 h-6 text-[#ff4f00]" />
         </div>
       </div>
 
       <div className="space-y-8">
         {loading ? (
-          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs">
-            <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-indigo-600 animate-spin-fast mx-auto mb-4" />
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Mapping Organization...</p>
+          <div className="bg-white rounded-xl border border-[#e8e8e8] p-12 text-center shadow-xs">
+            <div className="w-8 h-8 rounded-full border-4 border-[#e8e8e8] border-t-indigo-600 animate-spin-fast mx-auto mb-4" />
+            <p className="text-sm font-bold text-[#9a9a9a] uppercase tracking-widest">Mapping Organization...</p>
           </div>
         ) : levels.length === 0 ? (
-          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs text-slate-500 text-sm font-medium">
+          <div className="bg-white rounded-xl border border-[#e8e8e8] p-12 text-center shadow-xs text-[#6b6b6b] text-sm font-medium">
             No employees in the system yet.
           </div>
         ) : (
           levels.map(([level, empList]) => (
-            <div key={level} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <div key={level} className="bg-white rounded-2xl border border-[#e8e8e8] shadow-xs overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-[#f7f7f7] flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600 text-white font-black text-sm">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#ff4f00] text-white font-black text-sm">
                     L{level}
                   </span>
-                  <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">Level {level} Employees</h2>
+                  <h2 className="text-sm font-extrabold text-[#1c1b1f] tracking-tight">Level {level} Employees</h2>
                 </div>
-                <span className="text-[10px] font-black text-slate-400 bg-slate-200/50 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                <span className="text-[10px] font-black text-[#9a9a9a] bg-slate-200/50 px-2.5 py-1 rounded-full uppercase tracking-wider">
                   {empList.length} Headcount
                 </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-100 text-[10px] uppercase tracking-widest font-black text-slate-400 bg-white">
+                    <tr className="border-b border-slate-100 text-[10px] uppercase tracking-widest font-black text-[#9a9a9a] bg-white">
                       <th className="px-6 py-4 font-medium">Employee Name</th>
                       <th className="px-6 py-4 font-medium">Designation</th>
                       <th className="px-6 py-4 font-medium">Department</th>
@@ -118,27 +118,27 @@ export default function HierarchyPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-sm bg-white">
                     {empList.map((emp: any) => (
-                      <tr key={emp.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr key={emp.id} className="hover:bg-[#f7f7f7]/70 transition-colors">
                         <td className="px-6 py-4">
-                          <span className="font-bold text-slate-900 block">{emp.name}</span>
-                          <span className="text-xs text-slate-400 font-mono mt-0.5 block">{emp.employeeCode}</span>
+                          <span className="font-bold text-[#1c1b1f] block">{emp.name}</span>
+                          <span className="text-xs text-[#9a9a9a] font-mono mt-0.5 block">{emp.employeeCode}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase tracking-wide">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#f7f7f7] text-[#4a4a4a] border border-[#e8e8e8] uppercase tracking-wide">
                             {emp.designation || "Engineer"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-slate-600 font-medium">{emp.department}</td>
+                        <td className="px-6 py-4 text-[#6b6b6b] font-medium">{emp.department}</td>
                         <td className="px-6 py-4">
                           {emp.managerName ? (
                             <div className="flex items-center gap-2">
-                              <span className="text-slate-600 font-medium">{emp.managerName}</span>
-                              <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                              <span className="text-[#6b6b6b] font-medium">{emp.managerName}</span>
+                              <span className="text-[9px] font-black text-[#ff4f00] bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
                                 L{level - 1}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-slate-300 font-bold text-xs uppercase tracking-widest">Top Level</span>
+                            <span className="text-[#b0b0b0] font-bold text-xs uppercase tracking-widest">Top Level</span>
                           )}
                         </td>
                         <td className="px-6 py-4">
@@ -148,7 +148,7 @@ export default function HierarchyPage() {
                               {emp.reports} Report{emp.reports !== 1 ? "s" : ""}
                             </span>
                           ) : (
-                            <span className="text-slate-300 text-xs font-medium">—</span>
+                            <span className="text-[#b0b0b0] text-xs font-medium">—</span>
                           )}
                         </td>
                       </tr>
