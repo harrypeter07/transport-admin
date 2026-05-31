@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, CheckCircle, User, UserCog } from "lucide-react";
+import { LayoutDashboard, Users, CheckCircle, User } from "lucide-react";
 
 const navGroups = [
   {
@@ -14,12 +14,6 @@ const navGroups = [
       { name: "Profile", href: "/dashboard/manager/profile", icon: User },
     ],
   },
-  {
-    label: "Operations",
-    items: [
-      { name: "User Accounts", href: "/dashboard/manager/operations/users", icon: UserCog },
-    ],
-  }
 ];
 
 export default function ManagerLayout({
