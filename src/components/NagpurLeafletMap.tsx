@@ -564,7 +564,7 @@ export default function LeafletMap({
 
  {analyticsLoading && (
  <div className="text-[9px] text-[#9a9a9a] italic mt-1 flex items-center gap-1">
- <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-none animate-spin-fast"></span>
+ <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin-fast"></span>
  Fetching Nagpur road curves...
  </div>
  )}
@@ -593,7 +593,7 @@ export default function LeafletMap({
 
  {loadingGeometries && (
  <div className="text-[9px] text-[#9a9a9a] italic mt-1 flex items-center gap-1">
- <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-none animate-spin-fast"></span>
+ <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin-fast"></span>
  Fetching Nagpur road curves...
  </div>
  )}

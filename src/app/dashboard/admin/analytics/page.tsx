@@ -136,7 +136,7 @@ export default function AnalyticsPage() {
  <div className="p-4 bg-[#f7f7f7] border border-[#e8e8e8] rounded-none text-[#1c1b1f] text-xs font-semibold">{error}</div>
  ) : loading ? (
  <div className="flex flex-col items-center justify-center py-20 bg-white border border-[#e8e8e8] rounded-none">
- <div className="w-8 h-8 rounded-none border-4 border-[#e8e8e8] border-t-slate-800 animate-spin-fast" />
+ <div className="w-8 h-8 rounded-full border-4 border-[#e8e8e8] border-t-slate-800 animate-spin-fast" />
  <p className="mt-4 text-xs font-black text-[#9a9a9a] uppercase tracking-widest">Compiling ROI Ledger...</p>
  </div>
  ) : !hasRouteData ? (
