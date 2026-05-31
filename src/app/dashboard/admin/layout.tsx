@@ -12,7 +12,6 @@ import {
   Settings,
   BarChart,
   Network,
-  FileSpreadsheet,
   UserCog,
 } from "lucide-react";
 
@@ -39,7 +38,6 @@ const navGroups = [
     label: "Transport",
     items: [
       { name: "Route Optimization", href: "/dashboard/admin/transport/optimization", icon: Map },
-      { name: "Imports", href: "/dashboard/admin/transport/imports", icon: FileSpreadsheet },
     ],
   },
   {
