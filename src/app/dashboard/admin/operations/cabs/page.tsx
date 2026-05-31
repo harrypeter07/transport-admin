@@ -112,22 +112,22 @@ export default function CabsPage() {
  <span className="font-semibold text-[#1c1b1f]">Cabs</span>
  </nav>
 
- <div className="flex items-start justify-between">
+ <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
  <div>
  <h1 className="text-xl font-extrabold text-[#1c1b1f] tracking-tight">Cabs</h1>
  <p className="text-[#6b6b6b] text-sm mt-0.5">Manage transport fleet vehicles, capacities, and operational status.</p>
  </div>
  <button
  onClick={() => { setShowModal(true); setFormError(null); }}
- className="bg-[#1c1b1f] text-white px-4 py-2 rounded-none text-xs font-bold hover:bg-black flex items-center gap-2 transition"
+ className="bg-[#1c1b1f] text-white px-4 py-2 rounded-none text-xs font-bold hover:bg-black flex items-center gap-2 transition shrink-0"
  >
  <Plus className="w-3.5 h-3.5" /> Register Cab
  </button>
  </div>
 
  <div className="bg-white rounded-none border border-[#e8e8e8] shadow-xs overflow-hidden">
- <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row gap-3">
- <div className="relative flex-1 max-w-sm">
+ <div className="p-4 border-b border-slate-100 flex flex-col gap-3">
+ <div className="relative flex-1">
  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9a9a]" />
  <input
  type="text"
@@ -137,18 +137,18 @@ export default function CabsPage() {
  className="w-full pl-8 pr-4 py-2 text-xs border border-[#e8e8e8] rounded-none bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all"
  />
  </div>
- <div className="flex gap-2">
- <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all text-[#4a4a4a]">
+ <div className="flex flex-wrap gap-2">
+ <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="flex-1 min-w-[120px] border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none transition-all text-[#4a4a4a]">
  <option value="">All Statuses</option>
  <option value="ACTIVE">Active</option>
  <option value="AVAILABLE">Available</option>
  <option value="MAINTENANCE">Maintenance</option>
  </select>
- <select value={filterShift} onChange={e => setFilterShift(e.target.value)} className="border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all text-[#4a4a4a]">
+ <select value={filterShift} onChange={e => setFilterShift(e.target.value)} className="flex-1 min-w-[120px] border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none transition-all text-[#4a4a4a]">
  <option value="">All Shifts</option>
  {shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
  </select>
- <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all text-[#4a4a4a]">
+ <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="flex-1 min-w-[120px] border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none transition-all text-[#4a4a4a]">
  <option value="vehicleNumber">Sort: Vehicle No</option>
  <option value="status">Sort: Status</option>
  <option value="shift">Sort: Shift</option>

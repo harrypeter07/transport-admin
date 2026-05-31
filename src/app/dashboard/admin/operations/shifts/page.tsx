@@ -71,7 +71,7 @@ export default function ShiftsPage() {
  <span className="font-semibold text-[#1c1b1f]">Shifts</span>
  </nav>
 
- <div className="flex items-start justify-between">
+ <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
  <div>
  <h1 className="text-xl font-extrabold text-[#1c1b1f] tracking-tight">Shifts</h1>
  <p className="text-[#6b6b6b] text-sm mt-0.5">Configure work shifts and view allocated resources per shift.</p>

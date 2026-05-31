@@ -53,7 +53,7 @@ export default function DriverRoutesExecutionPage() {
 
  if (loading) {
  return (
- <div className="flex items-center justify-center min-h-[500px]">
+ <div className="flex items-center justify-center min-h-[280px] md:h-[400px] lg:h-[500px]">
  <span className="text-[#9a9a9a]">Loading active route...</span>
  </div>
  );
@@ -62,7 +62,7 @@ export default function DriverRoutesExecutionPage() {
  if (!route) {
  return (
  <div className="space-y-6">
- <div className="flex items-center justify-between">
+ <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
  <div>
  <h1 className="text-2xl font-bold text-[#1c1b1f]">Active Route</h1>
  <p className="text-sm text-[#6b6b6b] mt-1">You currently have no active route in progress.</p>
@@ -82,7 +82,7 @@ export default function DriverRoutesExecutionPage() {
 
  return (
  <div className="space-y-6 max-w-4xl mx-auto">
- <div className="flex items-center justify-between">
+ <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
  <div>
  <h1 className="text-2xl font-bold text-[#1c1b1f]">Route Execution</h1>
  <p className="text-sm text-[#6b6b6b] mt-1 flex items-center gap-2">
@@ -134,7 +134,7 @@ export default function DriverRoutesExecutionPage() {
  </div>
 
  <div className="flex-1">
- <div className="flex items-start justify-between">
+ <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
  <div>
  <h3 className={`text-lg font-bold ${isCompleted ? 'text-[#6b6b6b] line-through decoration-slate-300' : 'text-[#1c1b1f]'}`}>
  {stop.employee?.name}

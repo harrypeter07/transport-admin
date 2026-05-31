@@ -40,7 +40,7 @@ export default function ManagerDashboardPage() {
 
  return (
  <div className="space-y-6">
- <div className="flex items-center justify-between">
+ <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
  <div>
  <h1 className="text-2xl font-bold text-[#1c1b1f]">Manager Portal</h1>
  <p className="text-sm text-[#6b6b6b] mt-1">

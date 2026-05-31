@@ -128,7 +128,7 @@ export default function EmployeesPage() {
  </nav>
 
  {/* Header */}
- <div className="flex items-start justify-between">
+ <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
  <div>
  <h1 className="text-xl font-extrabold text-[#1c1b1f] tracking-tight">Employees</h1>
  <p className="text-[#6b6b6b] text-sm mt-0.5">Manage workforce, designations, and reporting structure.</p>
@@ -144,7 +144,7 @@ export default function EmployeesPage() {
  {/* Table card */}
  <div className="bg-white rounded-none border border-[#e8e8e8] shadow-xs overflow-hidden">
  <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row gap-3">
- <div className="relative flex-1 max-w-sm">
+ <div className="relative w-full sm:flex-1 sm:max-w-sm">
  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9a9a]" />
  <input
  type="text"
@@ -154,7 +154,7 @@ export default function EmployeesPage() {
  className="w-full pl-8 pr-4 py-2 text-xs border border-[#e8e8e8] rounded-none bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all"
  />
  </div>
- <div className="flex gap-2">
+ <div className="flex flex-wrap gap-2">
  <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all text-[#4a4a4a]">
  <option value="">All Roles</option>
  <option value="Manager">Manager</option>

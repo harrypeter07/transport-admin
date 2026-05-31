@@ -313,7 +313,7 @@ export default function SettingsPage() {
 
  {/* Panel 3 — Financial */}
  <Panel title="Financial & ROI Parameters" icon={DollarSign}>
- <div className="grid grid-cols-3 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <Field label="Currency Symbol" note="Displayed in analytics (e.g. ₹, $, €)">
  <input
  className={inputClass}

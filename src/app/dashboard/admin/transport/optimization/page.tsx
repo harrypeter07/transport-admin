@@ -879,7 +879,7 @@ export default function TransitAdminSPA() {
 
  {/* Attendance Checklist Sidebar */}
  {showAttendanceChecklist && (
- <div className="lg:col-span-3 p-5 rounded-none bg-white border border-[#e8e8e8] shadow-xs flex flex-col gap-4 max-h-[500px] overflow-y-auto animate-fadeIn">
+ <div className="lg:col-span-3 p-5 rounded-none bg-white border border-[#e8e8e8] shadow-xs flex flex-col gap-4 max-h-[280px] md:h-[400px] lg:h-[500px] overflow-y-auto animate-fadeIn">
  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
  <h3 className="text-xs font-bold text-[#1c1b1f] uppercase tracking-wider flex items-center gap-1.5">
  <Users className="w-4 h-4 text-[#6b6b6b]" />
@@ -1442,7 +1442,7 @@ export default function TransitAdminSPA() {
  ) : routeVariations.length > 0 ? (
  <div className="flex flex-col gap-3">
  {/* Variations tabs layout */}
- <div className="grid grid-cols-3 gap-1 bg-[#f7f7f7] p-1 rounded-none">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 bg-[#f7f7f7] p-1 rounded-none">
  {routeVariations.filter(v => v.strategy !== "NORMAL").map((v) => {
  const originalIndex = routeVariations.findIndex(orig => orig.strategy === v.strategy);
  const isActive = activeVarIdx === originalIndex || (activeVarIdx === -1 && v.strategy === "BALANCED");
@@ -2198,7 +2198,7 @@ export default function TransitAdminSPA() {
  </div>
 
  {/* Card-based ledger — no horizontal scroll */}
- <div className="flex flex-col divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+ <div className="flex flex-col divide-y divide-slate-100 max-h-[260px] md:h-[380px] lg:h-[480px] overflow-y-auto">
  {filteredLedgerRoutes.length === 0 ? (
  <div className="px-6 py-8 text-center text-slate-450 text-xs">
  No routes match the selected vehicle filter.
@@ -2247,7 +2247,7 @@ export default function TransitAdminSPA() {
  </div>
 
  {/* Metric pills */}
- <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+ <div className="mt-2.5 grid grid-cols-2 lg:grid-cols-4 gap-1.5">
  <div className="flex flex-col gap-0.5 bg-[#f7f7f7] border border-slate-100 rounded-none p-2 text-center">
  <span className="text-[8px] text-[#9a9a9a] font-bold uppercase tracking-wider">Pax</span>
  <span className="font-bold text-[#1c1b1f] text-xs">{route.passengerCount}</span>
