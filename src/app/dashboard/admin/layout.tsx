@@ -12,6 +12,7 @@ import {
   Settings,
   BarChart,
   Network,
+  FileSpreadsheet,
   UserCog,
 } from "lucide-react";
 
