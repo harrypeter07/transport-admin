@@ -99,7 +99,9 @@ async function main() {
       driverName: "Raj Driver",
       driverPhone: "+91 9999999992",
       licenseNumber: "DL-MH31-TEST",
-      shiftId: shift.id,
+      shifts: {
+        connect: { id: shift.id }
+      }
     }
   });
 

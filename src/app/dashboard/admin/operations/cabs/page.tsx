@@ -286,7 +286,7 @@ export default function CabsPage() {
               {formError && (
                 <div className="rounded-none border border-[#e8e8e8] bg-[#f7f7f7]/80 p-4 text-sm font-semibold text-[#1c1b1f] backdrop-blur-sm">{formError}</div>
               )}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <CField label="Vehicle Number" name="vehicleNumber" required placeholder="MH31 AB1234" defaultValue={editingCab?.vehicleNumber} />
                 <CField label="Capacity (seats)" name="capacity" required type="number" placeholder="6" defaultValue={editingCab?.capacity} />
               </div>
@@ -294,11 +294,11 @@ export default function CabsPage() {
               
               <div className="border-t border-slate-100 pt-3 mt-1">
                 <h3 className="text-[10px] font-black text-[#9a9a9a] uppercase tracking-widest mb-3">Driver Details</h3>
-                <div className="grid grid-cols-2 gap-4 mb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
                   <CField label="Driver Name" name="driverName" placeholder="John Doe" defaultValue={editingCab?.driverName} />
                   <CField label="Phone Number" name="driverPhone" placeholder="+91 9900000000" defaultValue={editingCab?.driverPhone} />
                 </div>
-                <div className="grid grid-cols-2 gap-4 mb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
                   <CField label="License Number" name="licenseNumber" placeholder="DL-..." defaultValue={editingCab?.licenseNumber} />
                   <div>
                     <label className="block text-xs font-bold text-[#4a4a4a] mb-1.5">Start Location (Home)</label>

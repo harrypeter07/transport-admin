@@ -194,7 +194,7 @@ export default function EmployeeRequestsPage() {
  <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
  <CalendarRange size={16} className="text-[#6b6b6b]" /> Apply For Leave
  </h2>
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <div>
  <label className="block text-xs font-bold text-[#6b6b6b] uppercase mb-1">Start Date</label>
  <input
@@ -256,7 +256,7 @@ export default function EmployeeRequestsPage() {
  {employee.shift.name} ({employee.shift.startTime} - {employee.shift.endTime})
  </div>
  )}
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <div>
  <label className="block text-xs font-bold text-[#6b6b6b] uppercase mb-1">Request Type</label>
  <select

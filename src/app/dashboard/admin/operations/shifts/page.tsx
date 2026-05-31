@@ -111,7 +111,7 @@ export default function ShiftsPage() {
  </div>
  <div className="flex gap-1">
  <button className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Edit className="w-3.5 h-3.5" /></button>
- <button onClick={() => handleDelete(shift.id, shift.name)} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
+ <button onClick={() => handleDelete(shift.id)} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
  </div>
  </div>
  <div className="p-5 bg-[#f7f7f7] flex flex-col gap-4">
@@ -174,7 +174,7 @@ export default function ShiftsPage() {
  <label className="block text-xs font-bold text-[#4a4a4a] mb-1.5">Shift Name<span className="text-[#6b6b6b] ml-0.5">*</span></label>
  <input name="name" required placeholder="Morning Shift" className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]" />
  </div>
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <div>
  <label className="block text-xs font-bold text-[#4a4a4a] mb-1.5">Start Time<span className="text-[#6b6b6b] ml-0.5">*</span></label>
  <input name="startTime" type="time" required className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]" />

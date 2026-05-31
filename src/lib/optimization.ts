@@ -21,6 +21,8 @@ export interface OptimizeCab {
   vendor: string;
   driverName: string;
   driverPhone: string;
+  startPoint?: Point;
+  tripSequence?: number;
 }
 
 export interface OptimizedRouteStop {

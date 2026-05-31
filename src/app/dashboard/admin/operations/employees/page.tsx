@@ -277,11 +277,11 @@ export default function EmployeesPage() {
  </div>
  )}
 
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <Field label="Employee Code" name="employeeCode" required placeholder="EMP001" defaultValue={editingEmployee?.employeeCode} />
  <Field label="Full Name" name="name" required placeholder="John Doe" defaultValue={editingEmployee?.name} />
  </div>
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <SelectField label="Gender" name="gender" required defaultValue={editingEmployee?.gender}>
  <option value="MALE">Male</option>
  <option value="FEMALE">Female</option>
@@ -294,7 +294,7 @@ export default function EmployeesPage() {
  <option value="Intern">Intern</option>
  </SelectField>
  </div>
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <Field label="Email" name="email" type="email" placeholder="john@company.com" defaultValue={editingEmployee?.email} />
  <Field label="Phone" name="phone" placeholder="+91 98765 43210" defaultValue={editingEmployee?.phone} />
  </div>

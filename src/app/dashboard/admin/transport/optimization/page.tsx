@@ -512,12 +512,12 @@ export default function TransitAdminSPA() {
  {autoOptimizingOverlay !== "idle" && (
  <div className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6 animate-fadeIn">
  <div className="relative flex items-center justify-center">
- {/* Outer ring spinner */}
- <div className="w-16 h-16 rounded-none border-4 border-slate-100 border-t-slate-800 animate-spin-fast" />
- {/* Inner icon */}
- <div className="absolute w-9 h-9 rounded-none bg-[#1c1b1f] flex items-center justify-center text-white font-black text-sm">
- TA
- </div>
+  {/* Outer ring spinner */}
+  <div className="w-16 h-16 rounded-full border-4 border-[#e8e8e8] border-t-[#1c1b1f] animate-spin-fast" />
+  {/* Inner icon */}
+  <div className="absolute w-9 h-9 rounded-full bg-[#1c1b1f] flex items-center justify-center text-white font-black text-sm">
+  TA
+  </div>
  </div>
  <div className="text-center flex flex-col gap-1.5">
  <p className="text-base font-extrabold text-[#1c1b1f] tracking-tight">
@@ -736,8 +736,7 @@ export default function TransitAdminSPA() {
  {optimizationPlans && previewedStrategy && (
  <div className="bg-white border border-[#e8e8e8] rounded-none p-4 shadow-none flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fadeIn">
  <div>
- <h3 className="text-sm font-black text-[#1c1b1f] flex items-center gap-1.5">
- <Sparkles className="w-4 h-4 text-[#6b6b6b]" />
+ <h3 className="text-sm font-black text-[#1c1b1f]">
  Previewing: {previewedStrategy.replace("_", " ")}
  </h3>
  {optimizationPlans.capacityShortfall > 0 && (
@@ -1821,7 +1820,7 @@ export default function TransitAdminSPA() {
  if (analysisLoading) {
  return (
  <div className="py-20 flex flex-col items-center justify-center bg-white border border-[#e8e8e8] rounded-none">
- <div className="w-8 h-8 border-4 border-[#1c1b1f] border-t-transparent rounded-none animate-spin-fast"></div>
+ <div className="w-8 h-8 rounded-full border-4 border-[#e8e8e8] border-t-[#1c1b1f] animate-spin-fast"></div>
  <p className="mt-4 text-xs font-bold text-[#9a9a9a] uppercase tracking-widest">Compiling Optimization Dataset...</p>
  </div>
  );

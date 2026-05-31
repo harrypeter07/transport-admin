@@ -69,6 +69,7 @@ export interface Route {
   stops: RouteStop[];
   violations: Violation[];
   hasEscort?: boolean; // client-side toggle representation
+  tripSequence?: number;
 }
 
 

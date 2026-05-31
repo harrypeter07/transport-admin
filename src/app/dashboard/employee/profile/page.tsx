@@ -18,7 +18,7 @@ export default function EmployeeProfilePage() {
  Personal Information
  </h2>
  <form className="space-y-4">
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <div>
  <label className="block text-xs font-bold text-[#6b6b6b] uppercase tracking-widest mb-1.5">Phone Number</label>
  <input type="tel" className="w-full rounded-none border border-[#e8e8e8] bg-[#f7f7f7] px-3.5 py-2.5 text-sm text-[#1c1b1f]" placeholder="+91 00000 00000" />

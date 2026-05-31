@@ -178,7 +178,9 @@ async function main() {
         driverName: d.name,
         driverPhone: "9988776655",
         licenseNumber: "MH31-" + Math.floor(Math.random() * 10000),
-        shiftId: shift.id,
+        shifts: {
+          connect: { id: shift.id },
+        },
       },
     });
     cabs.push(cab);

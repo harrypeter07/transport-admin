@@ -165,7 +165,7 @@ export default function SettingsPage() {
 
  {/* Panel 1 — Location & Depot */}
  <Panel title="Location & Depot" icon={MapPin}>
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <Field label="Base City" note="Used for geocoding employee addresses">
  <LocationAutocomplete
  id="defaultCity"

@@ -196,7 +196,7 @@ async function main() {
   await prisma.cab.upsert({
     where: { vehicleNumber: 'TEST CAB 01' },
     update: {},
-    create: { vehicleNumber: 'TEST CAB 01', capacity: 6, vendor: 'Test Transport', status: 'AVAILABLE', driverName: 'Test Driver', driverPhone: '+91 9999999993', licenseNumber: 'DL-TEST-01', shiftId: dummyShift.id }
+    create: { vehicleNumber: 'TEST CAB 01', capacity: 6, vendor: 'Test Transport', status: 'AVAILABLE', driverName: 'Test Driver', driverPhone: '+91 9999999993', licenseNumber: 'DL-TEST-01', shifts: { connect: { id: dummyShift.id } } }
   });
 
   console.log('Imported ' + importedEmployeesCount + ' employees and ' + importedCabsCount + ' cabs from roster.');

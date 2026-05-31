@@ -1,17 +1,18 @@
 const fs = require('fs');
-const path = require('path');
-const file = path.join(__dirname, 'src', 'app', 'dashboard', 'admin', 'transport', 'optimization', 'page.tsx');
-let content = fs.readFileSync(file, 'utf8');
+const files = [
+  'src/app/dashboard/driver/layout.tsx',
+  'src/app/dashboard/employee/layout.tsx',
+  'src/app/dashboard/manager/layout.tsx'
+];
 
-// Remove one of the duplicate imports
-const importStr = 'import { useRouter } from "next/navigation";';
-const firstIndex = content.indexOf(importStr);
-if (firstIndex !== -1) {
-  const secondIndex = content.indexOf(importStr, firstIndex + importStr.length);
-  if (secondIndex !== -1) {
-    // Remove the second occurrence
-    content = content.slice(0, secondIndex) + content.slice(secondIndex + importStr.length);
+files.forEach(f => {
+  let content = fs.readFileSync(f, 'utf8');
+  if (!content.includes('import { useState, useEffect } from "react";')) {
+    content = content.replace(
+      'import Link from "next/link";',
+      'import Link from "next/link";\nimport { useState, useEffect } from "react";'
+    );
+    fs.writeFileSync(f, content, 'utf8');
+    console.log("Fixed imports in", f);
   }
-}
-
-fs.writeFileSync(file, content, 'utf8');
+});
