@@ -775,7 +775,8 @@ export async function optimizeRoutes(
     // Filter out any null employees (can happen if a stop's employeeId became stale after a swap)
     const stopsEmps = route.stops
       .map(s => employees.find(e => e.id === s.employeeId))
-      .filter((e): e is OptimizeEmployee => e !== undefined);
+      .filter((e): e is OptimizeEmployee => e !== undefined)
+      .slice(0, route.capacity); // Hard cap: never exceed cab capacity
     if (stopsEmps.length === 0) continue;
     let bestOrderedRoute = getOptimalPermutation(stopsEmps, isPickup);
     
@@ -1414,8 +1415,11 @@ async function buildRoutesFromAssignments(
   for (const { cab, cluster } of assignments) {
     if (cluster.length === 0) continue;
 
+    // Hard cap: never assign more stops than the cab's stated capacity
+    const cappedCluster = cluster.slice(0, cab.capacity);
+
     // Optimal stop order + safety enforcement
-    let ordered = getOptimalPermutation(cluster, isPickup);
+    let ordered = getOptimalPermutation(cappedCluster, isPickup);
     const { route: safeRoute } = enforceSafetyRules(ordered, isPickup, false);
 
     // Build stops with Haversine ETAs
