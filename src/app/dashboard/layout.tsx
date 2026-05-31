@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { logout } from "@/app/actions/auth";
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
+import Image from "next/image";
 import NotificationBell from "@/components/NotificationBell";
 
 export default function DashboardLayout({
@@ -14,30 +14,35 @@ export default function DashboardLayout({
   const [, action, pending] = useActionState(logout, undefined);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 selection:bg-slate-900 selection:text-white font-sans antialiased">
-      {/* Single Platform Shell Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
-        <div className="w-full px-4 sm:px-6 h-14 flex items-center justify-between">
-          {/* Brand */}
-          <Link href="/dashboard/admin" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-black text-sm select-none">
-              TA
-            </div>
-            <span className="font-extrabold tracking-tight text-slate-900 text-base">Transit Admin</span>
-            <span className="hidden sm:inline text-[10px] bg-slate-100 border border-slate-200 text-slate-500 px-2 py-0.5 rounded font-mono font-bold">
-              ETMS
+    <div className="min-h-screen bg-[#f7f7f7] flex flex-col text-[#1c1b1f] selection:bg-[#ff4f00] selection:text-white antialiased">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b border-[#e8e8e8] bg-white">
+        <div className="w-full px-6 h-14 flex items-center justify-between">
+          {/* Logo */}
+          <Link href="/dashboard" className="flex items-center gap-4">
+            <Image
+              src="/logo.png"
+              alt="GlobalLogic"
+              width={140}
+              height={40}
+              className="h-7 w-auto"
+              priority
+            />
+            <div className="w-px h-5 bg-[#e8e8e8]" />
+            <span className="text-xs font-semibold text-[#6b6b6b] tracking-wider uppercase">
+              Transit Admin
             </span>
           </Link>
 
-          {/* User actions */}
-          <div className="flex items-center gap-4">
+          {/* Right actions */}
+          <div className="flex items-center gap-3">
             <NotificationBell />
-            <div className="w-px h-6 bg-slate-200"></div>
+            <div className="w-px h-5 bg-[#e8e8e8]" />
             <form action={action}>
               <button
                 type="submit"
                 disabled={pending}
-                className="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-900 transition px-3 py-1.5 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200"
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#6b6b6b] hover:text-[#ff4f00] transition-colors px-3 py-1.5"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -49,7 +54,7 @@ export default function DashboardLayout({
         </div>
       </header>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <main className="flex-1 w-full">
         {children}
       </main>

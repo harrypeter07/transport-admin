@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Map, CalendarClock, User } from "lucide-react";
+import { LayoutDashboard, Map, CalendarClock, User, Bell } from "lucide-react";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard/employee", icon: LayoutDashboard },
   { name: "My Route", href: "/dashboard/employee/route", icon: Map },
   { name: "Requests", href: "/dashboard/employee/requests", icon: CalendarClock },
+  { name: "Notifications", href: "/dashboard/employee/notifications", icon: Bell },
   { name: "Profile", href: "/dashboard/employee/profile", icon: User },
 ];
 
@@ -21,7 +22,7 @@ export default function EmployeeLayout({
   return (
     <div className="flex min-h-[calc(100vh-56px)]">
       {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col sticky top-14 h-[calc(100vh-56px)] overflow-y-auto">
+      <aside className="w-56 flex-shrink-0 border-r border-[#e8e8e8] bg-white flex flex-col sticky top-14 h-[calc(100vh-56px)] overflow-y-auto">
         <nav className="flex-1 py-4 px-3 flex flex-col gap-0.5">
           {navItems.map((item) => {
             const isActive =
@@ -29,20 +30,20 @@ export default function EmployeeLayout({
                 ? pathname === item.href
                 : pathname.startsWith(item.href);
             const Icon = item.icon;
-            
+
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2.5 px-2.5 py-2 text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                    ? "bg-[#ff4f00] text-white"
+                    : "text-[#4a4a4a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7]"
                 }`}
               >
                 <Icon
                   className={`w-4 h-4 flex-shrink-0 ${
-                    isActive ? "text-white" : "text-slate-400"
+                    isActive ? "text-white" : "text-[#9a9a9a]"
                   }`}
                 />
                 {item.name}
@@ -53,7 +54,7 @@ export default function EmployeeLayout({
       </aside>
 
       {/* Page content */}
-      <div className="flex-1 min-w-0 p-8 bg-slate-50">
+      <div className="flex-1 min-w-0 p-8 bg-[#f7f7f7]">
         {children}
       </div>
     </div>

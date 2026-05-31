@@ -1,80 +1,94 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
 }
 
 :root {
-  --background: #f8fafc; /* Slate 50 */
-  --foreground: #0f172a; /* Slate 900 */
+  --background: #ffffff;
+  --foreground: #1c1b1f;
+  --surface: #f7f7f7;
+  --border: #e8e8e8;
+  --accent: #ff4f00;
+  --accent-hover: #e64500;
+  --muted: #6b6b6b;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Light Card Style */
 .glass {
   background: #ffffff;
-  border: 1px solid #e2e8f0; /* Slate 200 */
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--border);
+  box-shadow: none;
 }
 
 .glass-hover {
-  transition: all 0.2s ease-in-out;
+  transition: all 0.15s ease-in-out;
 }
 .glass-hover:hover {
-  background: #f1f5f9; /* Slate 100 */
-  border-color: #cbd5e1; /* Slate 300 */
+  background: var(--surface);
+  border-color: #d0d0d0;
 }
 
-/* Custom Scrollbar for light mode */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f8fafc;
+  background: var(--surface);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1; /* Slate 300 */
-  border-radius: 3px;
+  background: #d0d0d0;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8; /* Slate 400 */
+  background: #b0b0b0;
 }
 
-/* Indicators */
+/* Status Indicators — kept muted so they don't clash with orange accent */
 .glow-green {
-  border: 1.5px solid #22c55e;
-  background-color: #dcfce7;
-  color: #166534;
+  border: 1px solid #b6d7c4;
+  background-color: #edf7f1;
+  color: #1a6b3a;
 }
 
 .glow-red {
-  border: 1.5px solid #ef4444;
-  background-color: #fee2e2;
-  color: #991b1b;
+  border: 1px solid #f4bcbc;
+  background-color: #fdf0f0;
+  color: #8b1a1a;
 }
 
 .glow-white {
-  border: 1.5px solid #cbd5e1;
+  border: 1px solid var(--border);
   background-color: #ffffff;
-  color: #0f172a;
+  color: var(--foreground);
+}
+
+/* GL Orange highlight — used for active states */
+.glow-orange {
+  border: 1px solid #ffd0b8;
+  background-color: #fff4ef;
+  color: #c43a00;
 }
 
 /* Fade-in animation */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -91,30 +105,29 @@ body {
   animation: spin-fast 0.6s linear infinite;
 }
 
-/* Custom Premium Leaflet Tooltip for MIHAN Landmark */
+/* Custom Premium Leaflet Tooltip */
 .leaflet-tooltip.depot-tooltip {
-  background-color: #0f172a !important; /* Slate 900 */
+  background-color: #1c1b1f !important;
   color: #ffffff !important;
   font-weight: 700 !important;
   font-size: 10px !important;
   padding: 4px 8px !important;
-  border-radius: 6px !important;
+  border-radius: 4px !important;
   border: 1.5px solid #ffffff !important;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.15) !important;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
-/* Tooltip arrow styling */
 .leaflet-tooltip-top.depot-tooltip::before {
-  border-top-color: #0f172a !important;
+  border-top-color: #1c1b1f !important;
 }
 .leaflet-tooltip-bottom.depot-tooltip::before {
-  border-bottom-color: #0f172a !important;
+  border-bottom-color: #1c1b1f !important;
 }
 .leaflet-tooltip-left.depot-tooltip::before {
-  border-left-color: #0f172a !important;
+  border-left-color: #1c1b1f !important;
 }
 .leaflet-tooltip-right.depot-tooltip::before {
-  border-right-color: #0f172a !important;
+  border-right-color: #1c1b1f !important;
 }

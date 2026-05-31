@@ -1,15 +1,12 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const jakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+  variable: "--font-jakarta",
 });
 
 export const metadata: Metadata = {
@@ -26,8 +23,8 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport = {
-  themeColor: "#0f172a",
+export const viewport: Viewport = {
+  themeColor: "#1c1b1f",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -42,7 +39,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-full flex flex-col bg-slate-50 text-slate-900 font-sans antialiased`}
+        className={`${jakartaSans.variable} min-h-full flex flex-col bg-white text-[#1c1b1f] antialiased`}
+        style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif" }}
       >
         {children}
       </body>
