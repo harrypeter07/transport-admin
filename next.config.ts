@@ -12,6 +12,24 @@ const nextConfig: NextConfig = {
     "/api/**/*": ["./prisma/dev.db"],
   },
   turbopack: {},
+  // Disable source maps in production to reduce build memory usage
+  productionBrowserSourceMaps: false,
+  webpack: (config, { isServer, dev }) => {
+    // Limit parallelism to prevent RAM exhaustion on low-memory machines
+    config.parallelism = 1;
+
+    // Disable source maps during production build to save memory
+    if (!dev) {
+      config.devtool = false;
+    }
+
+    // Reduce memory pressure from the filesystem cache
+    if (config.cache && typeof config.cache === "object") {
+      (config.cache as any).maxMemoryGenerations = 1;
+    }
+
+    return config;
+  },
 };
 
 export default withPWA(nextConfig);
