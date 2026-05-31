@@ -23,41 +23,39 @@ export default function HierarchyPage() {
  load();
  }, []);
 
- const computeLevels = (empList: any[]) => {
- // 1. Build map for easy lookup
- const map = new Map<string, any>();
- empList.forEach((e) => map.set(e.id, { ...e, reports: 0 }));
+  const computeLevels = (empList: any[]) => {
+    const getLevel = (designation?: string | null) => {
+      const lower = (designation || '').toLowerCase();
+      if (lower.includes('admin')) return 4;
+      if (lower.includes('senior manager')) return 3;
+      if (lower.includes('manager') && !lower.includes('senior')) return 2;
+      return 1; // Engineer or default
+    };
 
- // 2. Count direct reports
- empList.forEach((e) => {
- if (e.managerId && map.has(e.managerId)) {
- map.get(e.managerId).reports += 1;
- }
- });
+    // 1. Build map for easy lookup & set level
+    const map = new Map<string, any>();
+    empList.forEach((e) => map.set(e.id, { ...e, reports: 0, level: getLevel(e.designation) }));
 
- // 3. Compute depth (level) recursively
- const getDepth = (empId: string, visited = new Set<string>()): number => {
- if (visited.has(empId)) return 1; // Prevent infinite loops in case of cyclical reporting
- visited.add(empId);
- const emp = map.get(empId);
- if (!emp || !emp.managerId || !map.has(emp.managerId)) return 1;
- return 1 + getDepth(emp.managerId, visited);
- };
+    // 2. Count direct reports
+    empList.forEach((e) => {
+      if (e.managerId && map.has(e.managerId)) {
+        map.get(e.managerId).reports += 1;
+      }
+    });
 
- // 4. Group by level
- const levelMap = new Map<number, any[]>();
- empList.forEach((e) => {
- const depth = getDepth(e.id);
- if (!levelMap.has(depth)) levelMap.set(depth, []);
- 
- const enrichedEmp = map.get(e.id);
- enrichedEmp.managerName = e.managerId ? map.get(e.managerId)?.name : null;
- levelMap.get(depth)!.push(enrichedEmp);
- });
+    // 3. Group by level
+    const levelMap = new Map<number, any[]>();
+    empList.forEach((e) => {
+      const enrichedEmp = map.get(e.id);
+      enrichedEmp.managerName = e.managerId ? map.get(e.managerId)?.name : null;
+      const depth = enrichedEmp.level;
+      if (!levelMap.has(depth)) levelMap.set(depth, []);
+      levelMap.get(depth)!.push(enrichedEmp);
+    });
 
- // Convert to sorted array of [level, employees]
- return Array.from(levelMap.entries()).sort((a, b) => a[0] - b[0]);
- };
+    // Convert to sorted array of [level, employees], sorted descending (4 to 1)
+    return Array.from(levelMap.entries()).sort((a, b) => b[0] - a[0]);
+  };
 
  const levels = computeLevels(employees);
 
@@ -84,7 +82,7 @@ export default function HierarchyPage() {
  <div className="space-y-8">
  {loading ? (
  <div className="bg-white rounded-none border border-[#e8e8e8] p-12 text-center shadow-xs">
- <div className="w-8 h-8 rounded-none border-4 border-[#e8e8e8] border-t-indigo-600 animate-spin-fast mx-auto mb-4" />
+ <div className="w-8 h-8 rounded-full border-4 border-[#e8e8e8] border-t-indigo-600 animate-spin-fast mx-auto mb-4" />
  <p className="text-sm font-bold text-[#9a9a9a] uppercase tracking-widest">Mapping Organization...</p>
  </div>
  ) : levels.length === 0 ? (
