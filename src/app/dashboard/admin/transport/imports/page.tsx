@@ -114,33 +114,20 @@ export default function ImportsPage() {
               <Upload className="w-5 h-5 text-slate-600" />
             </div>
             <div>
-              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Upload Master Roster</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Upload a daily or monthly roster Excel (.xlsx) file</p>
+              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Master Roster Data</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Automated synchronization</p>
             </div>
           </div>
           <div className="p-5">
-            <form onSubmit={handleFileUpload} className="flex flex-col gap-4">
-              <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 bg-slate-50 rounded-xl hover:border-slate-400 hover:bg-slate-100 transition cursor-pointer relative group">
-                <input
-                  type="file"
-                  accept=".xlsx, .xls, .csv"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
-                <Upload className="w-6 h-6 text-slate-400 group-hover:text-slate-600 mb-2" />
-                <span className="text-sm font-semibold text-slate-700">
-                  {uploadFile ? uploadFile.name : "Click or drag to select Excel file"}
-                </span>
-                <span className="text-xs text-slate-400 mt-1">Supports .xlsx, .xls, .csv</span>
-              </div>
-              <button
-                type="submit"
-                disabled={status.type === "loading" || !uploadFile}
-                className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-slate-800 transition disabled:opacity-50"
-              >
-                {status.type === "loading" ? "Processing Data..." : "Upload & Process Data"}
-              </button>
-            </form>
+            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 bg-slate-50 rounded-xl">
+              <span className="text-lg mb-2">🔒</span>
+              <span className="text-sm font-semibold text-slate-700 text-center">
+                Manual Excel uploads are currently disabled.
+              </span>
+              <span className="text-xs text-slate-500 mt-2 text-center max-w-sm">
+                Roster data is being managed and synchronized directly by system administrators. 
+              </span>
+            </div>
           </div>
         </div>
       </div>

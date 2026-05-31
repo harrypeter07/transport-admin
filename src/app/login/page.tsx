@@ -128,15 +128,15 @@ export default function LoginPage() {
             </div>
             <div className="flex justify-between items-center text-[10px] bg-white/80 p-2">
               <span className="font-bold text-slate-800 w-16">MANAGER</span>
-              <span className="font-mono text-slate-600 select-all">rohit.deshmukh@transitadmin.com</span>
+              <span className="font-mono text-slate-600 select-all">manager_test@transitadmin.com</span>
             </div>
             <div className="flex justify-between items-center text-[10px] bg-white/80 p-2">
               <span className="font-bold text-slate-800 w-16">EMPLOYEE</span>
-              <span className="font-mono text-slate-600 select-all">amit.kale@transitadmin.com</span>
+              <span className="font-mono text-slate-600 select-all">employee_test@transitadmin.com</span>
             </div>
             <div className="flex justify-between items-center text-[10px] bg-white/80 p-2">
               <span className="font-bold text-slate-800 w-16">DRIVER</span>
-              <span className="font-mono text-slate-600 select-all">suresh@transitadmin.com</span>
+              <span className="font-mono text-slate-600 select-all">driver_test@transitadmin.com</span>
             </div>
           </div>
         </div>
