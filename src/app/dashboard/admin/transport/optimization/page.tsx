@@ -197,6 +197,7 @@ export default function TransitAdminSPA() {
  driverName: "",
  driverPhone: "",
  licenseNumber: "",
+ driverAddress: "",
  });
 
  useEffect(() => {
@@ -310,6 +311,7 @@ export default function TransitAdminSPA() {
  driverName: "",
  driverPhone: "",
  licenseNumber: "",
+ driverAddress: "",
  });
  };
 
@@ -448,15 +450,28 @@ export default function TransitAdminSPA() {
  return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
  });
  
- // If previewing a generated plan, map its routes to the expected Route format for the map
- const activeRoutesRaw = (optimizationPlans && previewedStrategy)
- ? optimizationPlans[previewedStrategy].routes.map((r: any, idx: number) => ({
+ // If previewing a generated plan, show the generated routes for every optimized shift.
+ const previewRoutes = (optimizationPlans && previewedStrategy)
+ ? optimizationPlans[previewedStrategy].routes.map((r: any, idx: number) => {
+ const routeShiftId = r.shiftId || activeShiftId;
+ const routeShift = r.shift || shifts.find((shift) => shift.id === routeShiftId);
+
+ return ({
  ...r,
- id: `preview-${idx}`,
- cab: { vehicleNumber: r.vehicleNumber, driverName: r.driverName, driverPhone: r.driverPhone },
+ id: `preview-${routeShiftId || "shift"}-${idx}`,
+ shiftId: routeShiftId,
+ shift: routeShift,
+ cab: {
+ vehicleNumber: r.vehicleNumber,
+ driverName: r.driverName,
+ driverPhone: r.driverPhone,
+ driverAddress: r.startPoint ? "Configured cab start" : undefined,
+ driverX: r.startPoint?.x,
+ driverY: r.startPoint?.y,
+ },
  stops: r.stops.map((s: any) => ({
  ...s,
- id: `preview-stop-${s.employeeId}`,
+ id: `preview-stop-${routeShiftId || "shift"}-${s.employeeId}`,
  employee: {
  id: s.employeeId,
  name: s.employeeName,
@@ -467,9 +482,21 @@ export default function TransitAdminSPA() {
  phone: "N/A"
  }
  }))
- }))
+ });
+ })
+ : null;
+ const activeRoutesRaw = previewRoutes
+ ? [...previewRoutes].sort((a, b) => {
+ const timeA = a.shift?.startTime || "";
+ const timeB = b.shift?.startTime || "";
+ if (timeA !== timeB) return timeA.localeCompare(timeB);
+ return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
+ })
  : dbActiveRoutes;
  const activeRoutes = activeRoutesRaw as Route[];
+ const manifestRoutes = previewRoutes ? activeRoutes : [];
+ const getRouteShiftLabel = (route: any) =>
+ route.shift?.name || route.shiftName || shifts.find((shift) => shift.id === route.shiftId)?.name || "Shift";
 
  const selectedRoute = activeRoutes.find((r: any) => r.id === selectedRouteId);
  const totalViolations = activeRoutes.reduce(
@@ -504,6 +531,9 @@ export default function TransitAdminSPA() {
  totalStops: r.stops.length,
  }))
  );
+ const getViolationKey = (violation: any, index: number, routeId?: string) =>
+ violation.id ||
+ `${routeId || violation.routeId || "route"}-${violation.type || "violation"}-${violation.severity || "severity"}-${index}`;
 
  return (
  <div className="flex flex-col min-h-0 bg-[#f7f7f7] text-[#1c1b1f] selection:bg-[#1c1b1f] selection:text-white font-sans antialiased">
@@ -1192,9 +1222,9 @@ export default function TransitAdminSPA() {
  </div>
  </div>
 
- {activeRoutes.length === 0 ? (
+ {manifestRoutes.length === 0 ? (
  <div className="p-8 text-center text-[#9a9a9a] bg-[#f7f7f7]/20 border border-dashed border-slate-250 rounded-none">
- No active routes optimized. Select a shift above and click Optimize, or import a sheet date.
+ No manifest generated yet. Click Optimize Routing to generate route cards for the selected date.
  </div>
  ) : activeViewMode === "TABLE" ? (
  <div className="overflow-x-auto">
@@ -1211,7 +1241,7 @@ export default function TransitAdminSPA() {
  </tr>
  </thead>
  <tbody className="divide-y divide-slate-100 font-semibold text-[#4a4a4a]">
- {activeRoutes.map((route) => {
+ {manifestRoutes.map((route) => {
  const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
  const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
  const isSelected = selectedRouteId === route.id;
@@ -1219,7 +1249,7 @@ export default function TransitAdminSPA() {
  return (
  <tr
  key={route.id}
- onClick={() => setSelectedRouteId(route.id)}
+ onClick={() => setSelectedRouteId(isSelected ? null : route.id)}
  className={`cursor-pointer border-l-4 transition-all duration-150
  ${
  isSelected
@@ -1230,7 +1260,7 @@ export default function TransitAdminSPA() {
  >
  <td className="p-3">
  <div className="flex flex-col text-left">
- <span className="text-[#1c1b1f] font-bold">{route.shift?.name || "Shift"}</span>
+ <span className="text-[#1c1b1f] font-bold">{getRouteShiftLabel(route)}</span>
  <span className="text-[9px] text-[#9a9a9a] font-mono">{route.shift?.startTime || "N/A"} - {route.shift?.endTime || "N/A"}</span>
  </div>
  </td>
@@ -1324,7 +1354,7 @@ export default function TransitAdminSPA() {
  /* High-Visibility Route Cards View */
  <div className="flex flex-col gap-6">
  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1">
- {activeRoutes.slice(0, visibleCabsCount).map((route) => {
+ {manifestRoutes.slice(0, visibleCabsCount).map((route) => {
  const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
  const activeViolationsCount = route.violations.filter((v: any) => !v.resolved).length;
  const isSelected = selectedRouteId === route.id;
@@ -1336,7 +1366,7 @@ export default function TransitAdminSPA() {
  return (
  <div
  key={route.id}
- onClick={() => setSelectedRouteId(route.id)}
+ onClick={() => setSelectedRouteId(isSelected ? null : route.id)}
  className={`p-6 rounded-none bg-white border transition-all duration-200 flex flex-col gap-5 text-left cursor-pointer print:border-[#d0d0d0] print:shadow-none
  ${
  isSelected
@@ -1353,7 +1383,7 @@ export default function TransitAdminSPA() {
  Vehicle Assignment Details
  </span>
  <span className="bg-black text-white font-mono text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
-  {route.shift?.name || "Shift"} A Trip {route.tripSequence || 1}
+  {getRouteShiftLabel(route)} Trip {route.tripSequence || 1}
 </span>
  </div>
  <h3 className="text-base font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
@@ -1645,8 +1675,8 @@ export default function TransitAdminSPA() {
  <ShieldAlert className="w-4 h-4 text-[#6b6b6b]" />
  <span>{activeViolationsCount} Safety Compliance Warnings</span>
  </div>
- {route.violations.filter(v => !v.resolved).map(v => (
- <div key={v.id} className="pl-5 leading-normal text-red-750">
+ {route.violations.filter(v => !v.resolved).map((v, idx) => (
+ <div key={getViolationKey(v, idx, route.id)} className="pl-5 leading-normal text-red-750">
  • {v.notes}
  </div>
  ))}
@@ -1657,13 +1687,13 @@ export default function TransitAdminSPA() {
  })}
  </div>
  
- {visibleCabsCount < activeRoutes.length && (
+ {visibleCabsCount < manifestRoutes.length && (
  <div className="flex justify-center mt-2 print:hidden">
  <button
- onClick={() => setVisibleCabsCount(activeRoutes.length)}
+ onClick={() => setVisibleCabsCount(manifestRoutes.length)}
  className="px-6 py-2.5 bg-[#1c1b1f] text-white rounded-none text-xs font-bold hover:bg-black transition shadow-none"
  >
- Load More Cabs ({activeRoutes.length - visibleCabsCount} remaining) &raquo;
+ Load More Cabs ({manifestRoutes.length - visibleCabsCount} remaining) &raquo;
  </button>
  </div>
  )}
@@ -1688,9 +1718,9 @@ export default function TransitAdminSPA() {
  const activeViolations = activeViolationsList.filter(v => !v.resolved);
  const resolvedViolations = activeViolationsList.filter(v => v.resolved);
 
- const renderViolationCard = (v: any) => (
+ const renderViolationCard = (v: any, idx: number) => (
  <div
- key={v.id}
+ key={getViolationKey(v, idx)}
  className={`p-5 rounded-none border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all ${
  v.resolved
  ? "bg-[#f7f7f7] border-slate-150 opacity-75"
@@ -2512,7 +2542,7 @@ export default function TransitAdminSPA() {
  driverName: form.driverName.value,
  driverPhone: form.driverPhone.value,
  licenseNumber: form.licenseNumber.value,
- driverStartAddress: form.driverStartAddress.value,
+ driverAddress: form.driverAddress.value,
  status: form.status.value,
  };
  await updateCab(editingCab.id, updatedData);
@@ -2584,12 +2614,12 @@ export default function TransitAdminSPA() {
  </div>
  
  <div className="flex flex-col gap-1">
- <label className="text-[9px] font-extrabold uppercase text-[#9a9a9a]">Driver Start Location (Optional)</label>
+ <label className="text-[9px] font-extrabold uppercase text-[#9a9a9a]">Home Address / Starting Point</label>
  <input
  type="text"
- name="driverStartAddress"
+ name="driverAddress"
  placeholder="e.g. Pratap Nagar, Nagpur"
- defaultValue=""
+ defaultValue={editingCab.driverAddress || ""}
  className="w-full bg-white border border-[#e8e8e8] rounded-none text-xs py-2 px-3 focus:outline-none focus:border-[#d0d0d0]"
  />
  </div>

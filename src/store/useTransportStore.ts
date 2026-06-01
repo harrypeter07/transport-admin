@@ -26,6 +26,9 @@ export interface Cab {
   driverName?: string | null;
   driverPhone?: string | null;
   licenseNumber?: string | null;
+  driverAddress?: string | null;
+  driverX?: number | null;
+  driverY?: number | null;
 }
 
 export interface Shift {
@@ -89,6 +92,57 @@ export interface OptimizationPlans {
   capacityShortfall: number;
   totalCabCapacity: number;
   totalEmployees: number;
+}
+
+const STRATEGY_KEYS = ["MAXIMIZE_UTILIZATION", "MINIMIZE_TIME", "BALANCED"] as const;
+
+function mergeStrategyPlan(plans: StrategyPlan[]): StrategyPlan {
+  const routes = plans.flatMap((plan) => plan.routes);
+  const allDurations = routes.flatMap((route) =>
+    (route.stops || []).map((stop: any) => stop.etaMinutes).filter((mins: any) => typeof mins === "number")
+  );
+
+  return {
+    routes,
+    totalCabsUsed: routes.length,
+    totalEmployeesCovered: new Set(routes.flatMap((route) => (route.stops || []).map((stop: any) => stop.employeeId))).size,
+    totalDistance: Math.round(routes.reduce((sum, route) => sum + (route.totalDistance || 0), 0) * 10) / 10,
+    avgCommuteMins: allDurations.length
+      ? Math.round(allDurations.reduce((sum, mins) => sum + mins, 0) / allDurations.length)
+      : 0,
+    totalViolations: routes.reduce(
+      (sum, route) => sum + (route.violations || []).filter((violation: any) => !violation.resolved).length,
+      0
+    ),
+  };
+}
+
+function mergeOptimizationPlans(previews: OptimizationPlans[]): OptimizationPlans {
+  return {
+    MAXIMIZE_UTILIZATION: mergeStrategyPlan(previews.map((preview) => preview.MAXIMIZE_UTILIZATION)),
+    MINIMIZE_TIME: mergeStrategyPlan(previews.map((preview) => preview.MINIMIZE_TIME)),
+    BALANCED: mergeStrategyPlan(previews.map((preview) => preview.BALANCED)),
+    capacityShortfall: previews.reduce((sum, preview) => sum + (preview.capacityShortfall || 0), 0),
+    totalCabCapacity: previews.reduce((sum, preview) => sum + (preview.totalCabCapacity || 0), 0),
+    totalEmployees: previews.reduce((sum, preview) => sum + (preview.totalEmployees || 0), 0),
+  };
+}
+
+function tagPreviewRoutes(preview: OptimizationPlans, shift: Shift): OptimizationPlans {
+  const tagged = { ...preview } as OptimizationPlans;
+
+  STRATEGY_KEYS.forEach((key) => {
+    tagged[key] = {
+      ...preview[key],
+      routes: preview[key].routes.map((route) => ({
+        ...route,
+        shiftId: shift.id,
+        shift,
+      })),
+    };
+  });
+
+  return tagged;
 }
 
 interface TransportStore {
@@ -225,25 +279,47 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
   previewOptimization: async (isPickup) => {
     set({ previewing: true, optimizationPlans: null });
     try {
-      const res = await fetch("/api/optimization", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shiftId: get().activeShiftId,
-          isPickup,
-          date: get().selectedDate,
-          mode: "ALL",
-        }),
-      });
+      const state = get();
+      const shiftsToOptimize = state.shifts.length > 0 ? state.shifts : [];
+      const previews: OptimizationPlans[] = [];
+      const hardErrors: string[] = [];
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        set({ previewing: false });
-        return { success: false, error: errData.error || "Preview failed" };
+      for (const shift of shiftsToOptimize) {
+        const res = await fetch("/api/optimization", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shiftId: shift.id,
+            isPickup,
+            date: state.selectedDate,
+            mode: "ALL",
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const message = errData.error || `Preview failed for ${shift.name}`;
+          if (!message.toLowerCase().includes("no active employees")) {
+            hardErrors.push(`${shift.name}: ${message}`);
+          }
+          continue;
+        }
+
+        const data = await res.json();
+        if (data.preview) {
+          previews.push(tagPreviewRoutes(data.preview, shift));
+        }
       }
 
-      const data = await res.json();
-      set({ optimizationPlans: data.preview, previewing: false });
+      if (previews.length === 0) {
+        set({ previewing: false });
+        return {
+          success: false,
+          error: hardErrors[0] || "No active employees found across the configured shifts.",
+        };
+      }
+
+      set({ optimizationPlans: mergeOptimizationPlans(previews), previewing: false });
       return { success: true };
     } catch (e) {
       set({ previewing: false });
@@ -259,23 +335,33 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     const plan = (plans as any)[strategy] as { routes: any[] };
     set({ loading: true });
     try {
-      const res = await fetch("/api/optimization", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shiftId: get().activeShiftId,
-          isPickup,
-          date: get().selectedDate,
-          mode: "APPLY",
-          selectedStrategy: strategy,
-          previewRoutes: plan.routes,
-        }),
-      });
+      const routesByShift = plan.routes.reduce((groups: Record<string, any[]>, route) => {
+        const shiftId = route.shiftId || get().activeShiftId;
+        if (!shiftId) return groups;
+        groups[shiftId] = groups[shiftId] || [];
+        groups[shiftId].push(route);
+        return groups;
+      }, {});
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        set({ loading: false });
-        return { success: false, error: errData.error || "Apply failed" };
+      for (const [shiftId, previewRoutes] of Object.entries(routesByShift)) {
+        const res = await fetch("/api/optimization", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shiftId,
+            isPickup,
+            date: get().selectedDate,
+            mode: "APPLY",
+            selectedStrategy: strategy,
+            previewRoutes,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          set({ loading: false });
+          return { success: false, error: errData.error || "Apply failed" };
+        }
       }
 
       const dateStr = get().selectedDate;

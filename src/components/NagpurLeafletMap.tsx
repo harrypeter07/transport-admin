@@ -61,6 +61,33 @@ export default function LeafletMap({
  const [analyticsNormalGeom, setAnalyticsNormalGeom] = useState<[number, number][]>([]);
  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+ const getRouteStartLatLng = (route: Route): [number, number] => {
+ const cab = route.cab;
+ if ((route.tripSequence || 1) <= 1 && typeof cab?.driverX === "number" && typeof cab?.driverY === "number") {
+ return [cab.driverY, cab.driverX];
+ }
+ return [DEPOT_LAT, DEPOT_LNG];
+ };
+
+ const isDepotLatLng = ([lat, lng]: [number, number]) => (
+ Math.abs(lat - DEPOT_LAT) < 0.00001 && Math.abs(lng - DEPOT_LNG) < 0.00001
+ );
+
+ const buildRouteLatLngs = (
+ route: Route,
+ stopCoords: [number, number][]
+ ): [number, number][] => {
+ const start = getRouteStartLatLng(route);
+
+ if (route.isPickup) {
+ return [start, ...stopCoords, [DEPOT_LAT, DEPOT_LNG]];
+ }
+
+ return isDepotLatLng(start)
+ ? [[DEPOT_LAT, DEPOT_LNG], ...stopCoords]
+ : [start, [DEPOT_LAT, DEPOT_LNG], ...stopCoords];
+ };
+
  // Helper to fetch route geometry from OSRM
  const fetchOSRMGeometry = async (coords: [number, number][]) => {
  if (coords.length <= 1) return coords;
@@ -97,27 +124,17 @@ export default function LeafletMap({
 
  // 1. Build actual optimized coordinates
  const stopsList = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
- const optCoords: [number, number][] = [];
-
- if (route.isPickup) {
- stopsList.forEach((s) => optCoords.push([s.employee.y, s.employee.x]));
- optCoords.push([DEPOT_LAT, DEPOT_LNG]);
- } else {
- optCoords.push([DEPOT_LAT, DEPOT_LNG]);
- stopsList.forEach((s) => optCoords.push([s.employee.y, s.employee.x]));
- }
+ const optCoords = buildRouteLatLngs(
+ route,
+ stopsList.map((s) => [s.employee.y, s.employee.x])
+ );
 
  // 2. Build normal (naive alphabetical) coordinates
  const normalStopsList = [...route.stops].sort((a, b) => a.employee.name.localeCompare(b.employee.name));
- const normCoords: [number, number][] = [];
-
- if (route.isPickup) {
- normalStopsList.forEach((s) => normCoords.push([s.employee.y, s.employee.x]));
- normCoords.push([DEPOT_LAT, DEPOT_LNG]);
- } else {
- normCoords.push([DEPOT_LAT, DEPOT_LNG]);
- normalStopsList.forEach((s) => normCoords.push([s.employee.y, s.employee.x]));
- }
+ const normCoords = buildRouteLatLngs(
+ route,
+ normalStopsList.map((s) => [s.employee.y, s.employee.x])
+ );
 
  const optGeom = await fetchOSRMGeometry(optCoords);
  const normGeom = await fetchOSRMGeometry(normCoords);
@@ -157,19 +174,10 @@ export default function LeafletMap({
  const geometries: Record<string, [number, number][]> = {};
  for (const v of vars) {
  const stopsList = [...v.stops].sort((a, b) => a.stopOrder - b.stopOrder);
- const coords: [number, number][] = [];
-
-
-
- if (route.isPickup) {
- // Pickup starts at Driver/Passenger stops, ends at Depot
- stopsList.forEach((s) => coords.push([s.y, s.x])); // [lat, lng]
- coords.push([DEPOT_LAT, DEPOT_LNG]);
- } else {
- // Drop starts at Driver -> Depot, goes to passenger stops
- coords.push([DEPOT_LAT, DEPOT_LNG]);
- stopsList.forEach((s) => coords.push([s.y, s.x]));
- }
+ const coords = buildRouteLatLngs(
+ route,
+ stopsList.map((s) => [s.y, s.x])
+ );
 
  // Fetch curve details from OpenStreetMap OSRM geometry endpoint
  try {
@@ -341,14 +349,91 @@ export default function LeafletMap({
 
  const fitCoords: [number, number][] = [[DEPOT_LAT, DEPOT_LNG]];
 
- // 2. DETAILED VIEW: 1 Cab Selected -> Show 3 variations side-by-side
+ // 2. OVERVIEW: Always plot all active cabs so every shift remains visible.
+ const overviewSeenCoords: Record<string, number> = {};
+ routes.forEach((route, idx) => {
+ const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+ if (sortedStops.length === 0) return;
+
+ const routeColor = [
+ "#64748b", "#3b82f6", "#8b5cf6", "#ec4899", "#10b981", "#f97316"
+ ][idx % 6];
+ const isSelectedOverviewRoute = selectedRouteId === route.id;
+
+ const lineCoords = buildRouteLatLngs(
+ route,
+ sortedStops.map((s) => [s.employee.y, s.employee.x])
+ );
+ const routeStart = getRouteStartLatLng(route);
+
+ L.polyline(lineCoords, {
+ color: routeColor,
+ weight: isSelectedOverviewRoute ? 3 : 2,
+ opacity: isSelectedOverviewRoute ? 0.25 : 0.5,
+ dashArray: "4, 6",
+ })
+ .on("click", () => onSelectRoute(isSelectedOverviewRoute ? null : route.id))
+ .addTo(layerGroup);
+
+ sortedStops.forEach((stop) => {
+ if (isWithinBounds(stop.employee.y, stop.employee.x)) {
+ fitCoords.push([stop.employee.y, stop.employee.x]);
+ }
+
+ if (isSelectedOverviewRoute) return;
+
+ const coordKey = `${stop.employee.y.toFixed(5)}_${stop.employee.x.toFixed(5)}`;
+ const overlapCount = overviewSeenCoords[coordKey] || 0;
+ overviewSeenCoords[coordKey] = overlapCount + 1;
+
+ let markerY = stop.employee.y;
+ let markerX = stop.employee.x;
+
+ if (overlapCount > 0) {
+ const offsetDist = 0.0002;
+ const angle = overlapCount * (Math.PI / 3);
+ markerY += Math.sin(angle) * offsetDist;
+ markerX += Math.cos(angle) * offsetDist;
+ }
+
+ L.marker([markerY, markerX], {
+ icon: createEmployeeIcon(stop.employee.gender, false, false),
+ })
+ .on("click", () => onSelectRoute(route.id))
+ .addTo(layerGroup);
+ });
+
+ if (!isSelectedOverviewRoute && !isDepotLatLng(routeStart) && isWithinBounds(routeStart[0], routeStart[1])) {
+ fitCoords.push(routeStart);
+ L.marker(routeStart, {
+ icon: createDriverStartIcon(),
+ })
+ .on("click", () => onSelectRoute(route.id))
+ .addTo(layerGroup);
+ }
+ });
+
+ // 3. DETAILED VIEW: 1 Cab Selected -> Show selected stops and variations over the all-shift overview
  if (selectedRouteId) {
  const selectedRoute = routes.find((r) => r.id === selectedRouteId);
  if (selectedRoute && selectedRoute.stops.length > 0) {
  const stopsList = [...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+ const routeStart = getRouteStartLatLng(selectedRoute);
  
  // Track seen coordinates to apply a small jitter offset for overlapping markers
  const seenCoords: Record<string, number> = {};
+
+ if (!isDepotLatLng(routeStart) && isWithinBounds(routeStart[0], routeStart[1])) {
+ fitCoords.push(routeStart);
+ L.marker(routeStart, {
+ icon: createDriverStartIcon(),
+ })
+ .bindPopup(`
+ <strong>${selectedRoute.cab.driverName || "Driver"} Home / Starting Point</strong><br/>
+ ${selectedRoute.cab.driverAddress || "Configured cab start"}
+ `)
+ .addTo(layerGroup);
+ }
 
  // Draw stops markers
  stopsList.forEach((stop) => {
@@ -444,85 +529,15 @@ export default function LeafletMap({
  .addTo(layerGroup);
  });
  }
-
-
-
- // Zoom map to fit selected route stops and depot
- if (fitCoords.length > 1) {
- map.fitBounds(L.latLngBounds(fitCoords), { padding: [50, 50] });
  }
  }
- } 
- // 3. OVERVIEW: No Cab Selected -> Plot all active cabs as thin lines
- else {
- const overviewSeenCoords: Record<string, number> = {};
- routes.forEach((route, idx) => {
- const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
- if (sortedStops.length === 0) return;
 
- const routeColor = [
- "#64748b", "#3b82f6", "#8b5cf6", "#ec4899", "#10b981", "#f97316"
- ][idx % 6];
-
- const lineCoords: [number, number][] = [];
- 
-
-
- if (route.isPickup) {
- sortedStops.forEach((s) => lineCoords.push([s.employee.y, s.employee.x]));
- lineCoords.push([DEPOT_LAT, DEPOT_LNG]);
- } else {
- lineCoords.push([DEPOT_LAT, DEPOT_LNG]);
- sortedStops.forEach((s) => lineCoords.push([s.employee.y, s.employee.x]));
- }
-
- // Draw simple thin polyline connecting stops
- L.polyline(lineCoords, {
- color: routeColor,
- weight: 2,
- opacity: 0.5,
- dashArray: "4, 6",
- })
- .on("click", () => onSelectRoute(route.id))
- .addTo(layerGroup);
-
-
-
- // Draw minor markers for stops
- sortedStops.forEach((stop) => {
- if (isWithinBounds(stop.employee.y, stop.employee.x)) {
- fitCoords.push([stop.employee.y, stop.employee.x]);
- }
-
- const coordKey = `${stop.employee.y.toFixed(5)}_${stop.employee.x.toFixed(5)}`;
- const overlapCount = overviewSeenCoords[coordKey] || 0;
- overviewSeenCoords[coordKey] = overlapCount + 1;
-
- let markerY = stop.employee.y;
- let markerX = stop.employee.x;
-
- if (overlapCount > 0) {
- const offsetDist = 0.0002; 
- const angle = overlapCount * (Math.PI / 3);
- markerY += Math.sin(angle) * offsetDist;
- markerX += Math.cos(angle) * offsetDist;
- }
- 
- L.marker([markerY, markerX], {
- icon: createEmployeeIcon(stop.employee.gender, false, false),
- })
- .on("click", () => onSelectRoute(route.id))
- .addTo(layerGroup);
- });
- });
-
- // Fit map bounds to show all active employees across Nagpur
+ // Fit map bounds to show all active employees across all shifts.
  if (fitCoords.length > 1) {
  map.fitBounds(L.latLngBounds(fitCoords), { padding: [40, 40] });
  } else {
  // Reset viewport directly to depot when no routes exist, keeping it centered
  map.setView([DEPOT_LAT, DEPOT_LNG], 13, { animate: true });
- }
  }
  }, [routes, selectedRouteId, variationGeometries, analyticsOptimizedGeom, analyticsNormalGeom, mode]);
 

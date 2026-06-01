@@ -301,7 +301,7 @@ export default function CabsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
                   <CField label="License Number" name="licenseNumber" placeholder="DL-..." defaultValue={editingCab?.licenseNumber} />
                   <div>
-                    <label className="block text-xs font-bold text-[#4a4a4a] mb-1.5">Start Location (Home)</label>
+                    <label className="block text-xs font-bold text-[#4a4a4a] mb-1.5">Home Address / Starting Point</label>
                     <LocationAutocomplete
                       name="driverAddress"
                       className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]"

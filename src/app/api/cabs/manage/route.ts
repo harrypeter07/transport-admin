@@ -10,10 +10,18 @@ export async function POST(req: NextRequest) {
  if (auth.response) return auth.response;
 
  const body = await req.json();
- const { vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber } = body;
+ const { vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress } = body;
 
  if (!vehicleNumber || !capacity || !driverName) {
  return NextResponse.json({ error: "Missing required fields (vehicleNumber, capacity, driverName)" }, { status: 400 });
+ }
+
+ let driverX = null;
+ let driverY = null;
+ if (driverAddress) {
+ const coords = await geocodeNagpurPlace(driverAddress);
+ driverX = coords.x;
+ driverY = coords.y;
  }
 
  const cab = await prisma.cab.create({
@@ -25,6 +33,9 @@ export async function POST(req: NextRequest) {
  driverName: driverName,
  driverPhone: driverPhone || "+91 99000 00000",
  licenseNumber: licenseNumber || `DL-MANUAL-${Math.floor(1000 + Math.random() * 9000)}`,
+ driverAddress: driverAddress || null,
+ driverX,
+ driverY,
  },
  });
 
@@ -85,7 +96,7 @@ export async function PATCH(req: NextRequest) {
  if (auth.response) return auth.response;
 
  const body = await req.json();
- const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverStartAddress, status } = body;
+ const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress, driverStartAddress, status } = body;
 
  if (!id) {
  return NextResponse.json({ error: "Cab ID is required" }, { status: 400 });
@@ -99,6 +110,20 @@ export async function PATCH(req: NextRequest) {
  return NextResponse.json({ error: "Cab not found" }, { status: 404 });
  }
 
+ const nextDriverAddress = driverAddress !== undefined ? driverAddress : driverStartAddress;
+ let driverX: number | null | undefined;
+ let driverY: number | null | undefined;
+ if (nextDriverAddress !== undefined) {
+ if (nextDriverAddress) {
+ const coords = await geocodeNagpurPlace(nextDriverAddress);
+ driverX = coords.x;
+ driverY = coords.y;
+ } else {
+ driverX = null;
+ driverY = null;
+ }
+ }
+
  const updatedCab = await prisma.cab.update({
  where: { id },
  data: {
@@ -109,6 +134,9 @@ export async function PATCH(req: NextRequest) {
  driverName: driverName !== undefined ? driverName : undefined,
  driverPhone: driverPhone !== undefined ? driverPhone : undefined,
  licenseNumber: licenseNumber !== undefined ? licenseNumber : undefined,
+ driverAddress: nextDriverAddress !== undefined ? (nextDriverAddress || null) : undefined,
+ driverX,
+ driverY,
  },
  });
 

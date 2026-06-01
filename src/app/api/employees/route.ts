@@ -4,8 +4,45 @@ import { parseExcelRoster } from "@/lib/excelParser";
 import { geocodePlace, makeDepot, geocodeNagpurPlace } from "@/lib/optimization";
 
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { verifySession } from "@/lib/dal";
 import { requireApiRole } from "@/lib/apiAuth";
+
+function textValue(value: unknown): string {
+ return typeof value === "string" ? value.trim() : "";
+}
+
+function nullableTextValue(value: unknown): string | null {
+ const text = textValue(value);
+ return text || null;
+}
+
+function prismaEmployeeWriteResponse(error: unknown) {
+ if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return null;
+
+ if (error.code === "P2002") {
+ const target = error.meta?.target;
+ const fields = Array.isArray(target) ? target : typeof target === "string" ? [target] : [];
+
+ if (fields.includes("employeeCode")) {
+ return NextResponse.json({ error: "An employee with this code already exists." }, { status: 409 });
+ }
+ if (fields.includes("email")) {
+ return NextResponse.json({ error: "An employee or user with this email already exists." }, { status: 409 });
+ }
+ if (fields.includes("userId")) {
+ return NextResponse.json({ error: "This user account is already linked to another employee." }, { status: 409 });
+ }
+
+ return NextResponse.json({ error: "Employee details conflict with an existing record." }, { status: 409 });
+ }
+
+ if (error.code === "P2003") {
+ return NextResponse.json({ error: "Selected manager or shift is invalid." }, { status: 400 });
+ }
+
+ return null;
+}
 
 // GET all employees
 export async function GET(req: NextRequest) {
@@ -19,13 +56,13 @@ export async function GET(req: NextRequest) {
  const shiftId = searchParams.get("shiftId");
 
  try {
- const whereClause: any = {
+ const whereClause: Prisma.EmployeeWhereInput = {
  status: "ACTIVE",
  ...(search && {
  OR: [
- { name: { contains: search, mode: "insensitive" } },
- { employeeCode: { contains: search, mode: "insensitive" } },
- { department: { contains: search, mode: "insensitive" } },
+ { name: { contains: search, mode: "insensitive" as const } },
+ { employeeCode: { contains: search, mode: "insensitive" as const } },
+ { department: { contains: search, mode: "insensitive" as const } },
  ],
  }),
  ...(shiftId && { shiftId }),
@@ -128,7 +165,7 @@ export async function POST(req: NextRequest) {
 
  for (const row of rows) {
  try {
- let coords = await geocodeNagpurPlace(row.address || row.name);
+ const coords = await geocodeNagpurPlace(row.address || row.name);
  const employeeEmail = row.email || `${row.employeeCode.toLowerCase()}@corporate.com`;
 
  await prisma.$transaction(async (tx) => {
@@ -189,7 +226,16 @@ export async function POST(req: NextRequest) {
  } else {
  // Create single employee manually
  const body = await req.json();
- const { employeeCode, name, gender, phone, email, address, department, designation, managerId, shiftId } = body;
+ const employeeCode = textValue(body.employeeCode);
+ const name = textValue(body.name);
+ const gender = textValue(body.gender);
+ const phone = textValue(body.phone);
+ const email = textValue(body.email);
+ const address = textValue(body.address);
+ const department = textValue(body.department) || "Engineering";
+ const designation = textValue(body.designation) || "Engineer";
+ const managerId = nullableTextValue(body.managerId);
+ const shiftId = nullableTextValue(body.shiftId);
 
  if (!employeeCode || !name || !gender) {
  return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -201,8 +247,12 @@ export async function POST(req: NextRequest) {
  });
  const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
 
- let coords = await geocodeNagpurPlace(
- address || name
+ const coords = await geocodePlace(
+ address || name,
+ settings.defaultCity,
+ settings.defaultCountry,
+ depot,
+ settings.maxPickupRadiusKm
  );
 
  if (!coords) {
@@ -212,10 +262,37 @@ export async function POST(req: NextRequest) {
  }
  const employeeEmail = email || `${employeeCode.toLowerCase()}@corporate.com`;
 
+ const existingEmployee = await prisma.employee.findFirst({
+ where: {
+ OR: [
+ { employeeCode },
+ { email: employeeEmail },
+ ],
+ },
+ select: { employeeCode: true, email: true },
+ });
+
+ if (existingEmployee?.employeeCode === employeeCode) {
+ return NextResponse.json({ error: "An employee with this code already exists." }, { status: 409 });
+ }
+
+ if (existingEmployee?.email === employeeEmail) {
+ return NextResponse.json({ error: "An employee with this email already exists." }, { status: 409 });
+ }
+
+ const existingUser = await prisma.user.findUnique({
+ where: { email: employeeEmail },
+ include: { employee: { select: { id: true } } },
+ });
+
+ if (existingUser?.employee) {
+ return NextResponse.json({ error: "This email is already linked to another employee account." }, { status: 409 });
+ }
+
  const employee = await prisma.$transaction(async (tx) => {
- let user = await tx.user.findUnique({ where: { email: employeeEmail } });
- if (!user) {
- user = await tx.user.create({
+ let userId = existingUser?.id;
+ if (!userId) {
+ const user = await tx.user.create({
  data: {
  email: employeeEmail,
  password: defaultPassword,
@@ -224,6 +301,7 @@ export async function POST(req: NextRequest) {
  requiresPasswordChange: true,
  },
  });
+ userId = user.id;
  }
 
  return await tx.employee.create({
@@ -236,12 +314,12 @@ export async function POST(req: NextRequest) {
  address: address || "Sadar, Nagpur",
  x: coords.x,
  y: coords.y,
- department: department || "Engineering",
- designation: designation || "Engineer",
- managerId: managerId || null,
- shiftId: shiftId || null,
+ department,
+ designation,
+ managerId,
+ shiftId,
  status: "ACTIVE",
- userId: user.id,
+ userId,
  },
  });
  });
@@ -250,6 +328,8 @@ export async function POST(req: NextRequest) {
  }
  } catch (e) {
  console.error("Error creating employee(s):", e);
+ const response = prismaEmployeeWriteResponse(e);
+ if (response) return response;
  return NextResponse.json({ error: "Internal server error" }, { status: 500 });
  }
 }

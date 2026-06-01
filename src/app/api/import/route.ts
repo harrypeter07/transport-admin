@@ -10,6 +10,37 @@ import bcrypt from "bcryptjs";
 export const dynamic = "force-dynamic";
 
 const AVG_SPEED = 0.5; // km per minute
+const TEST_LOGIN_ACCOUNTS = [
+ { email: "admin@transitadmin.com", name: "Admin User", role: "ADMIN", password: "Admin@1234" },
+ { email: "manager@test.com", name: "Sarah Manager", role: "MANAGER", password: "Test@123" },
+ { email: "employee@test.com", name: "John Employee", role: "EMPLOYEE", password: "Test@123" },
+];
+
+async function ensureTestLoginAccounts() {
+ for (const account of TEST_LOGIN_ACCOUNTS) {
+ const password = await bcrypt.hash(account.password, 10);
+ await prisma.user.upsert({
+ where: { email: account.email },
+ update: {
+ name: account.name,
+ role: account.role,
+ password,
+ isActive: true,
+ requiresPasswordChange: false,
+ resetToken: null,
+ resetTokenExpiry: null,
+ },
+ create: {
+ email: account.email,
+ name: account.name,
+ role: account.role,
+ password,
+ isActive: true,
+ requiresPasswordChange: false,
+ },
+ });
+ }
+}
 
 function formatExcelTime(val: any): string {
  if (typeof val === "number") {
@@ -351,20 +382,38 @@ export async function POST(req: NextRequest) {
  }
 }
 
-// DELETE: Reset database — clears all DB records and deletes the uploaded roster.xlsx file
+// DELETE: Reset transport/business data and keep test login accounts ready for the next Excel import
 export async function DELETE() {
  try {
  const auth = await requireApiRole(["ADMIN"]);
  if (auth.response) return auth.response;
 
+ const preservedEmails = TEST_LOGIN_ACCOUNTS.map((account) => account.email);
+
  await prisma.$transaction([
+ prisma.routeDeviation.deleteMany(),
+ prisma.vehicleLocation.deleteMany(),
+ prisma.operationalEvent.deleteMany(),
+ prisma.notification.deleteMany(),
+ prisma.notificationSettings.deleteMany(),
  prisma.violation.deleteMany(),
  prisma.routeStop.deleteMany(),
  prisma.route.deleteMany(),
+ prisma.timingChangeRequest.deleteMany(),
+ prisma.leaveRequest.deleteMany(),
  prisma.employee.deleteMany(),
  prisma.cab.deleteMany(),
  prisma.shift.deleteMany(),
+ prisma.holiday.deleteMany(),
+ prisma.systemSettings.deleteMany(),
+ prisma.user.deleteMany({ where: { email: { notIn: preservedEmails } } }),
  ]);
+ await ensureTestLoginAccounts();
+ await prisma.systemSettings.upsert({
+ where: { id: "default" },
+ update: {},
+ create: { id: "default" },
+ });
 
  const filePath = path.join(process.cwd(), "roster.xlsx");
  if (fs.existsSync(filePath)) {
@@ -373,7 +422,8 @@ export async function DELETE() {
 
  return NextResponse.json({
  success: true,
- message: "Database has been reset and the uploaded roster file has been deleted."
+ message: "Transport data has been cleared. Test login accounts are preserved and the uploaded roster file has been deleted.",
+ preservedAccounts: preservedEmails,
  });
  } catch (e) {
  console.error("Failed resetting database:", e);

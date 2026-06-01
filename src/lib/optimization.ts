@@ -44,6 +44,7 @@ export interface OptimizedRoute {
   capacity: number;
   driverName: string;
   driverPhone: string;
+  startPoint?: Point;
   stops: OptimizedRouteStop[];
   totalDistance: number;
   totalDuration: number;
@@ -83,6 +84,35 @@ export function getDistance(p1: Point, p2: Point): number {
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return c * R * 1.3; // estimated road distance in km
+}
+
+function isSamePoint(p1: Point, p2: Point): boolean {
+  return Math.abs(p1.x - p2.x) < 0.00001 && Math.abs(p1.y - p2.y) < 0.00001;
+}
+
+function buildCabRoutePoints(
+  stops: Point[],
+  isPickup: boolean,
+  startPoint: Point,
+  depot: Point
+): Point[] {
+  if (stops.length === 0) return [];
+
+  if (isPickup) {
+    return [startPoint, ...stops, depot];
+  }
+
+  return isSamePoint(startPoint, depot)
+    ? [depot, ...stops]
+    : [startPoint, depot, ...stops];
+}
+
+function calculateRoutePointsDistance(points: Point[]): number {
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    total += getDistance(points[i], points[i + 1]);
+  }
+  return total;
 }
 
 /**
@@ -544,6 +574,7 @@ export async function optimizeRoutes(
     
     const cab = sortedCabs[i];
     const capacity = cab.capacity;
+    const startPoint = cab.startPoint || depot;
 
     // Pick a seed employee (furthest from depot to bundle remote areas together)
     let seedIdx = 0;
@@ -612,10 +643,9 @@ export async function optimizeRoutes(
     const stops: OptimizedRouteStop[] = [];
 
     if (isPickup) {
-      // Pickup route stop details: employee pickup order ➔ depot
-      // Start from depot and add distance to first stop so ETA for Stop 1 is non-zero
+      // Pickup route: cab start -> employee pickup order -> depot.
       if (safetyCorrectedRoute.length > 0) {
-        currentDistance += getDistance(depot, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
+        currentDistance += getDistance(startPoint, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
       }
       for (let j = 0; j < safetyCorrectedRoute.length; j++) {
         const emp = safetyCorrectedRoute[j];
@@ -635,14 +665,16 @@ export async function optimizeRoutes(
           status: "PENDING",
         });
       }
-      // Add final leg to depot
       if (safetyCorrectedRoute.length > 0) {
         const lastEmp = safetyCorrectedRoute[safetyCorrectedRoute.length - 1];
         currentDistance += getDistance({ x: lastEmp.x, y: lastEmp.y }, depot);
       }
     } else {
-      // Drop route stop details: depot ➔ employee drop order
+      // Drop route: cab start -> depot -> employee drop order.
       if (safetyCorrectedRoute.length > 0) {
+        if (!isSamePoint(startPoint, depot)) {
+          currentDistance += getDistance(startPoint, depot);
+        }
         currentDistance += getDistance(depot, { x: safetyCorrectedRoute[0].x, y: safetyCorrectedRoute[0].y });
       }
       for (let j = 0; j < safetyCorrectedRoute.length; j++) {
@@ -682,6 +714,7 @@ export async function optimizeRoutes(
       capacity: cab.capacity,
       driverName: cab.driverName,
       driverPhone: cab.driverPhone,
+      startPoint,
       stops,
       totalDistance: Math.round(currentDistance * 10) / 10,
       totalDuration: Math.round(currentDistance / AVG_SPEED) + (isPickup ? 10 : 0),
@@ -1415,7 +1448,7 @@ async function buildRoutesFromAssignments(
   const routes: OptimizedRoute[] = [];
 
   for (const { cab, cluster } of assignments) {
-      const startPoint = cab.startPoint || depot;
+    const startPoint = cab.startPoint || depot;
     if (cluster.length === 0) continue;
 
     // Hard cap: never assign more stops than the cab's stated capacity
@@ -1432,7 +1465,10 @@ async function buildRoutesFromAssignments(
     if (isPickup && safeRoute.length > 0) {
       cumulativeDist += getDistance(startPoint, { x: safeRoute[0].x, y: safeRoute[0].y });
     } else if (!isPickup && safeRoute.length > 0) {
-      cumulativeDist += getDistance(startPoint, { x: safeRoute[0].x, y: safeRoute[0].y });
+      if (!isSamePoint(startPoint, depot)) {
+        cumulativeDist += getDistance(startPoint, depot);
+      }
+      cumulativeDist += getDistance(depot, { x: safeRoute[0].x, y: safeRoute[0].y });
     }
 
     for (let j = 0; j < safeRoute.length; j++) {
@@ -1456,39 +1492,30 @@ async function buildRoutesFromAssignments(
 
     if (isPickup && safeRoute.length > 0) {
       const last = safeRoute[safeRoute.length - 1];
-      cumulativeDist += getDistance({ x: last.x, y: last.y }, startPoint);
+      cumulativeDist += getDistance({ x: last.x, y: last.y }, depot);
     }
 
     // Accurate road distance via Google Maps or OSRM
     let distance = 0, duration = 0;
 
-    if (apiKey && safeRoute.length > 0) {
-      const points = [startPoint, ...safeRoute.map(e => ({ x: e.x, y: e.y }))];
+    if (safeRoute.length > 0) {
+      const points = buildCabRoutePoints(
+        safeRoute.map(e => ({ x: e.x, y: e.y })),
+        isPickup,
+        startPoint,
+        depot
+      );
       const { distanceMatrix, durationMatrix } = await fetchGoogleMapsMatrix(points, apiKey);
-      const n = safeRoute.length;
-
-      if (isPickup) {
-        for (let j = 1; j < n; j++) {
-          distance += distanceMatrix[j][j + 1] ?? 0;
-          duration += durationMatrix[j][j + 1] ?? 0;
-        }
-        distance += distanceMatrix[n]?.[0] ?? 0;
-        duration += (durationMatrix[n]?.[0] ?? 0) + 10;
-      } else {
-        distance += distanceMatrix[0]?.[1] ?? 0;
-        duration += durationMatrix[0]?.[1] ?? 0;
-        for (let j = 1; j < n; j++) {
-          distance += distanceMatrix[j][j + 1] ?? 0;
-          duration += durationMatrix[j][j + 1] ?? 0;
-        }
+      for (let j = 0; j < points.length - 1; j++) {
+        distance += distanceMatrix[j]?.[j + 1] ?? 0;
+        duration += durationMatrix[j]?.[j + 1] ?? 0;
       }
-    }
-
-    // Fall back to OSRM if Google Maps gave us 0 or key was absent
-    if (distance === 0) {
-      const osrm = await fetchOSRMRoute(safeRoute.map(e => ({ x: e.x, y: e.y })), isPickup, startPoint);
-      distance = osrm.distance;
-      duration = osrm.duration;
+      if (isPickup) {
+        duration += 10;
+      }
+      if (distance === 0) {
+        distance = Math.round(calculateRoutePointsDistance(points) * 10) / 10;
+      }
     }
 
     const violations = checkSafetyViolations(
@@ -1505,6 +1532,7 @@ async function buildRoutesFromAssignments(
       capacity: cab.capacity,
       driverName: cab.driverName || "Unassigned",
       driverPhone: cab.driverPhone || "N/A",
+      startPoint,
       stops,
       totalDistance: Math.round(distance * 10) / 10,
       totalDuration: duration || Math.round(cumulativeDist / AVG_SPEED) + (isPickup ? 10 : 0),
