@@ -8,6 +8,7 @@ export default function ShiftsPage() {
  const [shifts, setShifts] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [showModal, setShowModal] = useState(false);
+ const [editingShift, setEditingShift] = useState<any | null>(null);
  const [submitting, setSubmitting] = useState(false);
  const [formError, setFormError] = useState<string | null>(null);
  const formRef = useRef<HTMLFormElement>(null);
@@ -23,7 +24,7 @@ export default function ShiftsPage() {
 
  useEffect(() => { fetchShifts(); }, []);
 
- const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
  e.preventDefault();
  setSubmitting(true);
  setFormError(null);
@@ -34,18 +35,21 @@ export default function ShiftsPage() {
  endTime: data.get("endTime"),
  };
  try {
- const res = await fetch("/api/shifts", {
- method: "POST",
+ const url = editingShift ? `/api/shifts/${editingShift.id}` : "/api/shifts";
+ const method = editingShift ? "PUT" : "POST";
+ const res = await fetch(url, {
+ method,
  headers: { "Content-Type": "application/json" },
  body: JSON.stringify(payload),
  });
  if (res.ok) {
  setShowModal(false);
+ setEditingShift(null);
  formRef.current?.reset();
  fetchShifts();
  } else {
  const err = await res.json();
- setFormError(err.error || "Failed to create shift.");
+ setFormError(err.error || `Failed to ${editingShift ? "update" : "create"} shift.`);
  }
  } catch {
  setFormError("Network error. Please try again.");
@@ -84,7 +88,7 @@ export default function ShiftsPage() {
  <p className="text-[#6b6b6b] text-sm mt-0.5">Configure work shifts and view allocated resources per shift.</p>
  </div>
  <button
- onClick={() => { setShowModal(true); setFormError(null); }}
+ onClick={() => { setEditingShift(null); setShowModal(true); setFormError(null); }}
  className="bg-[#1c1b1f] text-white px-4 py-2 rounded-none text-xs font-bold hover:bg-black flex items-center gap-2 transition"
  >
  <Plus className="w-3.5 h-3.5" /> Add Shift
@@ -110,7 +114,7 @@ export default function ShiftsPage() {
  </div>
  </div>
  <div className="flex gap-1">
- <button className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Edit className="w-3.5 h-3.5" /></button>
+ <button onClick={() => { setEditingShift(shift); setShowModal(true); setFormError(null); }} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Edit className="w-3.5 h-3.5" /></button>
  <button onClick={() => handleDelete(shift.id)} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
  </div>
  </div>
@@ -163,31 +167,31 @@ export default function ShiftsPage() {
  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#1c1b1f]/60 backdrop-blur-md animate-fadeIn">
  <div className="bg-white/95 backdrop-blur-xl rounded-none border border-white/20 shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
  <div className="flex items-center justify-between p-6 border-b border-slate-100/80 bg-white/50 sticky top-0 z-10">
- <h2 className="text-lg font-black text-[#1c1b1f] tracking-tight">Add Shift</h2>
- <button onClick={() => setShowModal(false)} className="p-2 rounded-none hover:bg-slate-200/50 text-[#6b6b6b] hover:text-[#1c1b1f] transition-all bg-[#f7f7f7]/50"><X className="w-5 h-5" /></button>
+ <h2 className="text-lg font-black text-[#1c1b1f] tracking-tight">{editingShift ? "Edit Shift" : "Add Shift"}</h2>
+ <button onClick={() => { setShowModal(false); setEditingShift(null); }} className="p-2 rounded-none hover:bg-slate-200/50 text-[#6b6b6b] hover:text-[#1c1b1f] transition-all bg-[#f7f7f7]/50"><X className="w-5 h-5" /></button>
  </div>
- <form ref={formRef} onSubmit={handleCreate} className="p-6 space-y-6 bg-white/40">
+ <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6 bg-white/40">
  {formError && (
  <div className="rounded-none border border-[#e8e8e8] bg-[#f7f7f7]/80 p-4 text-sm font-semibold text-[#1c1b1f] backdrop-blur-sm">{formError}</div>
  )}
  <div>
  <label className="block text-xs font-bold text-[#4a4a4a] mb-1.5">Shift Name<span className="text-[#6b6b6b] ml-0.5">*</span></label>
- <input name="name" required placeholder="Morning Shift" className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]" />
+ <input name="name" required defaultValue={editingShift?.name} placeholder="Morning Shift" className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]" />
  </div>
  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
  <div>
  <label className="block text-xs font-bold text-[#4a4a4a] mb-1.5">Start Time<span className="text-[#6b6b6b] ml-0.5">*</span></label>
- <input name="startTime" type="time" required className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]" />
+ <input name="startTime" type="time" required defaultValue={editingShift?.startTime} className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]" />
  </div>
  <div>
  <label className="block text-xs font-bold text-[#4a4a4a] mb-1.5">End Time<span className="text-[#6b6b6b] ml-0.5">*</span></label>
- <input name="endTime" type="time" required className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]" />
+ <input name="endTime" type="time" required defaultValue={editingShift?.endTime} className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]" />
  </div>
  </div>
  <div className="flex justify-end gap-3 pt-6 border-t border-slate-100/80">
- <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2.5 text-sm font-bold text-[#6b6b6b] hover:text-[#1c1b1f] border border-[#e8e8e8] rounded-none hover:bg-[#f7f7f7] transition-all shadow-none">Cancel</button>
+ <button type="button" onClick={() => { setShowModal(false); setEditingShift(null); }} className="px-5 py-2.5 text-sm font-bold text-[#6b6b6b] hover:text-[#1c1b1f] border border-[#e8e8e8] rounded-none hover:bg-[#f7f7f7] transition-all shadow-none">Cancel</button>
  <button type="submit" disabled={submitting} className="px-6 py-2.5 text-sm font-bold text-white bg-[#1c1b1f] hover:bg-black shadow-none shadow-slate-900/20 rounded-none transition-all disabled:opacity-50">
- {submitting ? "Creating…" : "Create Shift"}
+ {submitting ? (editingShift ? "Updating…" : "Creating…") : (editingShift ? "Update Shift" : "Create Shift")}
  </button>
  </div>
  </form>
