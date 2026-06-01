@@ -166,6 +166,11 @@ export async function POST(req: NextRequest) {
  for (const row of rows) {
  try {
  const coords = await geocodeNagpurPlace(row.address || row.name);
+ if (!coords) {
+ console.warn(`Skipping row ${row.employeeCode}: address could not be geocoded precisely`);
+ skippedCount++;
+ continue;
+ }
  const employeeEmail = row.email || `${row.employeeCode.toLowerCase()}@corporate.com`;
 
  await prisma.$transaction(async (tx) => {

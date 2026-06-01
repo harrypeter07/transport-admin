@@ -63,17 +63,43 @@ export default function LeafletMap({
  const [analyticsNormalGeom, setAnalyticsNormalGeom] = useState<[number, number][]>([]);
  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
- const getRouteStartLatLng = (route: Route): [number, number] => {
- const cab = route.cab;
- if ((route.tripSequence || 1) <= 1 && typeof cab?.driverX === "number" && typeof cab?.driverY === "number") {
- return [cab.driverY, cab.driverX];
- }
- return [DEPOT_LAT, DEPOT_LNG];
- };
-
  const isDepotLatLng = ([lat, lng]: [number, number]) => (
  Math.abs(lat - DEPOT_LAT) < 0.00001 && Math.abs(lng - DEPOT_LNG) < 0.00001
  );
+
+ const isAirportVenueIntent = (value: string) => {
+ const text = value.toLowerCase();
+ return /\b(airport|terminal|aerodrome)\b/.test(text) && !/\bairport\s+road\b/.test(text);
+ };
+
+ const isNearNagpurAirport = ([lat, lng]: [number, number]) => {
+ const airportLat = 21.0922;
+ const airportLng = 79.0472;
+ const latKm = (lat - airportLat) * 111;
+ const lngKm = (lng - airportLng) * 103;
+ return Math.sqrt(latKm * latKm + lngKm * lngKm) < 1.2;
+ };
+
+ const hasPreciseDriverStart = (route: Route) => {
+ const cab = route.cab;
+ const address = cab?.driverAddress?.trim() ?? "";
+ if ((route.tripSequence || 1) > 1 || !address) return false;
+ if (typeof cab?.driverX !== "number" || typeof cab?.driverY !== "number") return false;
+
+ const start: [number, number] = [cab.driverY, cab.driverX];
+ if (!Number.isFinite(start[0]) || !Number.isFinite(start[1])) return false;
+ if (!isWithinBounds(start[0], start[1]) || isDepotLatLng(start)) return false;
+ if (isNearNagpurAirport(start) && !isAirportVenueIntent(address)) return false;
+ return true;
+ };
+
+ const getRouteStartLatLng = (route: Route): [number, number] => {
+ const cab = route.cab;
+ if (hasPreciseDriverStart(route)) {
+ return [cab!.driverY!, cab!.driverX!];
+ }
+ return [DEPOT_LAT, DEPOT_LNG];
+ };
 
  const buildRouteLatLngs = (
  route: Route,

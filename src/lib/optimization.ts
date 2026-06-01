@@ -924,9 +924,248 @@ export async function optimizeRoutes(
   return optimizedRoutes;
 }
 
-const geocodeCache: { [key: string]: Point } = {};
+const geocodeCache: { [key: string]: Point | null } = {};
 let osmDisabled = false;
 let osmFailedCount = 0;
+
+type NominatimResult = {
+  lat?: string;
+  lon?: string;
+  class?: string;
+  type?: string;
+  display_name?: string;
+  importance?: number | string;
+  place_rank?: number | string;
+};
+
+type GoogleGeocodeResult = {
+  formatted_address?: string;
+  partial_match?: boolean;
+  types?: string[];
+  geometry?: {
+    location?: { lat?: number; lng?: number };
+    location_type?: string;
+  };
+};
+
+const GEOCODE_STOP_WORDS = new Set([
+  "india",
+  "maharashtra",
+  "nagpur",
+  "near",
+  "opposite",
+  "behind",
+  "beside",
+  "road",
+  "rd",
+  "street",
+  "st",
+  "lane",
+  "colony",
+  "nagar",
+]);
+
+const BROAD_OSM_TYPES = new Set([
+  "administrative",
+  "boundary",
+  "city",
+  "town",
+  "village",
+  "state",
+  "country",
+  "postcode",
+]);
+
+const BROAD_GOOGLE_TYPES = new Set([
+  "country",
+  "administrative_area_level_1",
+  "administrative_area_level_2",
+  "locality",
+  "postal_code",
+]);
+
+function geocodeTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((token) => token.length > 2 && !GEOCODE_STOP_WORDS.has(token))
+  );
+}
+
+function tokenOverlapScore(input: string, label: string): number {
+  const inputTokens = geocodeTokens(input);
+  if (inputTokens.size === 0) return 0;
+  const labelTokens = geocodeTokens(label);
+  let matches = 0;
+  inputTokens.forEach((token) => {
+    if (labelTokens.has(token)) matches++;
+  });
+  return matches / inputTokens.size;
+}
+
+function isAirportVenueIntent(value: string): boolean {
+  const text = value.toLowerCase();
+  return /\b(airport|terminal|aerodrome)\b/.test(text) && !/\bairport\s+road\b/.test(text);
+}
+
+function isAirportLike(label: string, className?: string, type?: string, types: string[] = []): boolean {
+  const text = `${label} ${className ?? ""} ${type ?? ""} ${types.join(" ")}`.toLowerCase();
+  return /\b(airport|aerodrome|terminal|runway|aeroway)\b/.test(text);
+}
+
+function scoreGeocodeCandidate(options: {
+  name: string;
+  label: string;
+  point: Point;
+  depot: Point;
+  maxRadiusKm: number;
+  source: "google" | "osm";
+  className?: string;
+  type?: string;
+  types?: string[];
+  googleLocationType?: string;
+  partialMatch?: boolean;
+  importance?: number | string;
+  placeRank?: number | string;
+}): number | null {
+  const {
+    name,
+    label,
+    point,
+    depot,
+    maxRadiusKm,
+    source,
+    className,
+    type,
+    types = [],
+    googleLocationType,
+    partialMatch,
+    importance,
+    placeRank,
+  } = options;
+
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+
+  const distFromDepot = getDistance(point, depot);
+  if (distFromDepot > maxRadiusKm) return null;
+
+  const airportLike = isAirportLike(label, className, type, types);
+  if (airportLike && !isAirportVenueIntent(name)) return null;
+
+  const overlap = tokenOverlapScore(name, label);
+  const broadOsm = className === "boundary" || BROAD_OSM_TYPES.has(type ?? "");
+  const broadGoogle = types.some((candidateType) => BROAD_GOOGLE_TYPES.has(candidateType));
+  if ((broadOsm || broadGoogle) && overlap < 0.5) return null;
+
+  let score = source === "google" ? 12 : 8;
+  score += overlap * 45;
+
+  if (source === "google") {
+    if (googleLocationType === "ROOFTOP") score += 35;
+    else if (googleLocationType === "RANGE_INTERPOLATED") score += 25;
+    else if (googleLocationType === "GEOMETRIC_CENTER") score += 12;
+    else if (googleLocationType === "APPROXIMATE") score -= 8;
+
+    if (types.some((candidateType) => ["street_address", "premise", "subpremise", "establishment", "point_of_interest"].includes(candidateType))) {
+      score += 18;
+    }
+    if (partialMatch) score -= 10;
+  } else {
+    const rank = Number(placeRank);
+    if (Number.isFinite(rank)) {
+      if (rank >= 26) score += 20;
+      else if (rank >= 20) score += 12;
+      else if (rank >= 16) score += 4;
+      else score -= 8;
+    }
+
+    const importanceScore = Number(importance);
+    if (Number.isFinite(importanceScore)) score += Math.min(importanceScore * 8, 8);
+  }
+
+  return score >= 18 ? score : null;
+}
+
+function geocodeViewbox(depot: Point, maxRadiusKm: number): string {
+  const radiusKm = Math.min(Math.max(maxRadiusKm, 10), 120);
+  const latDelta = radiusKm / 111;
+  const lngDelta = radiusKm / (111 * Math.cos((depot.y * Math.PI) / 180));
+  const left = depot.x - lngDelta;
+  const right = depot.x + lngDelta;
+  const top = depot.y + latDelta;
+  const bottom = depot.y - latDelta;
+  return `${left},${top},${right},${bottom}`;
+}
+
+async function fetchGoogleGeocode(
+  name: string,
+  city: string,
+  country: string,
+  depot: Point,
+  maxRadiusKm: number,
+  apiKey: string
+): Promise<Point | null> {
+  const radiusKm = Math.min(Math.max(maxRadiusKm, 10), 120);
+  const latDelta = radiusKm / 111;
+  const lngDelta = radiusKm / (111 * Math.cos((depot.y * Math.PI) / 180));
+  const southWest = `${depot.y - latDelta},${depot.x - lngDelta}`;
+  const northEast = `${depot.y + latDelta},${depot.x + lngDelta}`;
+  const countryCode = country.toLowerCase() === "india" ? "IN" : "";
+  const components = [
+    countryCode ? `country:${countryCode}` : "",
+    city ? `locality:${city}` : "",
+  ].filter(Boolean).join("|");
+
+  const params = new URLSearchParams({
+    address: `${name}, ${city}, ${country}`,
+    region: countryCode.toLowerCase() || "in",
+    bounds: `${southWest}|${northEast}`,
+    key: apiKey,
+  });
+  if (components) params.set("components", components);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  try {
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const results = Array.isArray(data?.results) ? data.results as GoogleGeocodeResult[] : [];
+    let best: { point: Point; score: number } | null = null;
+
+    for (const result of results) {
+      const lat = Number(result.geometry?.location?.lat);
+      const lng = Number(result.geometry?.location?.lng);
+      const point: Point = { x: lng, y: lat };
+      const score = scoreGeocodeCandidate({
+        name,
+        label: result.formatted_address ?? "",
+        point,
+        depot,
+        maxRadiusKm,
+        source: "google",
+        types: result.types ?? [],
+        googleLocationType: result.geometry?.location_type,
+        partialMatch: result.partial_match,
+      });
+      if (score !== null && (!best || score > best.score)) {
+        best = { point, score };
+      }
+    }
+
+    return best?.point ?? null;
+  } catch (e) {
+    clearTimeout(timeoutId);
+    console.error("Google Geocoding failed:", e);
+    return null;
+  }
+}
 
 export function resetOSMCircuitBreaker() {
   osmDisabled = false;
@@ -947,20 +1186,32 @@ export async function geocodePlace(
   maxRadiusKm: number = 70
 ): Promise<Point | null> {
   const cleanName = name.toLowerCase().trim();
+  if (!cleanName) return null;
 
   // Check in-memory cache first
   const cacheKey = `${cleanName}|${city}|${country}`;
-  if (geocodeCache[cacheKey]) {
+  if (cacheKey in geocodeCache) {
     return geocodeCache[cacheKey];
   }
 
+  const googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY || "";
+  if (googleMapsApiKey) {
+    const googlePoint = await fetchGoogleGeocode(name, city, country, depot, maxRadiusKm, googleMapsApiKey);
+    if (googlePoint) {
+      geocodeCache[cacheKey] = googlePoint;
+      return googlePoint;
+    }
+  }
+
   if (!osmDisabled) {
-    // Query OpenStreetMap Nominatim with the configured city and country
+    // Query OpenStreetMap Nominatim with city/country bounds and score every candidate.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
     try {
       const query = encodeURIComponent(`${name}, ${city}, ${country}`);
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
+      const viewbox = geocodeViewbox(depot, maxRadiusKm);
+      const countryCodeParam = country.toLowerCase() === "india" ? "&countrycodes=in" : "";
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&addressdetails=1&limit=8${countryCodeParam}&bounded=1&viewbox=${viewbox}`, {
         signal: controller.signal,
         headers: { "User-Agent": "TransitAdminPOC/1.0" },
       });
@@ -968,23 +1219,33 @@ export async function geocodePlace(
       if (res.ok) {
         const contentType = res.headers.get("content-type") || "";
         if (contentType.includes("json")) {
-          const data = await res.json();
-          if (data && data.length > 0) {
-            const lat = parseFloat(data[0].lat);
-            const lng = parseFloat(data[0].lon);
-            const point: Point = { x: lng, y: lat };
-
-            // 70km outlier filter: skip if too far from depot
-            const distFromDepot = getDistance(point, depot);
-            if (distFromDepot > maxRadiusKm) {
-              console.warn(
-                `[OUTLIER] "${name}" resolved to (${lat}, ${lng}) which is ${distFromDepot.toFixed(1)}km from depot — exceeds ${maxRadiusKm}km limit. Skipping.`
-              );
-              return null;
+          const data = await res.json() as NominatimResult[];
+          let best: { point: Point; score: number } | null = null;
+          if (Array.isArray(data)) {
+            for (const result of data) {
+              const lat = parseFloat(result.lat ?? "");
+              const lng = parseFloat(result.lon ?? "");
+              const point: Point = { x: lng, y: lat };
+              const score = scoreGeocodeCandidate({
+                name,
+                label: result.display_name ?? "",
+                point,
+                depot,
+                maxRadiusKm,
+                source: "osm",
+                className: result.class,
+                type: result.type,
+                importance: result.importance,
+                placeRank: result.place_rank,
+              });
+              if (score !== null && (!best || score > best.score)) {
+                best = { point, score };
+              }
             }
-
-            geocodeCache[cacheKey] = point;
-            return point;
+          }
+          if (best) {
+            geocodeCache[cacheKey] = best.point;
+            return best.point;
           }
         }
       }
@@ -999,23 +1260,17 @@ export async function geocodePlace(
     }
   }
 
-  // Final fallback: use a slight random offset from the depot center
-  // (better than a completely wrong city's coordinates)
-  const fallbackPoint: Point = {
-    x: Math.round((depot.x + (Math.random() - 0.5) * 0.1) * 10000) / 10000,
-    y: Math.round((depot.y + (Math.random() - 0.5) * 0.1) * 10000) / 10000,
-  };
-  geocodeCache[cacheKey] = fallbackPoint;
-  return fallbackPoint;
+  console.warn(`[GEOCODE_UNRESOLVED] "${name}" did not produce a precise result near ${city}.`);
+  geocodeCache[cacheKey] = null;
+  return null;
 }
 
 /**
  * Legacy alias kept for backward-compatibility. Prefer geocodePlace() with explicit city/country.
  * @deprecated Use geocodePlace(name, city, country, depot, maxRadiusKm) instead.
  */
-export async function geocodeNagpurPlace(name: string): Promise<Point> {
-  const result = await geocodePlace(name, "Nagpur", "India", DEPOT, 9999);
-  return result ?? DEPOT;
+export async function geocodeNagpurPlace(name: string): Promise<Point | null> {
+  return geocodePlace(name, "Nagpur", "India", DEPOT, 70);
 }
 
 /**

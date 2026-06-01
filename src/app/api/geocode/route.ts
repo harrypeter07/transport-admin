@@ -1,5 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 
+type NominatimResult = {
+ display_name?: string;
+ class?: string;
+ type?: string;
+};
+
+function isAirportVenueIntent(value: string) {
+ const text = value.toLowerCase();
+ return /\b(airport|terminal|aerodrome)\b/.test(text) && !/\bairport\s+road\b/.test(text);
+}
+
+function isAirportLike(result: NominatimResult) {
+ const text = `${result.display_name ?? ""} ${result.class ?? ""} ${result.type ?? ""}`.toLowerCase();
+ return /\b(airport|aerodrome|terminal|runway|aeroway)\b/.test(text);
+}
+
 export async function GET(req: NextRequest) {
  try {
  const { searchParams } = new URL(req.url);
@@ -10,7 +26,7 @@ export async function GET(req: NextRequest) {
  }
 
  const res = await fetch(
- `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(q)}`,
+ `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&q=${encodeURIComponent(q)}`,
  {
  headers: {
  "User-Agent": "TransitAdminPOC/1.0",
@@ -24,7 +40,10 @@ export async function GET(req: NextRequest) {
  }
 
  const data = await res.json();
- return NextResponse.json(data);
+ const filtered = Array.isArray(data)
+ ? data.filter((item: NominatimResult) => isAirportVenueIntent(q) || !isAirportLike(item)).slice(0, 5)
+ : [];
+ return NextResponse.json(filtered);
  } catch (e: any) {
  console.error("Geocoding API error:", e);
  return NextResponse.json({ error: "Internal Server Error", details: e.message }, { status: 500 });

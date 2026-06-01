@@ -20,8 +20,10 @@ export async function POST(req: NextRequest) {
  let driverY = null;
  if (driverAddress) {
  const coords = await geocodeNagpurPlace(driverAddress);
+ if (coords) {
  driverX = coords.x;
  driverY = coords.y;
+ }
  }
 
  const cab = await prisma.cab.create({
@@ -116,8 +118,13 @@ export async function PATCH(req: NextRequest) {
  if (nextDriverAddress !== undefined) {
  if (nextDriverAddress) {
  const coords = await geocodeNagpurPlace(nextDriverAddress);
+ if (coords) {
  driverX = coords.x;
  driverY = coords.y;
+ } else {
+ driverX = null;
+ driverY = null;
+ }
  } else {
  driverX = null;
  driverY = null;
