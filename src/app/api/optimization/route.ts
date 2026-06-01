@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
 import {
   optimizeRoutes,
@@ -201,6 +202,123 @@ async function persistRoutes(
   }, { timeout: 20000, maxWait: 10000 });
 }
 
+async function persistPreviewRoutes(
+  previewRoutes: (OptimizedRoute & { shiftId?: string; shift?: { startTime?: string }; tripSequence?: number })[],
+  currentDateStr: string,
+  fallbackShiftId: string,
+  isPickup: boolean,
+  strategyLabel: string
+) {
+  const validRoutes = previewRoutes.filter((route) => {
+    const shiftId = route.shiftId || fallbackShiftId;
+    return route.cabId && shiftId && Array.isArray(route.stops) && route.stops.length > 0;
+  });
+
+  if (validRoutes.length === 0) {
+    throw new Error("No valid preview routes to apply");
+  }
+
+  const affectedShiftIds = Array.from(
+    new Set(validRoutes.map((route) => route.shiftId || fallbackShiftId).filter(Boolean))
+  );
+
+  const shifts = await prisma.shift.findMany({
+    where: { id: { in: affectedShiftIds } },
+    select: { id: true, startTime: true },
+  });
+  const shiftStartTimeById = new Map(shifts.map((shift) => [shift.id, shift.startTime || ""]));
+
+  const existingRoutes = await prisma.route.findMany({
+    where: {
+      date: currentDateStr,
+      shiftId: { notIn: affectedShiftIds },
+    },
+    select: { cabId: true, tripSequence: true },
+  });
+
+  const cabSequenceMap: Record<string, number> = {};
+  for (const route of existingRoutes) {
+    cabSequenceMap[route.cabId] = Math.max(cabSequenceMap[route.cabId] || 0, route.tripSequence || 1);
+  }
+
+  const sortedRoutes = [...validRoutes].sort((a, b) => {
+    const shiftA = a.shiftId || fallbackShiftId;
+    const shiftB = b.shiftId || fallbackShiftId;
+    const timeA = shiftStartTimeById.get(shiftA) || a.shift?.startTime || "";
+    const timeB = shiftStartTimeById.get(shiftB) || b.shift?.startTime || "";
+    if (timeA !== timeB) return timeA.localeCompare(timeB);
+    return a.vehicleNumber.localeCompare(b.vehicleNumber);
+  });
+
+  await prisma.$transaction(async tx => {
+    const oldRoutes = await tx.route.findMany({
+      where: { date: currentDateStr, shiftId: { in: affectedShiftIds } },
+      select: { id: true },
+    });
+    const oldIds = oldRoutes.map((route) => route.id);
+    if (oldIds.length > 0) {
+      await tx.routeStop.deleteMany({ where: { routeId: { in: oldIds } } });
+      await tx.violation.deleteMany({ where: { routeId: { in: oldIds } } });
+      await tx.route.deleteMany({ where: { id: { in: oldIds } } });
+    }
+
+    const routeRows: any[] = [];
+    const stopRows: any[] = [];
+    const violationRows: any[] = [];
+
+    for (const optRoute of sortedRoutes) {
+      const routeId = randomUUID();
+      const shiftId = optRoute.shiftId || fallbackShiftId;
+      const tripSequence = optRoute.tripSequence || ((cabSequenceMap[optRoute.cabId] || 0) + 1);
+      cabSequenceMap[optRoute.cabId] = Math.max(cabSequenceMap[optRoute.cabId] || 0, tripSequence);
+
+      routeRows.push({
+        id: routeId,
+        cabId: optRoute.cabId,
+        date: currentDateStr,
+        shiftId,
+        isPickup,
+        totalDistance: optRoute.totalDistance,
+        totalDuration: optRoute.totalDuration,
+        status: "PENDING",
+        optimizationScore: optRoute.optimizationScore,
+        optimizationMode: strategyLabel,
+        tripSequence,
+      });
+
+      for (const stop of optRoute.stops) {
+        stopRows.push({
+          routeId,
+          employeeId: stop.employeeId,
+          stopOrder: stop.stopOrder,
+          etaMinutes: stop.etaMinutes,
+          status: "PENDING",
+        });
+      }
+
+      for (const violation of optRoute.violations || []) {
+        violationRows.push({
+          routeId,
+          type: violation.type,
+          severity: violation.severity,
+          resolved: false,
+          notes: violation.notes,
+        });
+      }
+    }
+
+    await tx.route.createMany({ data: routeRows });
+    if (stopRows.length > 0) {
+      await tx.routeStop.createMany({ data: stopRows });
+    }
+    if (violationRows.length > 0) {
+      await tx.violation.createMany({ data: violationRows });
+    }
+  }, { timeout: 30000, maxWait: 10000 });
+
+  return { count: validRoutes.length, shiftCount: affectedShiftIds.length };
+}
+
 // POST: Run optimization
 export async function POST(req: NextRequest) {
   try {
@@ -235,9 +353,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === "APPLY" && selectedStrategy && Array.isArray(previewRoutes)) {
-      const { fallbackShiftId, cabTripSequenceMap } = await fetchOptimizationInputs(shiftId, currentDateStr);
-      await persistRoutes(previewRoutes, currentDateStr, fallbackShiftId, isPickup ?? true, selectedStrategy, cabTripSequenceMap);
-      return NextResponse.json({ success: true, count: previewRoutes.length });
+      const result = await persistPreviewRoutes(previewRoutes, currentDateStr, shiftId || "", isPickup ?? true, selectedStrategy);
+      return NextResponse.json({ success: true, ...result });
     }
 
     const { optEmployees, optCabs, fallbackShiftId, cabTripSequenceMap } = await fetchOptimizationInputs(shiftId, currentDateStr);

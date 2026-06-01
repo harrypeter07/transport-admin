@@ -335,39 +335,59 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     const plan = (plans as any)[strategy] as { routes: any[] };
     set({ loading: true });
     try {
-      const routesByShift = plan.routes.reduce((groups: Record<string, any[]>, route) => {
-        const shiftId = route.shiftId || get().activeShiftId;
-        if (!shiftId) return groups;
-        groups[shiftId] = groups[shiftId] || [];
-        groups[shiftId].push(route);
-        return groups;
-      }, {});
+      const previewRoutes = plan.routes.map((route) => ({
+        cabId: route.cabId,
+        vehicleNumber: route.vehicleNumber,
+        shiftId: route.shiftId || get().activeShiftId,
+        isPickup,
+        totalDistance: route.totalDistance,
+        totalDuration: route.totalDuration,
+        optimizationScore: route.optimizationScore,
+        tripSequence: route.tripSequence,
+        stops: (route.stops || []).map((stop: any) => ({
+          employeeId: stop.employeeId,
+          stopOrder: stop.stopOrder,
+          etaMinutes: stop.etaMinutes,
+        })),
+        violations: (route.violations || []).map((violation: any) => ({
+          type: violation.type,
+          severity: violation.severity,
+          notes: violation.notes,
+        })),
+      })).filter((route) => route.shiftId && route.cabId && route.stops.length > 0);
 
-      for (const [shiftId, previewRoutes] of Object.entries(routesByShift)) {
-        const res = await fetch("/api/optimization", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            shiftId,
-            isPickup,
-            date: get().selectedDate,
-            mode: "APPLY",
-            selectedStrategy: strategy,
-            previewRoutes,
-          }),
-        });
+      if (previewRoutes.length === 0) {
+        set({ loading: false });
+        return { success: false, error: "No valid preview routes to apply" };
+      }
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          set({ loading: false });
-          return { success: false, error: errData.error || "Apply failed" };
-        }
+      const res = await fetch("/api/optimization", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shiftId: get().activeShiftId,
+          isPickup,
+          date: get().selectedDate,
+          mode: "APPLY",
+          selectedStrategy: strategy,
+          previewRoutes,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        set({ loading: false });
+        return { success: false, error: errData.error || "Apply failed" };
       }
 
       const dateStr = get().selectedDate;
       const resRoutes = await fetch(`/api/optimization?date=${dateStr}`);
+      if (!resRoutes.ok) {
+        set({ loading: false });
+        return { success: false, error: "Plan applied, but route refresh failed. Reload the page to view it." };
+      }
       const routes = await resRoutes.json();
-      set({ routes, loading: false, optimizationPlans: null });
+      set({ routes, loading: false, optimizationPlans: null, selectedRouteId: null });
       return { success: true };
     } catch (e) {
       set({ loading: false });

@@ -508,7 +508,7 @@ export default function TransitAdminSPA() {
  })
  : dbActiveRoutes;
  const activeRoutes = activeRoutesRaw as Route[];
- const manifestRoutes = previewRoutes ? activeRoutes : [];
+ const manifestRoutes = activeRoutes;
  const getRouteShiftLabel = (route: any) =>
  route.shift?.name || route.shiftName || shifts.find((shift) => shift.id === route.shiftId)?.name || "Shift";
  const isInitialOptimizerDataLoading = !initialDataLoaded || (loading && cabs.length === 0);
