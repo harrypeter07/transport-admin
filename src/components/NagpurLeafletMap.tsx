@@ -51,9 +51,11 @@ export default function LeafletMap({
  const mapInstanceRef = useRef<any>(null);
  const layerGroupRef = useRef<any>(null);
  const LRef = useRef<any>(null);
+ const lastFitKeyRef = useRef<string>("");
 
  const [variationsData, setVariationsData] = useState<any[]>([]);
  const [variationGeometries, setVariationGeometries] = useState<Record<string, [number, number][]>>({});
+ const [routeGeometries, setRouteGeometries] = useState<Record<string, [number, number][]>>({});
  const [loadingGeometries, setLoadingGeometries] = useState(false);
 
  // Analytics mode states for optimized vs normal route comparison
@@ -92,21 +94,64 @@ export default function LeafletMap({
  const fetchOSRMGeometry = async (coords: [number, number][]) => {
  if (coords.length <= 1) return coords;
  try {
- const coordsStr = coords.map((c) => `${c[1]},${c[0]}`).join(";");
- const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
- const res = await fetch(url);
+ const res = await fetch("/api/routing/geometry", {
+ method: "POST",
+ headers: { "Content-Type": "application/json" },
+ body: JSON.stringify({ coords }),
+ });
  if (res.ok) {
  const data = await res.json();
- if (data && data.routes && data.routes[0]) {
- const geomCoords = data.routes[0].geometry.coordinates;
- return geomCoords.map((c: any) => [c[1], c[0]]); // convert to [lat, lng]
+ if (Array.isArray(data?.coordinates) && data.coordinates.length > coords.length) {
+ return data.coordinates;
  }
  }
  } catch (e) {
- console.error("OSRM fetch failed:", e);
+ console.error("Route geometry fetch failed:", e);
  }
  return coords; // fallback to straight lines
  };
+
+ // Fetch real road geometry for the actual optimized route sequence.
+ // This works for both persisted DB routes and unsaved preview routes.
+ useEffect(() => {
+ if (routes.length === 0) {
+ setRouteGeometries({});
+ return;
+ }
+
+ let active = true;
+
+ const fetchRouteGeometries = async () => {
+ const selectedRoute = selectedRouteId
+ ? routes.find((route) => route.id === selectedRouteId)
+ : null;
+ const orderedRoutes = selectedRoute
+ ? [selectedRoute, ...routes.filter((route) => route.id !== selectedRoute.id)]
+ : routes;
+
+ setRouteGeometries({});
+
+ for (const route of orderedRoutes) {
+ const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+ if (sortedStops.length === 0) continue;
+
+ const coords = buildRouteLatLngs(
+ route,
+ sortedStops.map((s) => [s.employee.y, s.employee.x])
+ );
+
+ const geometry = await fetchOSRMGeometry(coords);
+ if (!active) return;
+ setRouteGeometries((prev) => ({ ...prev, [route.id]: geometry }));
+ }
+ };
+
+ fetchRouteGeometries();
+
+ return () => {
+ active = false;
+ };
+ }, [routes, selectedRouteId, DEPOT_LAT, DEPOT_LNG]);
 
  // Fetch OSRM geometry for Analytics mode
  useEffect(() => {
@@ -162,13 +207,21 @@ export default function LeafletMap({
  const fetchVariationsAndGeometries = async () => {
  setLoadingGeometries(true);
  try {
+ const route = routes.find((r) => r.id === selectedRouteId);
+ if (!route || selectedRouteId.startsWith("preview-")) {
+ setVariationsData([]);
+ setVariationGeometries({});
+ return;
+ }
+
  const res = await fetch(`/api/routes/${selectedRouteId}/variations`);
- if (!res.ok) throw new Error("Failed to fetch variations");
+ if (!res.ok) {
+ setVariationsData([]);
+ setVariationGeometries({});
+ return;
+ }
  const vars = await res.json();
  setVariationsData(vars);
-
- const route = routes.find((r) => r.id === selectedRouteId);
- if (!route) return;
 
  // Fetch OSRM geometry for each strategy
  const geometries: Record<string, [number, number][]> = {};
@@ -179,37 +232,19 @@ export default function LeafletMap({
  stopsList.map((s) => [s.y, s.x])
  );
 
- // Fetch curve details from OpenStreetMap OSRM geometry endpoint
- try {
- const coordsStr = coords.map((c) => `${c[1]},${c[0]}`).join(";"); // OSRM takes lng,lat
- const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
- const routeRes = await fetch(url);
- if (routeRes.ok) {
- const routeData = await routeRes.json();
- if (routeData && routeData.routes && routeData.routes[0]) {
- const geomCoords = routeData.routes[0].geometry.coordinates;
- geometries[v.strategy] = geomCoords.map((c: any) => [c[1], c[0]]); // convert to [lat, lng]
- }
- }
- } catch (e) {
- console.error(`OSRM fetch failed for strategy ${v.strategy}:`, e);
- }
-
- // Fallback to straight lines if OSRM failed
- if (!geometries[v.strategy]) {
- geometries[v.strategy] = coords;
- }
+ geometries[v.strategy] = await fetchOSRMGeometry(coords);
  }
  setVariationGeometries(geometries);
  } catch (err) {
- console.error("Error fetching variations geometries:", err);
+ setVariationsData([]);
+ setVariationGeometries({});
  } finally {
  setLoadingGeometries(false);
  }
  };
 
  fetchVariationsAndGeometries();
- }, [selectedRouteId, routes]);
+ }, [selectedRouteId, routes, mode]);
 
  // Initialize Leaflet Map Instance
  useEffect(() => {
@@ -352,6 +387,8 @@ export default function LeafletMap({
  // 2. OVERVIEW: Always plot all active cabs so every shift remains visible.
  const overviewSeenCoords: Record<string, number> = {};
  routes.forEach((route, idx) => {
+ if (selectedRouteId && route.id !== selectedRouteId) return;
+
  const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
  if (sortedStops.length === 0) return;
 
@@ -364,13 +401,15 @@ export default function LeafletMap({
  route,
  sortedStops.map((s) => [s.employee.y, s.employee.x])
  );
+ const roadCoords = routeGeometries[route.id] || lineCoords;
  const routeStart = getRouteStartLatLng(route);
 
- L.polyline(lineCoords, {
+ L.polyline(roadCoords, {
  color: routeColor,
- weight: isSelectedOverviewRoute ? 3 : 2,
- opacity: isSelectedOverviewRoute ? 0.25 : 0.5,
- dashArray: "4, 6",
+ weight: isSelectedOverviewRoute ? 4 : 3,
+ opacity: isSelectedOverviewRoute ? 0.35 : 0.65,
+ dashArray: routeGeometries[route.id] ? undefined : "4, 6",
+ lineJoin: "round",
  })
  .on("click", () => onSelectRoute(isSelectedOverviewRoute ? null : route.id))
  .addTo(layerGroup);
@@ -419,6 +458,11 @@ export default function LeafletMap({
  if (selectedRoute && selectedRoute.stops.length > 0) {
  const stopsList = [...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder);
  const routeStart = getRouteStartLatLng(selectedRoute);
+ const selectedRouteCoords = buildRouteLatLngs(
+ selectedRoute,
+ stopsList.map((s) => [s.employee.y, s.employee.x])
+ );
+ const selectedRoadCoords = routeGeometries[selectedRoute.id] || selectedRouteCoords;
  
  // Track seen coordinates to apply a small jitter offset for overlapping markers
  const seenCoords: Record<string, number> = {};
@@ -514,6 +558,17 @@ export default function LeafletMap({
  .addTo(layerGroup);
  }
  } else {
+ // Plot the selected cab's actual optimized route sequence as a road-following path.
+ // Preview routes do not exist in the DB yet, so this cannot depend on the variations API.
+ L.polyline(selectedRoadCoords, {
+ color: "#111827",
+ weight: 6,
+ opacity: 0.9,
+ lineJoin: "round",
+ })
+ .bindPopup(`<strong>${selectedRoute.cab.vehicleNumber} Optimized Route</strong>`)
+ .addTo(layerGroup);
+
  // Plot the 3 variations paths
  Object.entries(variationGeometries).forEach(([strategy, pathCoords]) => {
  const color = STRATEGY_COLORS[strategy as keyof typeof STRATEGY_COLORS] || "#94a3b8";
@@ -532,14 +587,21 @@ export default function LeafletMap({
  }
  }
 
- // Fit map bounds to show all active employees across all shifts.
+ const fitKey = selectedRouteId
+ ? `selected:${selectedRouteId}`
+ : `all:${routes.map((route) => `${route.id}:${route.stops.length}`).join("|")}`;
+
+ if (lastFitKeyRef.current !== fitKey) {
+ lastFitKeyRef.current = fitKey;
+
+ // Fit once for the current selection; do not snap back while the user zooms/pans.
  if (fitCoords.length > 1) {
  map.fitBounds(L.latLngBounds(fitCoords), { padding: [40, 40] });
  } else {
- // Reset viewport directly to depot when no routes exist, keeping it centered
  map.setView([DEPOT_LAT, DEPOT_LNG], 13, { animate: true });
  }
- }, [routes, selectedRouteId, variationGeometries, analyticsOptimizedGeom, analyticsNormalGeom, mode]);
+ }
+ }, [routes, selectedRouteId, routeGeometries, variationGeometries, analyticsOptimizedGeom, analyticsNormalGeom, mode]);
 
  return (
  <div className="relative w-full h-full">

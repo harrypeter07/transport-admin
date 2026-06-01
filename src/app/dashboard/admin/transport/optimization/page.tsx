@@ -85,6 +85,7 @@ export default function TransitAdminSPA() {
  const router = useRouter();
 
  const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "COMPLIANCE" | "ANALYSIS">("OPTIMIZER");
+ const [initialDataLoaded, setInitialDataLoaded] = useState(false);
  
 
  // Analysis Dashboard State
@@ -201,8 +202,21 @@ export default function TransitAdminSPA() {
  });
 
  useEffect(() => {
- fetchInitialData();
+ let isActive = true;
+
+ const loadInitialData = async () => {
+ await fetchInitialData();
+ if (isActive) {
+ setInitialDataLoaded(true);
+ }
+ };
+
+ loadInitialData();
  fetchImportSheets();
+
+ return () => {
+ isActive = false;
+ };
  }, []);
 
  useEffect(() => {
@@ -497,6 +511,7 @@ export default function TransitAdminSPA() {
  const manifestRoutes = previewRoutes ? activeRoutes : [];
  const getRouteShiftLabel = (route: any) =>
  route.shift?.name || route.shiftName || shifts.find((shift) => shift.id === route.shiftId)?.name || "Shift";
+ const isInitialOptimizerDataLoading = !initialDataLoaded || (loading && cabs.length === 0);
 
  const selectedRoute = activeRoutes.find((r: any) => r.id === selectedRouteId);
  const totalViolations = activeRoutes.reduce(
@@ -859,7 +874,17 @@ export default function TransitAdminSPA() {
  )}
 
  {/* Cabs Availability & Capacity Edge Cases Alert Banners */}
- {cabs.filter(c => c.status === "AVAILABLE").length === 0 ? (
+ {isInitialOptimizerDataLoading ? (
+ <div className="p-4 bg-white border border-[#e8e8e8] rounded-none flex items-start gap-2.5 text-xs text-[#1c1b1f] animate-fadeIn">
+ <RotateCw className="w-5 h-5 text-[#6b6b6b] flex-shrink-0 mt-0.5 animate-spin-fast" />
+ <div className="flex flex-col text-left">
+ <span className="font-bold text-[#1c1b1f]">Loading Optimizer Data</span>
+ <span className="mt-0.5 text-[#6b6b6b] font-medium">
+ Fetching employees, cabs, shifts, and existing routes for the selected date.
+ </span>
+ </div>
+ </div>
+ ) : cabs.filter(c => c.status === "AVAILABLE").length === 0 ? (
  <div className="p-4 bg-[#f7f7f7] border border-[#e8e8e8] rounded-none flex items-start gap-2.5 text-xs text-[#1c1b1f] animate-fadeIn">
  <AlertCircle className="w-5 h-5 text-[#6b6b6b] flex-shrink-0 mt-0.5" />
  <div className="flex flex-col text-left">
