@@ -86,9 +86,9 @@ export default function TransitAdminSPA() {
 
  const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "COMPLIANCE" | "ANALYSIS">("OPTIMIZER");
  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
- 
+ const [addressChanged, setAddressChanged] = useState(false);
 
- // Analysis Dashboard State
+  // Analysis Dashboard State
  const [analysisData, setAnalysisData] = useState<any>(null);
  const [analysisLoading, setAnalysisLoading] = useState<boolean>(false);
  const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -205,11 +205,6 @@ export default function TransitAdminSPA() {
     let isActive = true;
 
     const loadInitialData = async () => {
-      // Session persistence: skip re-fetch if store already has data
-      if (employees.length > 0 && cabs.length > 0) {
-        if (isActive) setInitialDataLoaded(true);
-        return;
-      }
       await fetchInitialData();
       if (isActive) {
         setInitialDataLoaded(true);
@@ -228,9 +223,25 @@ export default function TransitAdminSPA() {
  if (shifts.length > 0 && !employeeForm.shiftId) {
  setEmployeeForm((prev) => ({ ...prev, shiftId: shifts[0].id }));
  }
- }, [shifts]);
+  }, [shifts]);
 
- const handleGeneratePlans = async () => {
+  // Detect if route stop coords differ from current employee data (address was changed)
+  useEffect(() => {
+    let changed = false;
+    for (const route of routes) {
+      for (const stop of route.stops) {
+        const emp = employees.find(e => e.id === stop.employeeId);
+        if (emp && (emp.x !== stop.employee.x || emp.y !== stop.employee.y)) {
+          changed = true;
+          break;
+        }
+      }
+      if (changed) break;
+    }
+    setAddressChanged(changed);
+  }, [employees, routes]);
+
+  const handleGeneratePlans = async () => {
  setOptimizing(true);
  setOptimizeError(null);
  try {
@@ -695,10 +706,17 @@ export default function TransitAdminSPA() {
  className="flex items-center gap-1.5 bg-slate-800 text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
  >
  <RotateCw className={`w-3.5 h-3.5 ${previewing ? "animate-spin-fast" : ""}`} />
- {previewing ? "Solving..." : "Optimize Routing"}
- </button>
+  {previewing ? "Solving..." : "Optimize Routing"}
+  </button>
 
- {routes.some(r => r.status === "PENDING" || r.status === "PLANNED") && (
+  {addressChanged && (
+    <div className="text-[9px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 flex items-center gap-1.5 animate-fadeIn">
+      <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+      <span>Addresses changed — re-optimize to update routes</span>
+    </div>
+  )}
+
+  {routes.some(r => r.status === "PENDING" || r.status === "PLANNED") && (
  <button
  onClick={async () => {
  if (!confirm("Are you sure you want to publish these routes to the fleet? Drivers and Employees will immediately see their assignments.")) return;

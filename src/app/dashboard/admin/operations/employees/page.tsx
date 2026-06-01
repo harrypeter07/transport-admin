@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Search, Plus, Edit, Trash2, ChevronRight, X } from "lucide-react";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
+import { useTransportStore } from "@/store/useTransportStore";
 
 type Shift = { id: string; name: string };
 
@@ -77,12 +78,19 @@ export default function EmployeesPage() {
  headers: { "Content-Type": "application/json" },
  body: JSON.stringify(payload),
  });
- if (res.ok) {
- setShowModal(false);
- setEditingEmployee(null);
- formRef.current?.reset();
- fetchEmployees();
- } else {
+  if (res.ok) {
+  setShowModal(false);
+  setEditingEmployee(null);
+  formRef.current?.reset();
+  fetchEmployees();
+  // Refresh routes in shared store for map consistency
+  const { selectedDate, setRoutes } = useTransportStore.getState();
+  const date = selectedDate || new Date().toISOString().split("T")[0];
+  fetch(`/api/optimization?date=${date}`)
+    .then(r => r.json())
+    .then(data => setRoutes(Array.isArray(data) ? data : []))
+    .catch(() => {});
+  } else {
  const err = await res.json();
  setFormError(err.error || `Failed to ${editingEmployee ? "update" : "create"} employee.`);
  }

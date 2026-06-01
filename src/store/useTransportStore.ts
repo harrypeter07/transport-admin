@@ -182,6 +182,7 @@ interface TransportStore {
   resetDatabase: () => Promise<any>;
   applyRouteSequence: (routeId: string, stopIds: string[], distance: number, duration: number) => Promise<void>;
   swapRouteCab: (routeId: string, cabId: string) => Promise<void>;
+  setRoutes: (routes: Route[]) => void;
 }
 
 export const useTransportStore = create<TransportStore>((set, get) => ({
@@ -245,6 +246,8 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
   setSelectedRouteId: (routeId) => {
     set({ selectedRouteId: routeId });
   },
+
+  setRoutes: (routes) => set({ routes }),
 
   runOptimization: async (isPickup, apiKey = "", mode = "FASTEST_TRAVEL") => {
     set({ loading: true });

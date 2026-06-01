@@ -410,19 +410,22 @@ export default function GoogleMapView({
       const roadCoords = routeGeometries[route.id] || lineCoords.map((c) => [c.lat, c.lng]);
       const routeStart = getRouteStartLatLng(route);
 
-      const path = new google.maps.Polyline({
-        path: roadCoords.map(([lat, lng]) => ({ lat, lng })),
-        map,
-        strokeColor: routeColor,
-        strokeWeight: isSelectedOverviewRoute ? 4 : 3,
-        strokeOpacity: isSelectedOverviewRoute ? 0.35 : 0.65,
-        zIndex: isSelectedOverviewRoute ? 10 : 5,
-      });
-      overlays.push(path);
+      // Selected route has dedicated polyline below — skip here to avoid double lines
+      if (!isSelectedOverviewRoute) {
+        const path = new google.maps.Polyline({
+          path: roadCoords.map(([lat, lng]) => ({ lat, lng })),
+          map,
+          strokeColor: routeColor,
+          strokeWeight: 3,
+          strokeOpacity: 0.65,
+          zIndex: 5,
+        });
+        overlays.push(path);
 
-      path.addListener("click", () => {
-        onSelectRoute(isSelectedOverviewRoute ? null : route.id);
-      });
+        path.addListener("click", () => {
+          onSelectRoute(route.id);
+        });
+      }
 
       sortedStops.forEach((stop) => {
         if (isWithinBounds(stop.employee.y, stop.employee.x)) {
