@@ -32,24 +32,24 @@ export async function POST(req: Request) {
  const now = new Date();
 
  // Upsert latest location directly on Route and insert trail
- await prisma.$transaction([
- prisma.route.update({
- where: { id: routeId },
- data: {
- currentLat: lat,
- currentLng: lng,
- lastLocationAt: now
- }
- }),
- prisma.vehicleLocation.create({
- data: {
- routeId,
- lat,
- lng,
- timestamp: now
- }
- })
- ]);
+  await prisma.$transaction([
+    prisma.route.update({
+      where: { id: routeId },
+      data: {
+        currentLat: lat,
+        currentLng: lng,
+        lastLocationAt: now
+      }
+    }),
+    prisma.vehicleLocation.create({
+      data: {
+        routeId,
+        lat,
+        lng,
+        timestamp: now
+      }
+    })
+  ]);
 
  // Simple Deviation Check: STALLED
  // If we want to check if stalled, we could check the previous location. 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { geocodeNagpurPlace } from "@/lib/optimization";
+import { mapsProvider } from "@/lib/maps";
 import { requireApiRole } from "@/lib/apiAuth";
 
 // POST: Manually create a Cab and its Driver
@@ -19,10 +19,10 @@ export async function POST(req: NextRequest) {
  let driverX = null;
  let driverY = null;
  if (driverAddress) {
- const coords = await geocodeNagpurPlace(driverAddress);
- if (coords) {
- driverX = coords.x;
- driverY = coords.y;
+  const coords = await mapsProvider.geocode(driverAddress);
+  if (coords) {
+  driverX = coords.x;
+  driverY = coords.y;
  }
  }
 
@@ -112,15 +112,15 @@ export async function PATCH(req: NextRequest) {
  return NextResponse.json({ error: "Cab not found" }, { status: 404 });
  }
 
- const nextDriverAddress = driverAddress !== undefined ? driverAddress : driverStartAddress;
- let driverX: number | null | undefined;
- let driverY: number | null | undefined;
- if (nextDriverAddress !== undefined) {
- if (nextDriverAddress) {
- const coords = await geocodeNagpurPlace(nextDriverAddress);
- if (coords) {
- driverX = coords.x;
- driverY = coords.y;
+  const nextDriverAddress = driverAddress !== undefined ? driverAddress : driverStartAddress;
+  let driverX: number | null | undefined;
+  let driverY: number | null | undefined;
+  if (nextDriverAddress !== undefined) {
+  if (nextDriverAddress) {
+  const coords = await mapsProvider.geocode(nextDriverAddress);
+  if (coords) {
+  driverX = coords.x;
+  driverY = coords.y;
  } else {
  driverX = null;
  driverY = null;

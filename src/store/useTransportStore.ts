@@ -204,17 +204,17 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     const currentShiftId = opts?.shiftId ?? state.activeShiftId;
     const dateToFetch = opts?.date ?? state.selectedDate ?? new Date().toISOString().split("T")[0];
     try {
-      const res = await fetch("/api/employees");
-      const employees = await res.json();
+      // Session persistence: use cached employees/cabs/shifts if already loaded
+      const hasCached = state.employees.length > 0 && state.cabs.length > 0;
+      const [employees, cabs, shifts] = hasCached
+        ? [state.employees, state.cabs, state.shifts]
+        : await Promise.all([
+            fetch("/api/employees").then(r => r.json()),
+            fetch("/api/cabs").then(r => r.json()),
+            fetch("/api/shifts").then(r => r.json()),
+          ]);
 
-      const resCabs = await fetch("/api/cabs");
-      const cabs = await resCabs.json();
-
-      const resShifts = await fetch("/api/shifts");
-      const shifts = await resShifts.json();
-
-      // Prefer caller-supplied shiftId, then stored, then first available
-      const resolvedShiftId = currentShiftId || shifts[0]?.id || "";
+      const resolvedShiftId = currentShiftId || (Array.isArray(shifts) ? shifts[0]?.id : "") || "";
       const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
       const routesData = await resRoutes.json();
       const routes = Array.isArray(routesData) ? routesData : [];

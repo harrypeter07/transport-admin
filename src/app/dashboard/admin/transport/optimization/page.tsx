@@ -201,23 +201,28 @@ export default function TransitAdminSPA() {
  driverAddress: "",
  });
 
- useEffect(() => {
- let isActive = true;
+  useEffect(() => {
+    let isActive = true;
 
- const loadInitialData = async () => {
- await fetchInitialData();
- if (isActive) {
- setInitialDataLoaded(true);
- }
- };
+    const loadInitialData = async () => {
+      // Session persistence: skip re-fetch if store already has data
+      if (employees.length > 0 && cabs.length > 0) {
+        if (isActive) setInitialDataLoaded(true);
+        return;
+      }
+      await fetchInitialData();
+      if (isActive) {
+        setInitialDataLoaded(true);
+      }
+    };
 
- loadInitialData();
- fetchImportSheets();
+    loadInitialData();
+    fetchImportSheets();
 
- return () => {
- isActive = false;
- };
- }, []);
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
  useEffect(() => {
  if (shifts.length > 0 && !employeeForm.shiftId) {
@@ -331,19 +336,7 @@ export default function TransitAdminSPA() {
 
 
 
- const handleResetGeocodingCircuitBreaker = async () => {
- try {
- const res = await fetch("/api/admin/reset-geocoding", { method: "POST" });
- if (res.ok) {
- alert("OSM Geocoding circuit breaker reset successfully!");
- } else {
- alert("Failed to reset geocoding circuit breaker.");
- }
- } catch (e) {
- console.error(e);
- alert("Error resetting circuit breaker.");
- }
- };
+
 
  const handleImportSheet = async (e: React.FormEvent) => {
  e.preventDefault();
@@ -649,9 +642,8 @@ export default function TransitAdminSPA() {
  {/* Module Content */}
  <main className="flex-grow w-full px-6 py-6 flex flex-col gap-6">
  
- {/* DESK 1: ROUTE OPTIMIZER */}
- {activeDesk === "OPTIMIZER" && (
- <div className="flex flex-col gap-6 text-left animate-fadeIn">
+  {/* DESK 1: ROUTE OPTIMIZER */}
+  <div className={`flex flex-col gap-6 text-left ${activeDesk === "OPTIMIZER" ? "" : "hidden"}`}>
  {/* Top Workspace Bar */}
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-[100px] z-30 bg-[#f7f7f7] py-2 -mx-2 px-2">
  <div>
@@ -834,23 +826,8 @@ export default function TransitAdminSPA() {
  <div className="flex flex-col gap-1 text-left bg-[#f7f7f7] p-3 rounded-none border border-[#e8e8e8]">
  <span className="text-[10px] font-bold text-[#4a4a4a] uppercase">Routing API Key Status</span>
  <p className="text-[11px] text-[#6b6b6b] leading-relaxed mt-1">
- The Google Maps API Key is configured securely on the server via <code>.env.local</code>. All optimizations and route comparisons automatically query Google Maps when configured, falling back to OSRM when unavailable.
+ The Google Maps API Key is configured securely on the server via <code>.env.local</code>. All optimizations, route comparisons, and geocoding use Google Maps Platform exclusively for precise road-accurate data.
  </p>
- </div>
- <div className="border-t border-slate-100 pt-3 flex flex-col gap-2">
- <span className="text-[9px] uppercase font-bold text-[#9a9a9a]">OSM Geocoding Diagnostics</span>
- <div className="flex items-center justify-between gap-4">
- <span className="text-[11px] text-[#6b6b6b] leading-normal text-left">
- Reset the OpenStreetMap Nominatim geocoding circuit breaker if Nominatim requests were blocked or timed out.
- </span>
- <button
- type="button"
- onClick={handleResetGeocodingCircuitBreaker}
- className="whitespace-nowrap px-3.5 py-2 bg-[#f7f7f7] border border-[#e8e8e8] hover:bg-slate-200 text-[#4a4a4a] rounded-none text-[10px] font-bold transition cursor-pointer"
- >
- Reset Geocoder
- </button>
- </div>
  </div>
  </div>
  )}
@@ -1563,7 +1540,7 @@ export default function TransitAdminSPA() {
  </div>
  ) : (
  <div className="text-center py-2 bg-[#f7f7f7] rounded-none border border-slate-150 text-[10px] font-semibold text-[#6b6b6b]">
- Dist: {route.totalDistance} km · Dur: {route.totalDuration} mins (Haversine/OSRM)
+ Dist: {route.totalDistance} km · Dur: {route.totalDuration} mins (road metrics)
  </div>
  )}
  </div>
@@ -1725,12 +1702,10 @@ export default function TransitAdminSPA() {
  </div>
  )}
  </div>
- </div>
- )}
+  </div>
 
- {/* DESK 3: COMPLIANCE WARNINGS */}
- {activeDesk === "COMPLIANCE" && (
- <div className="flex flex-col gap-6 text-left animate-fadeIn">
+  {/* DESK 3: COMPLIANCE WARNINGS */}
+  <div className={`flex flex-col gap-6 text-left ${activeDesk === "COMPLIANCE" ? "" : "hidden"}`}>
  <div>
  <h1 className="text-lg font-bold text-[#1c1b1f]">Safety Compliance Ledger</h1>
  <p className="text-xs text-[#6b6b6b]">
@@ -1847,12 +1822,10 @@ export default function TransitAdminSPA() {
  </>
  );
  })()}
- </div>
- )}
+  </div>
 
- {/* DESK 4: ROI & ANALYTICS */}
- {activeDesk === "ANALYSIS" && (
- <div className="flex flex-col gap-6 text-left animate-fadeIn">
+  {/* DESK 4: ROI & ANALYTICS */}
+  <div className={`flex flex-col gap-6 text-left ${activeDesk === "ANALYSIS" ? "" : "hidden"}`}>
  {/* Header / Top title inside the desk */}
  <div className="flex justify-between items-center flex-wrap gap-4">
  <div>
@@ -2375,10 +2348,9 @@ export default function TransitAdminSPA() {
  </>
  );
  })()}
- </div>
- )}
+  </div>
 
- </main>
+  </main>
 
  {/* Edit Employee Modal */}
  {editingEmployee && (

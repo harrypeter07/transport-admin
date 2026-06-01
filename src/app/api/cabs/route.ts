@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 import prisma from "@/lib/db";
-import { geocodeNagpurPlace } from "@/lib/optimization";
+import { mapsProvider } from "@/lib/maps";
 
 export async function GET(req: Request) {
   const session = await verifySession();
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     let finalDriverX = null;
     let finalDriverY = null;
     if (driverAddress) {
-      const coords = await geocodeNagpurPlace(driverAddress);
+      const coords = await mapsProvider.geocode(driverAddress);
       if (coords) {
         finalDriverX = coords.x;
         finalDriverY = coords.y;

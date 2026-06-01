@@ -10,6 +10,7 @@ import {
   makeDepot,
 } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
+import { resolveCabOriginFromSnapshot } from "@/lib/vehicleState";
 
 // GET all routes with details
 export async function GET(req: NextRequest) {
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
 }
 
 // Fetch employees + cabs and calculate dynamic start locations based on previous trips
-async function fetchOptimizationInputs(shiftId: string, currentDateStr: string) {
+async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, depot: { x: number; y: number }) {
   const dbEmployees = await prisma.employee.findMany({
     where: {
       status: "ACTIVE",
@@ -77,7 +78,10 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string) 
     include: {
       routes: {
         where: { date: currentDateStr },
-        include: { stops: { include: { employee: true } } }
+        include: {
+          stops: { include: { employee: true } },
+          locations: { orderBy: { timestamp: "desc" }, take: 1 }
+        }
       }
     }
   });
@@ -104,22 +108,38 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string) 
       .filter(r => r.shiftId !== fallbackShiftId)
       .sort((a, b) => a.tripSequence - b.tripSequence);
 
-    if (prevRoutes.length === 0) {
-      if (cab.driverX && cab.driverY) {
-        startPoint = { x: cab.driverX, y: cab.driverY };
-      }
-    } else {
+    if (prevRoutes.length > 0) {
       tripSequence = prevRoutes.length + 1;
-      const lastRoute = prevRoutes[prevRoutes.length - 1];
-      
-      if (!lastRoute.isPickup) {
-        // Last route was a drop off, it ended at the last employee's house
-        const sortedStops = lastRoute.stops.sort((a, b) => b.stopOrder - a.stopOrder);
-        if (sortedStops.length > 0 && sortedStops[0].employee) {
-          startPoint = { x: sortedStops[0].employee.x, y: sortedStops[0].employee.y };
-        }
-      }
     }
+
+    const origin = resolveCabOriginFromSnapshot(
+      {
+        id: cab.id,
+        driverX: cab.driverX,
+        driverY: cab.driverY,
+        routes: cab.routes.map((route) => ({
+          id: route.id,
+          status: route.status,
+          startedAt: route.startedAt,
+          completedAt: route.completedAt,
+          currentLat: route.currentLat,
+          currentLng: route.currentLng,
+          lastLocationAt: route.lastLocationAt,
+          locations: route.locations.map((location) => ({
+            lat: location.lat,
+            lng: location.lng,
+            timestamp: location.timestamp,
+          })),
+          stops: route.stops.map((stop) => ({
+            stopOrder: stop.stopOrder,
+            employee: stop.employee ? { x: stop.employee.x, y: stop.employee.y } : null,
+          })),
+        })),
+      },
+      depot
+    );
+
+    startPoint = origin.startPoint;
 
     cabTripSequenceMap[cab.id] = tripSequence;
 
@@ -339,7 +359,7 @@ export async function POST(req: NextRequest) {
     const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
 
     if (mode === "ALL") {
-      const { optEmployees, optCabs } = await fetchOptimizationInputs(shiftId, currentDateStr);
+      const { optEmployees, optCabs } = await fetchOptimizationInputs(shiftId, currentDateStr, depot);
 
       if (optEmployees.length === 0) {
         return NextResponse.json({ error: "No active employees found for this shift" }, { status: 400 });
@@ -357,7 +377,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...result });
     }
 
-    const { optEmployees, optCabs, fallbackShiftId, cabTripSequenceMap } = await fetchOptimizationInputs(shiftId, currentDateStr);
+    const { optEmployees, optCabs, fallbackShiftId, cabTripSequenceMap } = await fetchOptimizationInputs(shiftId, currentDateStr, depot);
 
     if (optEmployees.length === 0) {
       return NextResponse.json({ error: "No active employees found for this shift" }, { status: 400 });

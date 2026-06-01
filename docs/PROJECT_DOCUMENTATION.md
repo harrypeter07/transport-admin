@@ -2,6 +2,206 @@
 
 Last updated: 2026-06-01
 
+## Active Migration Context: Google Maps Platform and Dynamic Cab Origin
+
+The current migration goal is to keep the ETMS product behavior and deliverables intact while improving route quality by moving mapping, routing, distance, ETA, geocoding, and route geometry toward Google Maps Platform.
+
+Current deliverables that must remain stable:
+
+- Admin route optimization dashboard.
+- Multi-shift pickup/drop optimization.
+- Maximize Utilization, Minimize Time, and Balanced strategy previews.
+- Apply selected strategy and publish to fleet.
+- Commuter manifest cards after optimization/apply/publish.
+- Driver, employee, manager, leave, calendar, ROI, analytics, and execution workflows.
+- Current cab selection behavior in the manifest map.
+
+Migration direction:
+
+- Google Maps Platform should become the primary provider for geocoding, distance, duration, ETA, and route geometry.
+- Existing business logic should not be replaced. The provider layer should change first; optimizer behavior should be preserved.
+- OSRM, OpenStreetMap, Leaflet, and Haversine are legacy/transitional dependencies to be removed in phases once equivalent Google-backed behavior is verified.
+- The app should remain buildable and usable during migration. Where Google configuration is missing or a Google request fails during the transition, existing degraded behavior can remain temporarily to avoid breaking demos.
+
+Dynamic cab origin target:
+
+- Route origin should be resolved from vehicle operational state, not hardcoded by trip number.
+- First operational trip of a cab/driver/day usually starts from driver home.
+- Later trips should start from the cab's current/last known operational location, commonly MIHAN Depot after a pickup route.
+- End-of-day routing should support policy-based behavior: either return to driver home or return to office/depot, with ROI reflecting deadhead distance.
+
+Recommended migration order:
+
+1. Introduce a Google-first internal maps/routing service boundary.
+2. Route all distance, duration, geometry, and geocoding calls through that boundary.
+3. Add caching and operational vehicle state tables in a separate database migration.
+4. Replace Leaflet map rendering with Google Maps JavaScript API.
+5. Remove OSRM/OpenStreetMap/Haversine dependencies after parity verification.
+I made no code changes and did not touch the database. Here is the planning review.
+
+Current Assessment
+The ETMS is already modular enough for this migration: business workflows live in API routes, Prisma models, Zustand store, and dashboard pages, while map rendering is mostly centralized through NagpurLeafletMap and RouteVisualizer.
+
+Current routing stack is mixed:
+
+UI map: Leaflet + OSM tiles.
+Geometry: Google Directions first in some paths, OSRM fallback.
+Optimization metrics: Google Distance Matrix in some flows, OSRM/Haversine elsewhere.
+Tracking/analytics: still uses local straight-line distance in places.
+Schema already has useful starting points: Cab.driverAddress, driverX, driverY, Route.tripSequence, Route.currentLat/currentLng, VehicleLocation, SystemSettings.defaultDepotLat/Lng.
+The biggest architectural issue is not UI. It is that “distance” is not yet a single service boundary. It is scattered across optimization, analytics, execution, tracking, and route editing.
+
+Dynamic Cab Origin Design
+Do not model this as “trip 1 = home, trip 2 = office.” Model it as:
+
+Vehicle Operational State -> Route Start Resolver -> Optimization Input
+
+Recommended start resolver priority:
+
+Active in-progress route location: latest VehicleLocation.
+Completed previous route destination for same cab/date.
+Explicit dispatcher override.
+Driver home for first operational route of day.
+Depot fallback only when no trusted operational location exists.
+For first pickup trip:
+Driver Home -> Employee Stops -> Depot
+
+For subsequent same-day trips:
+Current Vehicle Location, normally depot after the first pickup, then route proceeds from there.
+
+For drop/end-of-day:
+
+Option A: Office -> Employee Stops -> Driver Home
+Option B: Office -> Employee Stops -> Office
+Recommendation: support both, chosen by policy. Default to Option A only for the final route of the operational day when the same cab/driver has no later assigned trip. Otherwise use Option B or current-vehicle-location-based routing. This captures deadhead cost honestly without forcing the cab home too early.
+
+Google Migration Strategy
+Create one internal routing abstraction, for example conceptually:
+
+MapsProvider
+
+geocode address/place
+autocomplete/place details
+compute matrix
+compute route geometry
+compute route ETA
+snap/validate coordinate if needed
+Then implement only a Google provider. Remove direct calls to Leaflet, OSRM, OSM/Nominatim, and Haversine from business modules.
+
+Preferred Google APIs:
+
+Maps JavaScript API for rendering.
+Places API for address selection and autocomplete.
+Geocoding API for server-side batch/import geocoding.
+Routes API computeRouteMatrix for optimization matrices.
+Routes API computeRoutes for final route geometry and ETA.
+Avoid legacy Distance Matrix/Directions for new architecture unless temporarily used during migration.
+I recommend Routes API over Directions API as the long-term core because it has both route and matrix methods, supports modern routing options, traffic-aware durations, route polylines, and a cleaner migration path. Google documents computeRoutes and computeRouteMatrix as the two core Routes API methods, and matrix billing is per origin-destination element. Sources: Google Routes docs and billing docs. Routes API, Routes billing
+
+Optimization Impact
+Keep the current optimization modes, but replace their metric source.
+
+Maximize Cab Utilization: cab filling logic remains. Distance/proximity comparisons should use cached Google road distance/time instead of Haversine.
+Fastest Travel: should rank using Google duration, ideally traffic-aware for execution-day planning.
+Balanced Mode: keep existing scoring formula, but feed it Google distance and duration.
+Driver/Cab/Shift assignment: no conceptual rewrite needed. The input set changes from fixed depot origin to resolved vehicle origin.
+Route sequencing: candidate stop order should be evaluated against a Google matrix. Persist selected route metrics from Google, not recalculated straight-line estimates.
+Safety rules: unchanged. Female first/last/isolated rules are business constraints, not map logic.
+Important: naive all-pairs matrix calculation can become expensive. The algorithm should request only candidate clusters/routes, cache aggressively, and avoid recomputing unchanged employee pairs.
+
+Execution Impact
+Route execution should store:
+
+planned origin and destination,
+actual start location,
+latest vehicle location,
+completed route end location,
+route geometry polyline,
+planned vs actual distance/duration.
+Driver workflow should start a route from the actual current location. If the driver starts somewhere unexpected, mark it as an operational override, not a mapping failure.
+
+Database Impact
+Recommended new/changed data, not implementation yet:
+
+CabOperationalState: cabId, date, currentLat, currentLng, source, lastUpdatedAt, state.
+RouteOriginDestination: routeId, originType, originLat/Lng, destinationType, destinationLat/Lng.
+TravelMetricCache: origin hash/placeId, destination hash/placeId, mode, distanceMeters, durationSeconds, trafficDurationSeconds, provider, expiresAt.
+GeocodeCache: rawInput, normalizedInput, placeId, formattedAddress, lat/lng, confidence, provider.
+RouteGeometryCache: waypoint signature, encodedPolyline, distance, duration, provider, expiresAt.
+Add Google placeId to employee/cab/depot location records where possible.
+Existing driverX/Y, currentLat/Lng, VehicleLocation, and tripSequence can be preserved but should not be the only source of truth.
+
+UI Impact
+Affected components/pages:
+
+NagpurLeafletMap
+RouteVisualizer
+Admin transport optimization visualization
+Driver route view
+Employee route view
+Manager monitoring
+Execution dashboard/tracking
+Cab and employee address autocomplete
+Settings depot picker
+Migration recommendation:
+
+Replace Leaflet map component with a Google Maps component.
+Use Google markers/advanced markers for depot, employees, cab current location, driver home.
+Use Google route polylines from computeRoutes, not manually drawn straight lines.
+Keep dashboard business UI intact; only swap the map adapter.
+ROI Impact
+ROI should include:
+
+first-trip driver-home-to-first-stop distance,
+depot-to-driver-home or final-stop-to-driver-home if end-of-day home return is selected,
+deadhead/repositioning distance,
+actual vs planned distance,
+route cancellation/reassignment cost,
+Google API cost as operational software cost.
+This will make ROI more realistic. Current ROI likely understates real cost if it assumes every cab begins at depot.
+
+Cost Analysis
+Based on current Google pricing pages, Dynamic Maps and Routes Essentials have free monthly caps, and Routes Matrix is billed per returned element. Google lists Routes Compute Route Matrix Essentials at 10,000 free monthly usage cap, then roughly $5 / 1,000 in the first paid tier; Geocoding is also listed at 10,000 free then $5 / 1,000; Dynamic Maps is 10,000 free then $7 / 1,000. Sources: pricing list, Maps JS billing.
+
+Risk example:
+
+100 employees full pairwise matrix: about 10,000 elements per run.
+1,000 employees full pairwise: about 1,000,000 elements per run.
+5,000 employees full pairwise: about 25,000,000 elements per run.
+So the migration must not do full all-pairs matrices at scale. Use per-shift batching, candidate pruning, route-level caching, and only recompute changed addresses/routes.
+
+Edge Cases
+
+Driver on leave: resolve origin from replacement driver/cab state.
+Cab changed: route origin follows vehicle state, not old driver home.
+Driver changed: first route may use new driver home only if vehicle is actually there.
+Multiple shifts: operational day state must survive across shifts.
+Route cancellation: next route starts from latest known vehicle/current depot, not cancelled route destination.
+Vehicle breakdown: mark cab unavailable and freeze operational state.
+Temporary depot/office: treat as a location entity with validity dates.
+Driver starts away from home: allow dispatcher override or mobile GPS as actual origin.
+Security & Reliability
+Use separate keys:
+
+Browser key restricted to Maps JavaScript + allowed domains.
+Server key restricted to Routes/Geocoding/Places APIs and backend IPs if possible.
+Add quotas and alerts in Google Cloud. Google notes Routes API supports quota limits and has 3,000 QPM for compute routes and 3,000 EPM for route matrix. computeRouteMatrix has request limits, including 625 elements generally and 100 elements with TRAFFIC_AWARE_OPTIMAL. Source: Routes billing and limits.
+
+No OSRM/Haversine fallback in final state. Fallback should be degraded behavior: use cached Google metrics, mark optimization stale, or block publish until Google metrics are available.
+
+Recommended Implementation Order
+
+Create routing/geocoding provider boundary.
+Add Google cache tables and operational vehicle state model.
+Move geocoding/autocomplete to Google Places/Geocoding.
+Replace optimization metric calls with Google matrix through cache.
+Introduce dynamic route origin resolver.
+Persist planned origin/destination and Google metrics per route.
+Replace Leaflet UI with Google Maps JavaScript API.
+Remove OSRM, Leaflet, OSM, Nominatim, and Haversine code paths.
+Update ROI to include deadhead and first/last route costs.
+Add quota monitoring, cache dashboards, and migration validation reports.
+
 ## 1. Project Overview
 
 This project is a web-based Employee Transportation Management System for managing employee commute rosters, cabs, shifts, route planning, route execution, safety compliance, and admin/manager/employee/driver workflows.

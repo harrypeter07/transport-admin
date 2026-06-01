@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { parseExcelRoster } from "@/lib/excelParser";
-import { geocodePlace, makeDepot, geocodeNagpurPlace } from "@/lib/optimization";
+import { geocodePlace, makeDepot } from "@/lib/optimization";
+import { mapsProvider } from "@/lib/maps";
 
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
@@ -165,7 +166,7 @@ export async function POST(req: NextRequest) {
 
  for (const row of rows) {
  try {
- const coords = await geocodeNagpurPlace(row.address || row.name);
+  const coords = await mapsProvider.geocode(row.address || row.name);
  if (!coords) {
  console.warn(`Skipping row ${row.employeeCode}: address could not be geocoded precisely`);
  skippedCount++;

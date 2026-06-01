@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 import prisma from "@/lib/db";
-import { geocodeNagpurPlace } from "@/lib/optimization";
+import { mapsProvider } from "@/lib/maps";
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await verifySession();
@@ -18,7 +18,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     let finalDriverY = undefined;
     if (driverAddress !== undefined) {
       if (driverAddress) {
-        const coords = await geocodeNagpurPlace(driverAddress);
+        const coords = await mapsProvider.geocode(driverAddress);
         if (coords) {
           finalDriverX = coords.x;
           finalDriverY = coords.y;

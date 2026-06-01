@@ -104,29 +104,3 @@ body {
   animation: spin-fast 0.6s linear infinite;
 }
 
-/* Custom Premium Leaflet Tooltip */
-.leaflet-tooltip.depot-tooltip {
-  background-color: #1c1b1f !important;
-  color: #ffffff !important;
-  font-weight: 700 !important;
-  font-size: 10px !important;
-  padding: 4px 8px !important;
-  border-radius: 4px !important;
-  border: 1.5px solid #ffffff !important;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.15) !important;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.leaflet-tooltip-top.depot-tooltip::before {
-  border-top-color: #1c1b1f !important;
-}
-.leaflet-tooltip-bottom.depot-tooltip::before {
-  border-bottom-color: #1c1b1f !important;
-}
-.leaflet-tooltip-left.depot-tooltip::before {
-  border-left-color: #1c1b1f !important;
-}
-.leaflet-tooltip-right.depot-tooltip::before {
-  border-right-color: #1c1b1f !important;
-}
