@@ -17,6 +17,7 @@ type Cab = {
   driverPhone: string;
   licenseNumber: string;
   driverAddress: string | null;
+  formattedAddress: string | null;
   shifts: CabShift[];
 };
 
@@ -35,6 +36,7 @@ export default function CabsPage() {
   
   // Array state for tracking selected shifts in form
   const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
+  const [autoAddress, setAutoAddress] = useState<{ displayName?: string; placeId?: string; lat?: number; lon?: number } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   const fetchCabs = async (q = search) => {
@@ -73,7 +75,11 @@ export default function CabsPage() {
       driverName: data.get("driverName"),
       driverPhone: data.get("driverPhone"),
       licenseNumber: data.get("licenseNumber"),
-      driverAddress: data.get("driverAddress")
+      driverAddress: data.get("driverAddress"),
+      formattedAddress: autoAddress?.displayName || data.get("driverAddress"),
+      placeId: autoAddress?.placeId || null,
+      lat: autoAddress?.lat ?? null,
+      lon: autoAddress?.lon ?? null,
     };
     try {
       const url = editingCab ? `/api/cabs/${editingCab.id}` : "/api/cabs";
@@ -117,6 +123,7 @@ export default function CabsPage() {
 
   const handleEditClick = (cab: Cab) => {
     setEditingCab(cab);
+    setAutoAddress(null);
     setSelectedShiftIds(cab.shifts?.map(s => s.id) || []);
     setShowModal(true);
     setFormError(null);
@@ -160,7 +167,7 @@ export default function CabsPage() {
             <p className="text-[#6b6b6b] text-sm mt-0.5">Manage vehicles, vendors, drivers, and shifts.</p>
           </div>
           <button
-            onClick={() => { setShowModal(true); setEditingCab(null); setSelectedShiftIds([]); setFormError(null); }}
+            onClick={() => { setShowModal(true); setEditingCab(null); setSelectedShiftIds([]); setFormError(null); setAutoAddress(null); }}
             className="bg-[#1c1b1f] text-white px-4 py-2 rounded-none text-xs font-bold hover:bg-black flex items-center gap-2 transition"
           >
             <Plus className="w-3.5 h-3.5" /> Register Cab
@@ -244,7 +251,7 @@ export default function CabsPage() {
                           <>
                             <div className="text-[#1c1b1f]">{cab.driverName}</div>
                             <div className="text-[10px] text-[#6b6b6b] font-mono">{cab.driverPhone}</div>
-                            {cab.driverAddress && <div className="text-[10px] text-[#9a9a9a] font-normal truncate max-w-[120px]">{cab.driverAddress}</div>}
+                            {cab.driverAddress && <div className="text-[10px] text-[#9a9a9a] font-normal truncate max-w-[120px]" title={cab.formattedAddress || cab.driverAddress}>{cab.formattedAddress || cab.driverAddress}</div>}
                           </>
                         ) : <span className="font-normal text-[#9a9a9a] text-[11px]">Unassigned</span>}
                       </td>
@@ -307,6 +314,7 @@ export default function CabsPage() {
                       className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]"
                       defaultValue={editingCab?.driverAddress || ""}
                       placeholder="e.g. Sadar, Nagpur"
+                      onSelect={(loc) => setAutoAddress(loc)}
                     />
                   </div>
                 </div>

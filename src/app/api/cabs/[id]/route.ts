@@ -13,19 +13,30 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const { id } = await params;
     const body = await req.json();
     const { vehicleNumber, capacity, vendor, status, driverName, driverPhone, licenseNumber, driverAddress, shiftIds } = body;
+    const formattedAddress = body.formattedAddress;
+    const placeId = body.placeId;
+    const autoLat = body.lat ? Number(body.lat) : null;
+    const autoLon = body.lon ? Number(body.lon) : null;
 
     let finalDriverX = undefined;
     let finalDriverY = undefined;
-    if (driverAddress !== undefined) {
+    let finalDriverPlaceId = undefined;
+    if (autoLat && autoLon && Number.isFinite(autoLat) && Number.isFinite(autoLon)) {
+      finalDriverX = autoLon;
+      finalDriverY = autoLat;
+      finalDriverPlaceId = placeId || null;
+    } else if (driverAddress !== undefined) {
       if (driverAddress) {
         const coords = await mapsProvider.geocode(driverAddress);
         if (coords) {
           finalDriverX = coords.x;
           finalDriverY = coords.y;
+          finalDriverPlaceId = coords.placeId || null;
         }
       } else {
         finalDriverX = null;
         finalDriverY = null;
+        finalDriverPlaceId = null;
       }
     }
 
@@ -40,8 +51,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         ...(driverPhone !== undefined && { driverPhone }),
         ...(licenseNumber !== undefined && { licenseNumber }),
         ...(driverAddress !== undefined && { driverAddress: driverAddress || null }),
+        ...(formattedAddress !== undefined && { formattedAddress }),
         ...(finalDriverX !== undefined && { driverX: finalDriverX }),
         ...(finalDriverY !== undefined && { driverY: finalDriverY }),
+        ...(finalDriverPlaceId !== undefined && { placeId: finalDriverPlaceId }),
         shifts: shiftIds ? {
           set: shiftIds.map((sid: string) => ({ id: sid }))
         } : undefined

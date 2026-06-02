@@ -5,6 +5,7 @@ import {
   type RouteGeometryResult,
   type RouteMatrixResult,
 } from "@/lib/maps/googleMaps";
+import { getSessionCache, setSessionCache } from "@/lib/sessionCache";
 
 export type GeocodeOptions = {
   city?: string;
@@ -14,10 +15,22 @@ export type GeocodeOptions = {
   apiKey?: string;
 };
 
+export type GeocodeResult = MapPoint & {
+  placeId?: string;
+  locationType?: "ROOFTOP" | "RANGE_INTERPOLATED" | "GEOMETRIC_CENTER" | "APPROXIMATE";
+};
+
+const LOCATION_TYPE_WEIGHTS: Record<string, number> = {
+  ROOFTOP: 1000,
+  RANGE_INTERPOLATED: 500,
+  GEOMETRIC_CENTER: 100,
+  APPROXIMATE: 0,
+};
+
 export interface MapsProvider {
   computeRouteGeometry(points: MapPoint[], apiKey: string): Promise<RouteGeometryResult | null>;
   computeMatrix(points: MapPoint[], apiKey: string): Promise<RouteMatrixResult | null>;
-  geocode(name: string, options?: GeocodeOptions): Promise<MapPoint | null>;
+  geocode(name: string, options?: GeocodeOptions): Promise<GeocodeResult | null>;
   autocomplete(query: string, options?: GeocodeOptions): Promise<{ label: string; point: MapPoint }[]>;
   computeETA(distanceKm: number, speedKmPerMin?: number): number;
 }
@@ -42,12 +55,17 @@ function haversineDistance(p1: MapPoint, p2: MapPoint): number {
   return c * R;
 }
 
-async function googleGeocode(name: string, options: GeocodeOptions = {}): Promise<MapPoint | null> {
+async function googleGeocode(name: string, options: GeocodeOptions = {}): Promise<GeocodeResult | null> {
   const apiKey = options.apiKey || process.env.GOOGLE_MAPS_API_KEY || "";
   if (!apiKey) return null;
 
   const cleanName = name.toLowerCase().trim();
   if (!cleanName) return null;
+
+  // Check in-memory cache (1 hour TTL)
+  const cacheKey = `geocode:${cleanName}:${options.city || "Nagpur"}:${options.country || "India"}`;
+  const cached = getSessionCache<GeocodeResult>(cacheKey);
+  if (cached) return cached;
 
   const city = options.city || "Nagpur";
   const country = options.country || "India";
@@ -74,7 +92,7 @@ async function googleGeocode(name: string, options: GeocodeOptions = {}): Promis
   if (components) params.set("components", components);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
     const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`, {
@@ -84,7 +102,8 @@ async function googleGeocode(name: string, options: GeocodeOptions = {}): Promis
 
     const data = await res.json();
     const results = Array.isArray(data?.results) ? data.results : [];
-    let best: { point: MapPoint; score: number } | null = null;
+    let best: { point: MapPoint; score: number; placeId?: string; locationType?: GeocodeResult["locationType"] } | null = null;
+    let hasHighPrecision = false;
 
     for (const result of results) {
       const lat = Number(result?.geometry?.location?.lat);
@@ -95,14 +114,27 @@ async function googleGeocode(name: string, options: GeocodeOptions = {}): Promis
       const distFromDepot = haversineDistance(point, depot);
       if (distFromDepot > maxRadiusKm) continue;
 
+      const locationType = String(result?.geometry?.location_type || "APPROXIMATE") as GeocodeResult["locationType"];
+      const typeWeight = LOCATION_TYPE_WEIGHTS[locationType ?? "APPROXIMATE"] ?? 0;
+
+      // Skip APPROXIMATE if we already have a higher-precision result
+      if (typeWeight === 0 && hasHighPrecision) continue;
+      if (typeWeight > 0) hasHighPrecision = true;
+
       const label = String(result?.formatted_address || "");
-      const score = label ? Math.max(1, 100 - distFromDepot) : null;
-      if (score !== null && (!best || score > best.score)) {
-        best = { point, score };
+      const distanceScore = label ? Math.max(1, 100 - distFromDepot) : 0;
+      const score = typeWeight + distanceScore;
+      const placeId = String(result?.place_id || "");
+
+      if (label && (!best || score > best.score)) {
+        best = { point, score, placeId, locationType };
       }
     }
 
-    return best?.point ?? null;
+    if (!best) return null;
+    const result: GeocodeResult = { x: best.point.x, y: best.point.y, placeId: best.placeId, locationType: best.locationType };
+    setSessionCache(cacheKey, result, 60 * 60 * 1000);
+    return result;
   } catch (error) {
     console.error("Google geocode failed:", error);
     return null;
@@ -165,7 +197,7 @@ class GoogleMapsProvider implements MapsProvider {
     return computeGoogleRouteMatrix(points, apiKey);
   }
 
-  async geocode(name: string, options?: GeocodeOptions) {
+  async geocode(name: string, options?: GeocodeOptions): Promise<GeocodeResult | null> {
     return googleGeocode(name, options);
   }
 

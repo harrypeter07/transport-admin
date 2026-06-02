@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
         display_name: place.formatted_address || place.name || "",
         lat: String(place.geometry?.location?.lat ?? ""),
         lon: String(place.geometry?.location?.lng ?? ""),
+        location_type: place.geometry?.location_type || "",
         address: {
           city: extractAddressComponent(components, "locality") ||
                 extractAddressComponent(components, "sublocality") ||

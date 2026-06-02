@@ -10,6 +10,7 @@ export interface Employee {
   address: string;
   x: number;
   y: number;
+  formattedAddress?: string | null;
   department: string;
   shiftId: string | null;
   status: string;
@@ -29,6 +30,7 @@ export interface Cab {
   driverAddress?: string | null;
   driverX?: number | null;
   driverY?: number | null;
+  formattedAddress?: string | null;
 }
 
 export interface Shift {
@@ -73,6 +75,7 @@ export interface Route {
   violations: Violation[];
   hasEscort?: boolean; // client-side toggle representation
   tripSequence?: number;
+  routeNumber?: number;
 }
 
 
@@ -150,7 +153,6 @@ interface TransportStore {
   cabs: Cab[];
   shifts: Shift[];
   routes: Route[];
-  importSheets: string[];
   activeShiftId: string;
   selectedDate: string; // ISO date string: YYYY-MM-DD
   selectedRouteId: string | null;
@@ -176,10 +178,6 @@ interface TransportStore {
   addCab: (cab: any) => Promise<void>;
   updateCab: (id: string, cab: any) => Promise<void>;
   deleteCab: (id: string) => Promise<void>;
-  fetchImportSheets: () => Promise<void>;
-  importSheet: (sheetName: string) => Promise<any>;
-  uploadRosterFile: (file: File) => Promise<any>;
-  resetDatabase: () => Promise<any>;
   applyRouteSequence: (routeId: string, stopIds: string[], distance: number, duration: number) => Promise<void>;
   swapRouteCab: (routeId: string, cabId: string) => Promise<void>;
   setRoutes: (routes: Route[]) => void;
@@ -190,7 +188,6 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
   cabs: [],
   shifts: [],
   routes: [],
-  importSheets: [],
   activeShiftId: "",
   selectedDate: new Date().toISOString().split("T")[0],
   selectedRouteId: null,
@@ -598,92 +595,6 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     } catch (e) {
       console.error("Error updating cab details:", e);
       set({ loading: false });
-    }
-  },
-
-  fetchImportSheets: async () => {
-    try {
-      const res = await fetch(`/api/import?t=${Date.now()}`);
-      if (res.ok) {
-        const data = await res.json();
-        set({ importSheets: data.sheets || [] });
-      }
-    } catch (e) {
-      console.error("Failed fetching import sheets:", e);
-    }
-  },
-
-  importSheet: async (sheetName) => {
-    set({ loading: true });
-    try {
-      const res = await fetch("/api/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sheetName }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        // Use the date and shiftId returned by the import API
-        // so we fetch routes for the correct date, not just today.
-        const importedDate: string = data.date || new Date().toISOString().split("T")[0];
-        const importedShiftId: string = data.shiftId || "";
-        await get().fetchInitialData({ date: importedDate, shiftId: importedShiftId });
-        set({ loading: false });
-        return { success: true, message: data.message };
-      } else {
-        set({ loading: false });
-        return { success: false, error: data.error };
-      }
-    } catch (e) {
-      console.error("Excel import action failed:", e);
-      set({ loading: false });
-      return { success: false, error: "Network or Server error" };
-    }
-  },
-
-  uploadRosterFile: async (file) => {
-    set({ loading: true });
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/import", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        set({ importSheets: data.sheets || [], loading: false });
-        return { success: true, message: data.message };
-      } else {
-        set({ loading: false });
-        return { success: false, error: data.error || "Upload failed" };
-      }
-    } catch (e) {
-      console.error("Failed uploading roster file:", e);
-      set({ loading: false });
-      return { success: false, error: "Upload failed due to connection error" };
-    }
-  },
-
-  resetDatabase: async () => {
-    set({ loading: true });
-    try {
-      const res = await fetch("/api/import", {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (res.ok) {
-        await get().fetchInitialData();
-        set({ loading: false });
-        return { success: true, message: data.message };
-      } else {
-        set({ loading: false });
-        return { success: false, error: data.error || "Reset failed" };
-      }
-    } catch (e) {
-      console.error("Database reset failed:", e);
-      set({ loading: false });
-      return { success: false, error: "Database reset failed due to connection error" };
     }
   },
 

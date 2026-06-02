@@ -179,7 +179,7 @@ async function persistRoutes(
       await tx.route.deleteMany({ where: { id: { in: oldIds } } });
     }
 
-    for (const optRoute of optimizedRoutes) {
+    for (const [index, optRoute] of optimizedRoutes.entries()) {
       const route = await tx.route.create({
         data: {
           cabId: optRoute.cabId,
@@ -191,7 +191,8 @@ async function persistRoutes(
           status: "PENDING",
           optimizationScore: optRoute.optimizationScore,
           optimizationMode: strategyLabel,
-          tripSequence: cabTripSequenceMap[optRoute.cabId] || 1
+          tripSequence: cabTripSequenceMap[optRoute.cabId] || 1,
+          routeNumber: index + 1
         },
       });
 
@@ -286,7 +287,7 @@ async function persistPreviewRoutes(
     const stopRows: any[] = [];
     const violationRows: any[] = [];
 
-    for (const optRoute of sortedRoutes) {
+    for (const [index, optRoute] of sortedRoutes.entries()) {
       const routeId = randomUUID();
       const shiftId = optRoute.shiftId || fallbackShiftId;
       const tripSequence = optRoute.tripSequence || ((cabSequenceMap[optRoute.cabId] || 0) + 1);
@@ -304,6 +305,7 @@ async function persistPreviewRoutes(
         optimizationScore: optRoute.optimizationScore,
         optimizationMode: strategyLabel,
         tripSequence,
+        routeNumber: index + 1,
       });
 
       for (const stop of optRoute.stops) {
@@ -386,10 +388,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No available cabs found" }, { status: 400 });
     }
 
-    const optimizedRoutes = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey, mode, depot);
+    const { routes: optimizedRoutes, usingFallback } = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey, mode, depot);
     await persistRoutes(optimizedRoutes, currentDateStr, fallbackShiftId, isPickup, mode, cabTripSequenceMap);
 
-    return NextResponse.json({ success: true, count: optimizedRoutes.length });
+    return NextResponse.json({ success: true, count: optimizedRoutes.length, usingFallback });
   } catch (e) {
     console.error("Optimization failed:", e);
     return NextResponse.json({ error: "Optimization engine error" }, { status: 500 });

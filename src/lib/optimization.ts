@@ -1,4 +1,5 @@
 import { mapsProvider } from "@/lib/maps";
+import { getSessionCache, setSessionCache } from "@/lib/sessionCache";
 
 export interface Point {
   x: number;
@@ -70,6 +71,14 @@ export function makeDepot(lat: number, lng: number): Point {
   return { x: lng, y: lat };
 }
 
+export interface GlobalRoadData {
+  dist: number[][];                   // road distance matrix (km)
+  dur: number[][];                    // road duration matrix (minutes)
+  empToGlobalIdx: Map<string, number>; // employee.id → global matrix row/col
+  cabToGlobalIdx: Map<string, number>; // cab.id → global matrix row/col
+  depotGlobalIdx: number;              // depot position in global matrix
+}
+
 // Speed fallback: 30 km/h (0.5 km per minute)
 const AVG_SPEED = 0.5;
 
@@ -127,9 +136,8 @@ async function buildRouteMetricsFromPoints(
 
 /**
  * Gets road distance and travel duration for the route using Google Routes.
- * The function name is kept for compatibility with existing route handlers.
  */
-export async function fetchOSRMRoute(
+export async function fetchGoogleRouteMetrics(
   stops: Point[],
   isPickup: boolean,
   depot: Point = DEPOT
@@ -547,27 +555,51 @@ export async function optimizeRoutes(
   apiKey: string = "",
   mode: string = "FASTEST_TRAVEL",
   depot: Point = DEPOT
-): Promise<OptimizedRoute[]> {
-  if (employees.length === 0 || cabs.length === 0) return [];
+): Promise<{ routes: OptimizedRoute[]; usingFallback: boolean }> {
+  if (employees.length === 0 || cabs.length === 0) return { routes: [], usingFallback: false };
 
   // Sort cabs by capacity descending to maximize employee transport
   const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
-  
+
+  // Build global road matrix once: [cab_0_start, ..., cab_{M-1}_start, emp_0, ..., emp_{N-1}, depot]
+  const globalPoints: Point[] = [
+    ...sortedCabs.map(c => c.startPoint || depot),
+    ...employees.map(e => ({ x: e.x, y: e.y })),
+    depot,
+  ];
+  const cabCount = sortedCabs.length;
+  const empOffset = cabCount;
+  const depotGlobalIdx = globalPoints.length - 1;
+  const empToGlobalIdx = new Map<string, number>();
+  employees.forEach((e, i) => empToGlobalIdx.set(e.id, empOffset + i));
+
+  const { distanceMatrix: globalDist, durationMatrix: globalDur, usingFallback } = await fetchGoogleMapsMatrix(globalPoints, apiKey);
+
+  const roadData: GlobalRoadData = {
+    dist: globalDist,
+    dur: globalDur,
+    empToGlobalIdx,
+    cabToGlobalIdx: new Map(sortedCabs.map((c, i) => [c.id, i])),
+    depotGlobalIdx,
+  };
+
   let remainingEmployees = [...employees];
   const optimizedRoutes: OptimizedRoute[] = [];
 
   for (let i = 0; i < sortedCabs.length; i++) {
     if (remainingEmployees.length === 0) break;
-    
+
     const cab = sortedCabs[i];
     const capacity = cab.capacity;
     const startPoint = cab.startPoint || depot;
 
-    // Pick a seed employee (furthest from depot to bundle remote areas together)
+    // Pick a seed employee (furthest from depot by road distance)
     let seedIdx = 0;
     let maxDist = -1;
     for (let j = 0; j < remainingEmployees.length; j++) {
-      const dist = getDistance({ x: remainingEmployees[j].x, y: remainingEmployees[j].y }, depot);
+      const gIdx = empToGlobalIdx.get(remainingEmployees[j].id);
+      if (gIdx === undefined) continue;
+      const dist = globalDist[gIdx][depotGlobalIdx];
       if (dist > maxDist) {
         maxDist = dist;
         seedIdx = j;
@@ -575,38 +607,41 @@ export async function optimizeRoutes(
     }
 
     const seed = remainingEmployees[seedIdx];
-    // Remove seed from remaining list
     remainingEmployees.splice(seedIdx, 1);
 
-    // Find the closest employees to the seed to fill the cab capacity
+    // Find the closest employees to the seed by road distance to fill the cab capacity
     const cluster: OptimizeEmployee[] = [seed];
-    
+    const seedGIdx = empToGlobalIdx.get(seed.id) ?? depotGlobalIdx;
+
     while (cluster.length < capacity && remainingEmployees.length > 0) {
       let closestIdx = 0;
+      let minDuration = Infinity;
       let minDist = Infinity;
       for (let j = 0; j < remainingEmployees.length; j++) {
-        const dist = getDistance(
-          { x: remainingEmployees[j].x, y: remainingEmployees[j].y },
-          { x: seed.x, y: seed.y }
-        );
+        const gIdx = empToGlobalIdx.get(remainingEmployees[j].id);
+        if (gIdx === undefined) continue;
+        const dur = globalDur[seedGIdx][gIdx];
+        const dist = globalDist[seedGIdx][gIdx];
+        // Use road distance for closest-neighbor, but track duration for the guardrail
         if (dist < minDist) {
           minDist = dist;
+          minDuration = dur;
           closestIdx = j;
         }
       }
-      
-      // If FASTEST_TRAVEL, restrict detours tightly to 7km.
-      // If BALANCED, restrict detours to 12km (moderate packing).
-      // If MAXIMIZE_UTILIZATION, no restriction.
-      // ALWAYS override and take the employee if we are running out of subsequent cab capacity!
+
+      // Mode guardrails use road travel duration, not straight-line km
+      // FASTEST_TRAVEL: break if detour > 15 min
+      // BALANCED: break if detour > 30 min
+      // MAXIMIZE_UTILIZATION: no restriction
       const subsequentCapacity = sortedCabs.slice(i + 1).reduce((sum, c) => sum + c.capacity, 0);
       const mustTakeToAvoidLeavingBehind = remainingEmployees.length > subsequentCapacity;
 
       if (!mustTakeToAvoidLeavingBehind) {
-        if (mode === "FASTEST_TRAVEL" && minDist > 7 && cluster.length > 1) {
-          break; // Stop filling cab to prevent massive detours
-        } else if (mode === "BALANCED" && minDist > 12 && cluster.length > 1) {
-          break; // Stop filling cab to prevent moderate detours
+        if (mode === "FASTEST_TRAVEL" && minDuration > 15 && cluster.length > 1) {
+          break;
+        } else if (mode === "BALANCED" && minDuration > 30 && cluster.length > 1) {
+          break;
         }
       }
 
@@ -614,24 +649,31 @@ export async function optimizeRoutes(
       remainingEmployees.splice(closestIdx, 1);
     }
 
-    // Pre-compute Google matrix for all candidate points to drive permutation scoring with road-accurate distances
-    const allPoints: Point[] = [startPoint, ...cluster.map(e => ({ x: e.x, y: e.y })), depot];
-    const { distanceMatrix: fullDistMatrix, durationMatrix: fullDurMatrix } = await fetchGoogleMapsMatrix(allPoints, apiKey);
+    // Extract sub-matrix from global road data for [startPoint, cluster, depot]
+    const neededIndices = [
+      i,
+      ...cluster.map(e => empToGlobalIdx.get(e.id)).filter((idx): idx is number => idx !== undefined),
+      depotGlobalIdx,
+    ];
+    const n = neededIndices.length;
+    const fullDistMatrix = Array.from({ length: n }, (_, row) =>
+      neededIndices.map(col => globalDist[neededIndices[row]][col])
+    );
+    const fullDurMatrix = Array.from({ length: n }, (_, row) =>
+      neededIndices.map(col => globalDur[neededIndices[row]][col])
+    );
 
-    // Get optimal route using matrix-backed distance scoring
     const bestOrderedRoute = getOptimalPermutation(cluster, isPickup, fullDistMatrix);
 
-    // Apply safety correction
-    const hasEscort = false; // default
+    const hasEscort = false;
     const { route: safetyCorrectedRoute } = enforceSafetyRules(
       bestOrderedRoute,
       isPickup,
       hasEscort
     );
 
-    // Reorder the pre-computed matrix to match the ordered route so we can reuse it for final metrics
     const perm = safetyCorrectedRoute.map(e => cluster.indexOf(e));
-    const reordered = reorderMatrixForRoute(fullDistMatrix, fullDurMatrix, perm, 0, allPoints.length - 1);
+    const reordered = reorderMatrixForRoute(fullDistMatrix, fullDurMatrix, perm, 0, n - 1);
     const { stops, totalDistance, totalDuration } = buildRouteStopsFromMetrics(
       safetyCorrectedRoute,
       isPickup,
@@ -641,14 +683,12 @@ export async function optimizeRoutes(
       reordered.durationMatrix
     );
 
-    // Check violations for reporting
     const finalViolations = checkSafetyViolations(
       stops.map((s) => ({ name: s.employeeName, gender: s.gender })),
       isPickup,
       hasEscort
     );
 
-    // Calculate score
     const penalty = (hasEscort ? 15 : 0) + (finalViolations.length * 30);
     const score = Math.max(30, Math.round(100 - (totalDistance * 0.8) - penalty));
 
@@ -677,9 +717,9 @@ export async function optimizeRoutes(
       const maleStopIdx = route.stops.findIndex(s => s.gender === "MALE");
       if (maleStopIdx !== -1) {
         const maleStop = route.stops[maleStopIdx];
-        const maleEmpObj = employees.find(e => e.id === maleStop.employeeId)!;
+        const maleEmpObj = employees.find(e => e.id === maleStop.employeeId);
+        if (!maleEmpObj) continue;
 
-        // Swap out male and swap in female
         route.stops[maleStopIdx] = {
           ...maleStop,
           employeeId: female.id,
@@ -696,16 +736,17 @@ export async function optimizeRoutes(
         break;
       }
     }
-    if (!swapped) break; // No more males available for swaps
+    if (!swapped) break;
   }
 
-  // 2. Resolve isolated females (female alone in cab) by swapping with a male from a multi-passenger cab
+  // 2. Resolve isolated females by swapping with a male from a multi-passenger cab
   for (let r = 0; r < optimizedRoutes.length; r++) {
     const route = optimizedRoutes[r];
     if (route.stops.length === 1 && route.stops[0].gender === "FEMALE" && !route.hasEscort) {
       const isolatedStop = route.stops[0];
-      const isolatedEmpObj = employees.find(e => e.id === isolatedStop.employeeId)!;
-      
+      const isolatedEmpObj = employees.find(e => e.id === isolatedStop.employeeId);
+      if (!isolatedEmpObj) continue;
+
       let resolved = false;
       for (let pr = 0; pr < optimizedRoutes.length; pr++) {
         if (pr === r) continue;
@@ -714,9 +755,9 @@ export async function optimizeRoutes(
           const maleIdx = partnerRoute.stops.findIndex(s => s.gender === "MALE");
           if (maleIdx !== -1) {
             const partnerMaleStop = partnerRoute.stops[maleIdx];
-            const partnerMaleEmpObj = employees.find(e => e.id === partnerMaleStop.employeeId)!;
-            
-            // Swap female into partner route (traveling with others)
+            const partnerMaleEmpObj = employees.find(e => e.id === partnerMaleStop.employeeId);
+            if (!partnerMaleEmpObj) continue;
+
             partnerRoute.stops[maleIdx] = {
               ...partnerMaleStop,
               employeeId: isolatedEmpObj.id,
@@ -726,8 +767,7 @@ export async function optimizeRoutes(
               y: isolatedEmpObj.y,
               address: isolatedEmpObj.address,
             };
-            
-            // Swap male into isolated route (male traveling alone in cab is safe)
+
             route.stops[0] = {
               ...isolatedStop,
               employeeId: partnerMaleEmpObj.id,
@@ -737,7 +777,7 @@ export async function optimizeRoutes(
               y: partnerMaleEmpObj.y,
               address: partnerMaleEmpObj.address,
             };
-            
+
             resolved = true;
             break;
           }
@@ -749,21 +789,32 @@ export async function optimizeRoutes(
     }
   }
 
-  // 3. Recalculate routes sequence, travel times, ETAs, and violations for all modified routes
-  for (const route of optimizedRoutes) {
-    // Filter out any null employees (can happen if a stop's employeeId became stale after a swap)
+  // 3. Recalculate routes sequence, travel times, ETAs using global road data (no new API calls)
+  for (let r = 0; r < optimizedRoutes.length; r++) {
+    const route = optimizedRoutes[r];
     const stopsEmps = route.stops
       .map(s => employees.find(e => e.id === s.employeeId))
       .filter((e): e is OptimizeEmployee => e !== undefined)
-      .slice(0, route.capacity); // Hard cap: never exceed cab capacity
+      .slice(0, route.capacity);
     if (stopsEmps.length === 0) continue;
 
     const routeStartPoint = route.startPoint || depot;
-    const allPoints: Point[] = [routeStartPoint, ...stopsEmps.map(e => ({ x: e.x, y: e.y })), depot];
-    const { distanceMatrix: fullDistMatrix, durationMatrix: fullDurMatrix } = await fetchGoogleMapsMatrix(allPoints, apiKey);
+    // Extract sub-matrix from global road data
+    const neededIndices = [
+      r,
+      ...stopsEmps.map(e => empToGlobalIdx.get(e.id)).filter((idx): idx is number => idx !== undefined),
+      depotGlobalIdx,
+    ];
+    const n = neededIndices.length;
+    const fullDistMatrix = Array.from({ length: n }, (_, row) =>
+      neededIndices.map(col => globalDist[neededIndices[row]][col])
+    );
+    const fullDurMatrix = Array.from({ length: n }, (_, row) =>
+      neededIndices.map(col => globalDur[neededIndices[row]][col])
+    );
 
     const bestOrderedRoute = getOptimalPermutation(stopsEmps, isPickup, fullDistMatrix);
-    
+
     const { route: safetyCorrectedRoute } = enforceSafetyRules(
       bestOrderedRoute,
       isPickup,
@@ -771,7 +822,7 @@ export async function optimizeRoutes(
     );
 
     const perm = safetyCorrectedRoute.map(e => stopsEmps.indexOf(e));
-    const reordered = reorderMatrixForRoute(fullDistMatrix, fullDurMatrix, perm, 0, allPoints.length - 1);
+    const reordered = reorderMatrixForRoute(fullDistMatrix, fullDurMatrix, perm, 0, n - 1);
     const { stops: newStops, totalDistance: distance, totalDuration: duration } =
       buildRouteStopsFromMetrics(
         safetyCorrectedRoute,
@@ -798,7 +849,7 @@ export async function optimizeRoutes(
     route.violations = finalViolations;
   }
 
-  return optimizedRoutes;
+  return { routes: optimizedRoutes, usingFallback };
 }
 
 /**
@@ -812,7 +863,7 @@ export async function geocodePlace(
   country: string = "India",
   depot: Point = DEPOT,
   maxRadiusKm: number = 70
-): Promise<Point | null> {
+): Promise<{ x: number; y: number; placeId?: string; locationType?: string } | null> {
   const cleanName = name.toLowerCase().trim();
   if (!cleanName) return null;
 
@@ -834,15 +885,30 @@ export async function geocodeNagpurPlace(name: string): Promise<Point | null> {
 export async function fetchGoogleMapsMatrix(
   points: Point[],
   apiKey: string
-): Promise<{ distanceMatrix: number[][]; durationMatrix: number[][] }> {
+): Promise<{ distanceMatrix: number[][]; durationMatrix: number[][]; usingFallback: boolean }> {
   const n = points.length;
-  if (n === 0) return { distanceMatrix: [], durationMatrix: [] };
+  if (n === 0) return { distanceMatrix: [], durationMatrix: [], usingFallback: false };
+
+  // Check in-memory cache (5 min TTL) for identical point sets
+  const cacheKey = apiKey
+    ? `matrix:${apiKey.slice(-8)}:${points.map(p => `${p.x.toFixed(5)},${p.y.toFixed(5)}`).join("|")}`
+    : "";
+  if (apiKey) {
+    const cached = getSessionCache<{ dist: number[][]; dur: number[][] }>(cacheKey);
+    if (cached) {
+      return { distanceMatrix: cached.dist, durationMatrix: cached.dur, usingFallback: false };
+    }
+  }
 
   if (apiKey) {
     const routesMatrix = await mapsProvider.computeMatrix(points, apiKey);
-    if (routesMatrix) return routesMatrix;
+    if (routesMatrix) {
+      setSessionCache(cacheKey, { dist: routesMatrix.distanceMatrix, dur: routesMatrix.durationMatrix }, 5 * 60 * 1000);
+      return { ...routesMatrix, usingFallback: false };
+    }
   }
 
+  console.warn("⚠️ Google Maps Matrix API call failed or no API key — using Haversine estimation");
   const distanceMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
   const durationMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
 
@@ -854,7 +920,7 @@ export async function fetchGoogleMapsMatrix(
       durationMatrix[i][j] = mapsProvider.computeETA(d, AVG_SPEED);
     }
   }
-  return { distanceMatrix, durationMatrix };
+  return { distanceMatrix, durationMatrix, usingFallback: true };
 }
 
 /**
@@ -1202,26 +1268,41 @@ export interface AllStrategyPlans {
   capacityShortfall: number;      // > 0 → admin needs more cabs
   totalCabCapacity: number;
   totalEmployees: number;
+  usingFallback: boolean;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-function idxFurthestFromDepot(employees: OptimizeEmployee[], depot: Point): number {
+function idxFurthestFromDepot(employees: OptimizeEmployee[], depot: Point, roadData?: GlobalRoadData): number {
   let idx = 0, maxD = -1;
   for (let i = 0; i < employees.length; i++) {
-    const d = getDistance({ x: employees[i].x, y: employees[i].y }, depot);
+    const empGlobalIdx = roadData?.empToGlobalIdx.get(employees[i].id);
+    const d = roadData && empGlobalIdx !== undefined
+      ? roadData.dist[empGlobalIdx][roadData.depotGlobalIdx]
+      : getDistance({ x: employees[i].x, y: employees[i].y }, depot);
     if (d > maxD) { maxD = d; idx = i; }
   }
   return idx;
 }
 
-function idxNearestTo(employees: OptimizeEmployee[], ref: OptimizeEmployee): { idx: number; dist: number } {
-  let idx = 0, minD = Infinity;
+function idxNearestTo(employees: OptimizeEmployee[], ref: OptimizeEmployee, roadData?: GlobalRoadData): { idx: number; dist: number; roadDur?: number } {
+  let idx = 0, minD = Infinity, durAtMin: number | undefined;
+  const refGlobalIdx = roadData?.empToGlobalIdx.get(ref.id);
   for (let i = 0; i < employees.length; i++) {
-    const d = getDistance({ x: employees[i].x, y: employees[i].y }, { x: ref.x, y: ref.y });
-    if (d < minD) { minD = d; idx = i; }
+    const emp = employees[i];
+    let d: number;
+    let rd: number | undefined;
+    if (refGlobalIdx !== undefined && roadData) {
+      const empGlobalIdx = roadData.empToGlobalIdx.get(emp.id);
+      if (empGlobalIdx === undefined) continue;
+      d = roadData.dist[refGlobalIdx][empGlobalIdx];
+      rd = roadData.dur[refGlobalIdx][empGlobalIdx];
+    } else {
+      d = getDistance({ x: emp.x, y: emp.y }, { x: ref.x, y: ref.y });
+    }
+    if (d < minD) { minD = d; durAtMin = rd; idx = i; }
   }
-  return { idx, dist: minD };
+  return { idx, dist: minD, roadDur: durAtMin };
 }
 
 type ClusterAssignment = { cab: OptimizeCab; cluster: OptimizeEmployee[] };
@@ -1231,19 +1312,19 @@ type ClusterAssignment = { cab: OptimizeCab; cluster: OptimizeEmployee[] };
  * Greedily fills every cab to capacity. No radius limit.
  * Uses fewest cabs possible. Some employees may have longer rides.
  */
-function clusterMaxUtilization(employees: OptimizeEmployee[], cabs: OptimizeCab[], depot: Point): ClusterAssignment[] {
+function clusterMaxUtilization(employees: OptimizeEmployee[], cabs: OptimizeCab[], depot: Point, roadData?: GlobalRoadData): ClusterAssignment[] {
   const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
   const remaining = [...employees];
   const assignments: ClusterAssignment[] = [];
 
   for (const cab of sortedCabs) {
     if (remaining.length === 0) break;
-    const seedIdx = idxFurthestFromDepot(remaining, depot);
+    const seedIdx = idxFurthestFromDepot(remaining, depot, roadData);
     const seed = remaining.splice(seedIdx, 1)[0];
     const cluster: OptimizeEmployee[] = [seed];
 
     while (cluster.length < cab.capacity && remaining.length > 0) {
-      const { idx } = idxNearestTo(remaining, seed);
+      const { idx } = idxNearestTo(remaining, seed, roadData);
       cluster.push(remaining.splice(idx, 1)[0]);
     }
     assignments.push({ cab, cluster });
@@ -1253,7 +1334,7 @@ function clusterMaxUtilization(employees: OptimizeEmployee[], cabs: OptimizeCab[
 
 /**
  * Strategy 2 — MINIMIZE_TIME
- * Keeps clusters geographically tight (10 km radius from seed).
+ * Keeps clusters tight (20 min road-duration radius from seed).
  * Outliers seed their own separate cab — shorter rides for everyone.
  * May leave some cab seats empty.
  */
@@ -1261,7 +1342,8 @@ function clusterMinTime(
   employees: OptimizeEmployee[],
   cabs: OptimizeCab[],
   depot: Point,
-  radiusKm: number = 10
+  radiusMin: number = 20,
+  roadData?: GlobalRoadData
 ): ClusterAssignment[] {
   const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
   const remaining = [...employees];
@@ -1269,13 +1351,14 @@ function clusterMinTime(
 
   for (const cab of sortedCabs) {
     if (remaining.length === 0) break;
-    const seedIdx = idxFurthestFromDepot(remaining, depot);
+    const seedIdx = idxFurthestFromDepot(remaining, depot, roadData);
     const seed = remaining.splice(seedIdx, 1)[0];
     const cluster: OptimizeEmployee[] = [seed];
 
     while (cluster.length < cab.capacity && remaining.length > 0) {
-      const { idx, dist } = idxNearestTo(remaining, seed);
-      if (dist > radiusKm) break; // stop — next employee is too far away
+      const { idx, roadDur } = idxNearestTo(remaining, seed, roadData);
+      const breakDur = roadDur ?? (idxNearestTo(remaining, seed).dist);
+      if (breakDur > radiusMin) break;
       cluster.push(remaining.splice(idx, 1)[0]);
     }
     assignments.push({ cab, cluster });
@@ -1285,11 +1368,11 @@ function clusterMinTime(
 
 /**
  * Strategy 3 — BALANCED
- * 15 km radius, targets ~80% fill before stopping.
+ * 30 min road-duration radius, targets ~80% fill before stopping.
  * Balances commute time vs cab utilization.
  */
-function clusterBalanced(employees: OptimizeEmployee[], cabs: OptimizeCab[], depot: Point): ClusterAssignment[] {
-  const RADIUS_KM = 15;
+function clusterBalanced(employees: OptimizeEmployee[], cabs: OptimizeCab[], depot: Point, roadData?: GlobalRoadData): ClusterAssignment[] {
+  const RADIUS_MIN = 30;
   const FILL_RATIO = 0.8;
   const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
   const remaining = [...employees];
@@ -1298,14 +1381,14 @@ function clusterBalanced(employees: OptimizeEmployee[], cabs: OptimizeCab[], dep
   for (const cab of sortedCabs) {
     if (remaining.length === 0) break;
     const targetFill = Math.max(1, Math.ceil(cab.capacity * FILL_RATIO));
-    const seedIdx = idxFurthestFromDepot(remaining, depot);
+    const seedIdx = idxFurthestFromDepot(remaining, depot, roadData);
     const seed = remaining.splice(seedIdx, 1)[0];
     const cluster: OptimizeEmployee[] = [seed];
 
     while (cluster.length < cab.capacity && remaining.length > 0) {
-      const { idx, dist } = idxNearestTo(remaining, seed);
-      // Stop if we've hit the target fill AND the next person is too far
-      if (dist > RADIUS_KM && cluster.length >= targetFill) break;
+      const { idx, roadDur } = idxNearestTo(remaining, seed, roadData);
+      const breakDur = roadDur ?? (idxNearestTo(remaining, seed).dist);
+      if (breakDur > RADIUS_MIN && cluster.length >= targetFill) break;
       cluster.push(remaining.splice(idx, 1)[0]);
     }
     assignments.push({ cab, cluster });
@@ -1320,7 +1403,8 @@ async function buildRoutesFromAssignments(
   employees: OptimizeEmployee[],  // full employee list for post-swap lookups
   isPickup: boolean,
   apiKey: string,
-  depot: Point
+  depot: Point,
+  roadData?: GlobalRoadData
 ): Promise<OptimizedRoute[]> {
   const routes: OptimizedRoute[] = [];
 
@@ -1332,8 +1416,29 @@ async function buildRoutesFromAssignments(
     const cappedCluster = cluster.slice(0, cab.capacity);
 
     // Pre-compute Google matrix for all candidate points to drive permutation scoring
-    const allPoints: Point[] = [startPoint, ...cappedCluster.map(e => ({ x: e.x, y: e.y })), depot];
-    const { distanceMatrix: fullDistMatrix, durationMatrix: fullDurMatrix } = await fetchGoogleMapsMatrix(allPoints, apiKey);
+    let fullDistMatrix: number[][], fullDurMatrix: number[][];
+    let matrixSize = 0;
+    if (roadData) {
+      const cabGlobalIdx = roadData.cabToGlobalIdx.get(cab.id) ?? roadData.depotGlobalIdx;
+      const neededGlobalIndices = [
+        cabGlobalIdx,
+        ...cappedCluster.map(e => roadData.empToGlobalIdx.get(e.id)).filter((idx): idx is number => idx !== undefined),
+        roadData.depotGlobalIdx,
+      ];
+      matrixSize = neededGlobalIndices.length;
+      fullDistMatrix = Array.from({ length: matrixSize }, (_, i) =>
+        neededGlobalIndices.map(j => roadData.dist[neededGlobalIndices[i]][j])
+      );
+      fullDurMatrix = Array.from({ length: matrixSize }, (_, i) =>
+        neededGlobalIndices.map(j => roadData.dur[neededGlobalIndices[i]][j])
+      );
+    } else {
+      const allPoints: Point[] = [startPoint, ...cappedCluster.map(e => ({ x: e.x, y: e.y })), depot];
+      matrixSize = allPoints.length;
+      const matrices = await fetchGoogleMapsMatrix(allPoints, apiKey);
+      fullDistMatrix = matrices.distanceMatrix;
+      fullDurMatrix = matrices.durationMatrix;
+    }
 
     // Optimal stop order using matrix-backed distance scoring + safety enforcement
     const ordered = getOptimalPermutation(cappedCluster, isPickup, fullDistMatrix);
@@ -1341,7 +1446,7 @@ async function buildRoutesFromAssignments(
 
     // Reorder the pre-computed matrix to match the ordered route for final metrics
     const perm = safeRoute.map(e => cappedCluster.indexOf(e));
-    const reordered = reorderMatrixForRoute(fullDistMatrix, fullDurMatrix, perm, 0, allPoints.length - 1);
+    const reordered = reorderMatrixForRoute(fullDistMatrix, fullDurMatrix, perm, 0, matrixSize - 1);
     const { stops, totalDistance: distance, totalDuration: duration } = buildRouteStopsFromMetrics(
       safeRoute,
       isPickup,
@@ -1386,9 +1491,7 @@ function summarisePlan(routes: OptimizedRoute[]): StrategyPlan {
     ? Math.round(allDurations.reduce((a, b) => a + b, 0) / allDurations.length)
     : 0;
   const violations = routes.reduce(
-    (s, r) =>
-      s +
-      r.violations.filter((v) => !("resolved" in v) || !("resolved" in v && v.resolved)).length,
+    (s, r) => s + r.violations.length,
     0
   );
 
@@ -1417,18 +1520,43 @@ export async function optimizeAllStrategies(
   const totalCabCapacity = cabs.reduce((sum, c) => sum + c.capacity, 0);
   const capacityShortfall = Math.max(0, employees.length - totalCabCapacity);
 
+  // Build global road matrix once: [cab_0_start, ..., cab_{M-1}_start, emp_0, ..., emp_{N-1}, depot]
+  const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
+  const globalPoints: Point[] = [
+    ...sortedCabs.map(c => c.startPoint || depot),
+    ...employees.map(e => ({ x: e.x, y: e.y })),
+    depot,
+  ];
+  const cabCount = sortedCabs.length;
+  const empOffset = cabCount;
+  const depotGlobalIdx = globalPoints.length - 1;
+  const empToGlobalIdx = new Map<string, number>();
+  employees.forEach((e, i) => empToGlobalIdx.set(e.id, empOffset + i));
+  const cabToGlobalIdx = new Map<string, number>();
+  sortedCabs.forEach((c, i) => cabToGlobalIdx.set(c.id, i));
+
+  const { distanceMatrix: globalDist, durationMatrix: globalDur, usingFallback } = await fetchGoogleMapsMatrix(globalPoints, apiKey);
+
+  const roadData: GlobalRoadData = {
+    dist: globalDist,
+    dur: globalDur,
+    empToGlobalIdx,
+    cabToGlobalIdx,
+    depotGlobalIdx,
+  };
+
   const [maxRoutes, minRoutes, balRoutes] = await Promise.all([
     buildRoutesFromAssignments(
-      clusterMaxUtilization(employees, cabs, depot),
-      employees, isPickup, apiKey, depot
+      clusterMaxUtilization(employees, sortedCabs, depot, roadData),
+      employees, isPickup, apiKey, depot, roadData
     ),
     buildRoutesFromAssignments(
-      clusterMinTime(employees, cabs, depot, 10),
-      employees, isPickup, apiKey, depot
+      clusterMinTime(employees, sortedCabs, depot, 20, roadData),
+      employees, isPickup, apiKey, depot, roadData
     ),
     buildRoutesFromAssignments(
-      clusterBalanced(employees, cabs, depot),
-      employees, isPickup, apiKey, depot
+      clusterBalanced(employees, sortedCabs, depot, roadData),
+      employees, isPickup, apiKey, depot, roadData
     ),
   ]);
 
@@ -1439,6 +1567,7 @@ export async function optimizeAllStrategies(
     capacityShortfall,
     totalCabCapacity,
     totalEmployees: employees.length,
+    usingFallback,
   };
 }
 

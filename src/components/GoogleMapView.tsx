@@ -117,7 +117,7 @@ export default function GoogleMapView({
     const airportLng = 79.0472;
     const latKm = (lat - airportLat) * 111;
     const lngKm = (lng - airportLng) * 103;
-    return Math.sqrt(latKm * latKm + lngKm * lngKm) < 1.2;
+    return Math.sqrt(latKm * latKm + lngKm * lngKm) < 0.5;
   };
 
   const hasPreciseDriverStart = (route: Route) => {
@@ -158,46 +158,16 @@ export default function GoogleMapView({
   const fetchRouteGeometry = async (coords: google.maps.LatLngLiteral[]): Promise<[number, number][]> => {
     if (coords.length <= 1) return coords.map((c) => [c.lat, c.lng]);
 
-    if (typeof google !== "undefined" && google.maps?.DirectionsService) {
-      try {
-        const result = await new Promise<google.maps.DirectionsResult | null>((resolve) => {
-          const service = new google.maps.DirectionsService();
-          service.route(
-            {
-              origin: coords[0],
-              destination: coords[coords.length - 1],
-              waypoints: coords.slice(1, -1).map((c) => ({
-                location: c,
-                stopover: true,
-              })),
-              travelMode: google.maps.TravelMode.DRIVING,
-              optimizeWaypoints: false,
-            },
-            (result, status) => {
-              resolve(status === google.maps.DirectionsStatus.OK ? result : null);
-            }
-          );
-        });
-
-        if (result?.routes?.[0]?.overview_path) {
-          const path = result.routes[0].overview_path.map(
-            (ll) => [ll.lat(), ll.lng()] as [number, number]
-          );
-          if (path.length > coords.length) return path;
-        }
-      } catch (e) {
-        console.error("Google DirectionsService failed:", e);
-      }
-    }
-
+    const coordsArr: [number, number][] = coords.map((c) => [c.lat, c.lng]);
     try {
       const res = await fetch("/api/routing/geometry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coords }),
+        body: JSON.stringify({ coords: coordsArr }),
       });
       if (res.ok) {
         const data = await res.json();
+        console.log("[geometry] source:", data?.source, "| sent:", coords.length, "pts | recv:", data?.coordinates?.length, "pts");
         if (Array.isArray(data?.coordinates) && data.coordinates.length > coords.length) {
           return data.coordinates;
         }
@@ -205,7 +175,7 @@ export default function GoogleMapView({
     } catch (e) {
       console.error("Route geometry fetch failed:", e);
     }
-    return coords.map((c) => [c.lat, c.lng]);
+    return coordsArr;
   };
 
   useEffect(() => {
@@ -214,27 +184,26 @@ export default function GoogleMapView({
       return;
     }
     let active = true;
-    const fetchRouteGeometries = async () => {
-      const selectedRoute = selectedRouteId
-        ? routes.find((route) => route.id === selectedRouteId)
-        : null;
-      const orderedRoutes = selectedRoute
-        ? [selectedRoute, ...routes.filter((route) => route.id !== selectedRoute.id)]
-        : routes;
-      setRouteGeometries({});
-      for (const route of orderedRoutes) {
-        const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
-        if (sortedStops.length === 0) continue;
-        const coords = buildRouteLatLngs(
-          route,
-          sortedStops.map((s) => ({ lat: s.employee.y, lng: s.employee.x }))
-        );
-        const geometry = await fetchRouteGeometry(coords);
+    const selectedRoute = selectedRouteId
+      ? routes.find((route) => route.id === selectedRouteId)
+      : null;
+    const orderedRoutes = selectedRoute
+      ? [selectedRoute, ...routes.filter((route) => route.id !== selectedRoute.id)]
+      : routes;
+
+    for (const route of orderedRoutes) {
+      const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+      if (sortedStops.length === 0) continue;
+      const coords = buildRouteLatLngs(
+        route,
+        sortedStops.map((s) => ({ lat: s.employee.y, lng: s.employee.x }))
+      );
+      fetchRouteGeometry(coords).then((geometry) => {
         if (!active) return;
         setRouteGeometries((prev) => ({ ...prev, [route.id]: geometry }));
-      }
-    };
-    fetchRouteGeometries();
+      });
+    }
+
     return () => { active = false; };
   }, [routes, selectedRouteId, depotLat, depotLng, mapReady]);
 
@@ -508,7 +477,7 @@ export default function GoogleMapView({
           overlays.push(startMarker);
 
           const startInfo = new google.maps.InfoWindow({
-            content: `<strong style="font-size:14px;">${selectedRoute.cab.driverName || "Driver"}</strong><br/><span style="font-size:12px;color:#666;">${selectedRoute.cab.driverAddress || "Starting Point"}</span>`,
+            content: `<strong style="font-size:14px;">${selectedRoute.cab.driverName || "Driver"}</strong><br/><span style="font-size:12px;color:#666;">${selectedRoute.cab.formattedAddress || selectedRoute.cab.driverAddress || "Starting Point"}</span>`,
           });
           infoWindows.push(startInfo);
           startMarker.addListener("click", () => {
@@ -528,7 +497,8 @@ export default function GoogleMapView({
             fitCoords.push({ lat: stop.employee.y, lng: stop.employee.x });
           }
 
-          const parts = stop.employee.address.split(" | ");
+          const empAddress = stop.employee.formattedAddress || stop.employee.address;
+const parts = empAddress.split(" | ");
           const pickupLabel = parts[0];
           const homeLabel = parts[1] || parts[0];
           const phoneParts = stop.employee.phone.split("/");

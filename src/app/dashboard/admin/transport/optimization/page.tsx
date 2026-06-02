@@ -28,10 +28,7 @@ import {
  Printer,
  Plus,
  Trash,
- FileSpreadsheet,
- Download,
- Upload,
- AlertCircle,
+  AlertCircle,
  RefreshCw,
  ArrowUp,
  ArrowDown,
@@ -46,18 +43,17 @@ import {
 
 export default function TransitAdminSPA() {
  const {
- employees,
- cabs,
- shifts,
- routes,
- importSheets,
- activeShiftId,
- selectedDate,
- setSelectedDate,
- selectedRouteId,
- loading,
- fetchInitialData,
- setActiveShiftId,
+  employees,
+  cabs,
+  shifts,
+  routes,
+  activeShiftId,
+  selectedDate,
+  setSelectedDate,
+  selectedRouteId,
+  loading,
+  fetchInitialData,
+  setActiveShiftId,
  setSelectedRouteId,
  runOptimization,
  previewOptimization,
@@ -73,13 +69,9 @@ export default function TransitAdminSPA() {
  deleteEmployee,
  addCab,
  updateCab,
- deleteCab,
- fetchImportSheets,
- importSheet,
- uploadRosterFile,
- resetDatabase,
- applyRouteSequence,
- swapRouteCab,
+  deleteCab,
+  applyRouteSequence,
+  swapRouteCab,
  } = useTransportStore();
 
  const router = useRouter();
@@ -137,15 +129,8 @@ export default function TransitAdminSPA() {
  const [optimizing, setOptimizing] = useState(false);
  const [previewedStrategy, setPreviewedStrategy] = useState<"MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED" | null>(null);
  const [applyingStrategy, setApplyingStrategy] = useState<string | null>(null);
- const [visibleCabsCount, setVisibleCabsCount] = useState(4);
-
- // Excel bulk upload state
- const [uploadFile, setUploadFile] = useState<File | null>(null);
- const [uploading, setUploading] = useState(false);
- const [uploadMsg, setUploadMsg] = useState("");
- const [searchQuery, setSearchQuery] = useState("");
- // Auto-optimize loading overlay state
- const [autoOptimizingOverlay, setAutoOptimizingOverlay] = useState<"idle" | "uploading" | "optimizing">("idle");
+  const [visibleCabsCount, setVisibleCabsCount] = useState(4);
+  const [searchQuery, setSearchQuery] = useState("");
 
  // Settings/Diagnostics states
  const [showSettings, setShowSettings] = useState(false);
@@ -165,12 +150,9 @@ export default function TransitAdminSPA() {
  }
  const [variations, setVariations] = useState<Record<string, RouteVariation[]>>({});
  const [loadingVariations, setLoadingVariations] = useState<Record<string, boolean>>({});
- const [activeVarIndices, setActiveVarIndices] = useState<Record<string, number>>({});
+  const [activeVarIndices, setActiveVarIndices] = useState<Record<string, number>>({});
 
- // Local Excel import selection
- const [selectedImportSheet, setSelectedImportSheet] = useState<string>("");
-
- // Modals for editing and swapping
+  // Modals for editing and swapping
  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
  const [editingCab, setEditingCab] = useState<any | null>(null);
  const [swappingCabRouteId, setSwappingCabRouteId] = useState<string | null>(null);
@@ -212,7 +194,6 @@ export default function TransitAdminSPA() {
     };
 
     loadInitialData();
-    fetchImportSheets();
 
     return () => {
       isActive = false;
@@ -349,86 +330,7 @@ export default function TransitAdminSPA() {
 
 
 
- const handleImportSheet = async (e: React.FormEvent) => {
- e.preventDefault();
- if (!selectedImportSheet) return;
-
- setUploading(true);
- setUploadMsg("");
- setAutoOptimizingOverlay("uploading");
-
- try {
- const res = await importSheet(selectedImportSheet);
- if (res.success) {
- // Switch to optimizer desk to show the imported routes
- setActiveDesk("OPTIMIZER");
- setUploadMsg(res.message || "Roster imported successfully. Routes are loaded from the Excel sheet.");
- } else {
- setUploadMsg(`Error: ${res.error}`);
- }
- } catch (err: any) {
- console.error(err);
- setUploadMsg(`Error: ${err.message || "Excel import failed"}`);
- } finally {
- setUploading(false);
- setAutoOptimizingOverlay("idle");
- }
- };
-
-
- const handleFileUpload = async (e: React.FormEvent) => {
- e.preventDefault();
- if (!uploadFile) return;
-
- setUploading(true);
- setUploadMsg("");
- setAutoOptimizingOverlay("uploading");
-
- try {
- const res = await uploadRosterFile(uploadFile);
- if (res.success) {
- setUploadFile(null);
- const fileInput = document.getElementById("fileInput") as HTMLInputElement;
- if (fileInput) fileInput.value = "";
- setSelectedImportSheet("");
- setUploadMsg(res.message || "Roster spreadsheet uploaded successfully. Choose a sheet date to optimize.");
- } else {
- setUploadMsg(`Error: ${res.error}`);
- }
- } catch (err) {
- console.error(err);
- setUploadMsg("Upload failed.");
- } finally {
- setUploading(false);
- setAutoOptimizingOverlay("idle");
- }
- };
-
- const handleResetDatabase = async () => {
- if (!window.confirm("Are you sure you want to clear all data? This will delete all shifts, employees, cabs, drivers, routes, stops, and warnings from the database.")) {
- return;
- }
-
- setUploading(true);
- setUploadMsg("");
- try {
- const res = await resetDatabase();
- if (res.success) {
- await fetchImportSheets();
- setSelectedImportSheet("");
- setUploadMsg(res.message || "Database cleared successfully.");
- } else {
- setUploadMsg(`Error: ${res.error}`);
- }
- } catch (err) {
- console.error(err);
- setUploadMsg("Database reset failed.");
- } finally {
- setUploading(false);
- }
- };
-
- const fetchVariations = async (routeId: string) => {
+  const fetchVariations = async (routeId: string) => {
  setLoadingVariations((prev) => ({ ...prev, [routeId]: true }));
  try {
  const res = await fetch(`/api/routes/${routeId}/variations`);
@@ -557,39 +459,7 @@ export default function TransitAdminSPA() {
  return (
  <div className="flex flex-col min-h-0 bg-[#f7f7f7] text-[#1c1b1f] selection:bg-[#1c1b1f] selection:text-white font-sans antialiased">
 
- {/* Full-page overlay during upload + auto-optimize flow */}
- {autoOptimizingOverlay !== "idle" && (
- <div className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6 animate-fadeIn">
- <div className="relative flex items-center justify-center">
-  {/* Outer ring spinner */}
-  <div className="w-16 h-16 rounded-full border-4 border-[#e8e8e8] border-t-[#1c1b1f] animate-spin-fast" />
-  {/* Inner icon */}
-  <div className="absolute w-9 h-9 rounded-full bg-[#1c1b1f] flex items-center justify-center text-white font-black text-sm">
-  TA
-  </div>
- </div>
- <div className="text-center flex flex-col gap-1.5">
- <p className="text-base font-extrabold text-[#1c1b1f] tracking-tight">
- {autoOptimizingOverlay === "uploading" ? "Importing Roster…" : "Optimizing Routes…"}
- </p>
- <p className="text-xs text-[#6b6b6b] font-medium max-w-xs leading-relaxed">
- {autoOptimizingOverlay === "uploading"
- ? "Reading your Excel file and geocoding employee addresses in Nagpur."
- : "Computing safest & shortest routes for all cab-employee clusters."}
- </p>
- <div className="flex items-center justify-center gap-2 mt-2">
- <span className={`w-2 h-2 rounded-none bg-slate-300 ${autoOptimizingOverlay === "uploading" ? "bg-slate-800" : "bg-slate-300"}`} />
- <span className={`w-2 h-2 rounded-none ${autoOptimizingOverlay === "optimizing" ? "bg-slate-800" : "bg-slate-300"}`} />
- </div>
- <div className="flex gap-2 justify-center mt-1 text-[10px] font-bold text-[#9a9a9a] uppercase tracking-widest">
- <span className={autoOptimizingOverlay === "uploading" ? "text-[#4a4a4a]" : ""}>1 · Import</span>
- <span>→</span>
- <span className={autoOptimizingOverlay === "optimizing" ? "text-[#4a4a4a]" : ""}>2 · Optimize</span>
- </div>
- </div>
- </div>
- )}
- {/* Module Tab Bar — embedded inside platform shell */}
+  {/* Module Tab Bar — embedded inside platform shell */}
  <div className="sticky top-14 z-40 w-full border-b border-[#e8e8e8] bg-white/95 backdrop-blur-md">
  <div className="px-4 md:px-6 min-h-[44px] flex items-center justify-between overflow-x-auto no-scrollbar">
  <nav className="flex items-center gap-1 w-max flex-nowrap py-1.5">
@@ -849,26 +719,9 @@ export default function TransitAdminSPA() {
  </div>
  </div>
  )}
- </div>
+  </div>
 
- {/* Auto-import success toast */}
- {uploadMsg && !uploading && activeDesk === "OPTIMIZER" && (
- <div className="p-3.5 bg-[#f7f7f7] border border-[#e8e8e8] rounded-none flex items-center justify-between gap-3 animate-fadeIn">
- <div className="flex items-center gap-2.5 text-xs text-[#1c1b1f]">
- <CheckCircle2 className="w-4 h-4 text-[#6b6b6b] flex-shrink-0" />
- <span className="font-semibold">{uploadMsg}</span>
- </div>
- <button
- onClick={() => setUploadMsg("")}
- className="text-[#6b6b6b] hover:text-[#1c1b1f] text-lg leading-none font-bold"
- aria-label="Dismiss"
- >
- ×
- </button>
- </div>
- )}
-
- {/* Cabs Availability & Capacity Edge Cases Alert Banners */}
+  {/* Cabs Availability & Capacity Edge Cases Alert Banners */}
  {isInitialOptimizerDataLoading ? (
  <div className="p-4 bg-white border border-[#e8e8e8] rounded-none flex items-start gap-2.5 text-xs text-[#1c1b1f] animate-fadeIn">
  <RotateCw className="w-5 h-5 text-[#6b6b6b] flex-shrink-0 mt-0.5 animate-spin-fast" />
@@ -1015,10 +868,13 @@ export default function TransitAdminSPA() {
  <span className="text-[9px] uppercase font-bold tracking-widest text-[#9a9a9a]">
  Allocated Vehicle
  </span>
- <span className="text-sm font-bold text-[#1c1b1f] flex items-center gap-1.5 mt-0.5">
- <Truck className="w-4 h-4 text-[#9a9a9a]" />
- {selectedRoute.cab.vehicleNumber}
- </span>
+  <span className="text-sm font-bold text-[#1c1b1f] flex items-center gap-1.5 mt-0.5">
+  <Truck className="w-4 h-4 text-[#9a9a9a]" />
+  {selectedRoute.cab.vehicleNumber}
+  <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
+    r{selectedRoute.routeNumber}
+  </span>
+  </span>
  </div>
  <div className="flex flex-col items-end">
  <span className="text-[9px] uppercase font-bold tracking-widest text-[#9a9a9a]">
@@ -1261,7 +1117,7 @@ export default function TransitAdminSPA() {
  </tr>
  </thead>
  <tbody className="divide-y divide-slate-100 font-semibold text-[#4a4a4a]">
- {manifestRoutes.map((route) => {
+  {manifestRoutes.map((route, index) => {
  const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
  const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
  const isSelected = selectedRouteId === route.id;
@@ -1290,7 +1146,10 @@ export default function TransitAdminSPA() {
  <span className="text-[9px] text-[#9a9a9a] font-mono">{route.cab.driverPhone || "N/A"}</span>
  </div>
  </td>
- <td className="p-3 font-mono text-[#1c1b1f]">{route.cab.vehicleNumber}</td>
+  <td className="p-3 font-mono text-[#1c1b1f]">
+    <span className="text-[10px] text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1 py-0.5 font-bold mr-1">r{route.routeNumber || index + 1}</span>
+    {route.cab.vehicleNumber}
+  </td>
  <td className="p-3 text-[#6b6b6b]">
  {route.stops.length} / {route.cab.capacity} seats
  </td>
@@ -1374,7 +1233,7 @@ export default function TransitAdminSPA() {
  /* High-Visibility Route Cards View */
  <div className="flex flex-col gap-6">
  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1">
- {manifestRoutes.slice(0, visibleCabsCount).map((route) => {
+  {manifestRoutes.slice(0, visibleCabsCount).map((route, index) => {
  const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
  const activeViolationsCount = route.violations.filter((v: any) => !v.resolved).length;
  const isSelected = selectedRouteId === route.id;
@@ -1406,10 +1265,13 @@ export default function TransitAdminSPA() {
   {getRouteShiftLabel(route)} Trip {route.tripSequence || 1}
 </span>
  </div>
- <h3 className="text-base font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
- <Truck className="w-4 h-4 text-[#9a9a9a]" />
- {route.cab.vehicleNumber}
- </h3>
+  <h3 className="text-base font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
+  <Truck className="w-4 h-4 text-[#9a9a9a]" />
+  {route.cab.vehicleNumber}
+  <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
+    r{route.routeNumber || index + 1}
+  </span>
+  </h3>
  <span className="text-[10px] text-[#6b6b6b] font-semibold uppercase tracking-wider">
  Vendor: {route.cab.vendor} · {route.stops.length} / {route.cab.capacity} passengers
  </span>

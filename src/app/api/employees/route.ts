@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { parseExcelRoster } from "@/lib/excelParser";
 import { geocodePlace, makeDepot } from "@/lib/optimization";
 import { mapsProvider } from "@/lib/maps";
 
@@ -139,133 +138,56 @@ export async function DELETE(req: NextRequest) {
  }
 }
 
-// POST: Add new employee or bulk upload Excel
+// POST: Add single employee
 export async function POST(req: NextRequest) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+  try {
+    const auth = await requireApiRole(["ADMIN"]);
+    if (auth.response) return auth.response;
 
- const contentType = req.headers.get("content-type") || "";
- const defaultPassword = await bcrypt.hash("Welcome@123", 10);
+  const defaultPassword = await bcrypt.hash("Welcome@123", 10);
+  const body = await req.json();
+  const employeeCode = textValue(body.employeeCode);
+  const name = textValue(body.name);
+  const gender = textValue(body.gender);
+  const phone = textValue(body.phone);
+  const email = textValue(body.email);
+  const address = textValue(body.address);
+  const formattedAddress = textValue(body.formattedAddress) || address;
+  const placeId = body.placeId || null;
+  const autoLat = body.lat ? Number(body.lat) : null;
+  const autoLon = body.lon ? Number(body.lon) : null;
+  const department = textValue(body.department) || "Engineering";
+  const designation = textValue(body.designation) || "Engineer";
+  const managerId = nullableTextValue(body.managerId);
+  const shiftId = nullableTextValue(body.shiftId);
 
- if (contentType.includes("multipart/form-data")) {
- const formData = await req.formData();
- const file = formData.get("file") as File;
- const shiftId = formData.get("shiftId") as string;
+  if (!employeeCode || !name || !gender) {
+  return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
 
- if (!file) {
- return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
- }
-
- const bytes = await file.arrayBuffer();
- const buffer = Buffer.from(bytes);
- const rows = parseExcelRoster(buffer);
-
- let createdCount = 0;
- let skippedCount = 0;
-
- for (const row of rows) {
- try {
-  const coords = await mapsProvider.geocode(row.address || row.name);
- if (!coords) {
- console.warn(`Skipping row ${row.employeeCode}: address could not be geocoded precisely`);
- skippedCount++;
- continue;
- }
- const employeeEmail = row.email || `${row.employeeCode.toLowerCase()}@corporate.com`;
-
- await prisma.$transaction(async (tx) => {
- let user = await tx.user.findUnique({ where: { email: employeeEmail } });
- if (!user) {
- user = await tx.user.create({
- data: {
- email: employeeEmail,
- password: defaultPassword,
- name: row.name,
- role: row.department === "Management" || row.employeeCode.includes("MGR") ? "MANAGER" : "EMPLOYEE", // Crude check for excel
- requiresPasswordChange: true,
- },
- });
- }
-
- await tx.employee.upsert({
- where: { employeeCode: row.employeeCode },
- update: {
- name: row.name,
- gender: row.gender,
- phone: row.phone,
- email: employeeEmail,
- address: row.address,
- x: coords.x,
- y: coords.y,
- department: row.department,
- shiftId: shiftId || null,
- userId: user.id,
- },
- create: {
- employeeCode: row.employeeCode,
- name: row.name,
- gender: row.gender,
- phone: row.phone,
- email: employeeEmail,
- address: row.address,
- x: coords.x,
- y: coords.y,
- department: row.department,
- shiftId: shiftId || null,
- status: "ACTIVE",
- userId: user.id,
- },
- });
- });
- createdCount++;
- } catch (err) {
- console.error(`Skipping row ${row.employeeCode}:`, err);
- skippedCount++;
- }
- }
-
- return NextResponse.json({
- success: true,
- message: `Bulk import completed. Imported: ${createdCount}, Skipped: ${skippedCount}`,
- });
- } else {
- // Create single employee manually
- const body = await req.json();
- const employeeCode = textValue(body.employeeCode);
- const name = textValue(body.name);
- const gender = textValue(body.gender);
- const phone = textValue(body.phone);
- const email = textValue(body.email);
- const address = textValue(body.address);
- const department = textValue(body.department) || "Engineering";
- const designation = textValue(body.designation) || "Engineer";
- const managerId = nullableTextValue(body.managerId);
- const shiftId = nullableTextValue(body.shiftId);
-
- if (!employeeCode || !name || !gender) {
- return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
- }
-
- // Fetch settings for dynamic geocoding
- const settings = await prisma.systemSettings.upsert({
- where: { id: "default" }, update: {}, create: { id: "default" }
- });
- const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
-
- const coords = await geocodePlace(
- address || name,
- settings.defaultCity,
- settings.defaultCountry,
- depot,
- settings.maxPickupRadiusKm
- );
-
- if (!coords) {
- return NextResponse.json({
- error: `Address is outside the configured ${settings.maxPickupRadiusKm}km pickup radius from ${settings.depotName}.`
- }, { status: 400 });
- }
+  // Use autocomplete coordinates from client, or fall back to server-side geocoding
+  let coords: { x: number; y: number; placeId?: string | null };
+  if (autoLat && autoLon && Number.isFinite(autoLat) && Number.isFinite(autoLon)) {
+    coords = { x: autoLon, y: autoLat, placeId };
+  } else {
+    const settings = await prisma.systemSettings.upsert({
+      where: { id: "default" }, update: {}, create: { id: "default" }
+    });
+    const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
+    const resolved = await geocodePlace(
+      address || name,
+      settings.defaultCity,
+      settings.defaultCountry,
+      depot,
+      settings.maxPickupRadiusKm
+    );
+    if (!resolved) {
+      return NextResponse.json({
+        error: `Address is outside the configured ${settings.maxPickupRadiusKm}km pickup radius from ${settings.depotName}.`
+      }, { status: 400 });
+    }
+    coords = resolved;
+  }
  const employeeEmail = email || `${employeeCode.toLowerCase()}@corporate.com`;
 
  const existingEmployee = await prisma.employee.findFirst({
@@ -310,29 +232,30 @@ export async function POST(req: NextRequest) {
  userId = user.id;
  }
 
- return await tx.employee.create({
- data: {
- employeeCode,
- name,
- gender,
- phone,
- email: employeeEmail,
- address: address || "Sadar, Nagpur",
- x: coords.x,
- y: coords.y,
- department,
- designation,
- managerId,
- shiftId,
- status: "ACTIVE",
- userId,
- },
- });
+   return await tx.employee.create({
+   data: {
+   employeeCode,
+   name,
+   gender,
+   phone,
+   email: employeeEmail,
+   address: address || "Sadar, Nagpur",
+   formattedAddress,
+   x: coords.x,
+   y: coords.y,
+   placeId: coords.placeId || null,
+   department,
+   designation,
+   managerId,
+   shiftId,
+   status: "ACTIVE",
+   userId,
+   },
+   });
  });
 
- return NextResponse.json(employee);
- }
- } catch (e) {
+  return NextResponse.json(employee);
+  } catch (e) {
  console.error("Error creating employee(s):", e);
  const response = prismaEmployeeWriteResponse(e);
  if (response) return response;
@@ -346,57 +269,65 @@ export async function PATCH(req: NextRequest) {
  const auth = await requireApiRole(["ADMIN"]);
  if (auth.response) return auth.response;
 
- const body = await req.json();
- const { id, name, gender, phone, email, address, department, designation, managerId, shiftId, status } = body;
+  const body = await req.json();
+  const { id, name, gender, phone, email, address, department, designation, managerId, shiftId, status } = body;
+  const formattedAddress = body.formattedAddress;
+  const placeId = body.placeId;
+  const autoLat = body.lat ? Number(body.lat) : null;
+  const autoLon = body.lon ? Number(body.lon) : null;
 
- if (!id) {
- return NextResponse.json({ error: "Employee ID is required" }, { status: 400 });
- }
+  if (!id) {
+  return NextResponse.json({ error: "Employee ID is required" }, { status: 400 });
+  }
 
- const currentEmp = await prisma.employee.findUnique({ where: { id } });
- if (!currentEmp) {
- return NextResponse.json({ error: "Employee not found" }, { status: 404 });
- }
+  const currentEmp = await prisma.employee.findUnique({ where: { id } });
+  if (!currentEmp) {
+  return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+  }
 
- // Recalculate coordinates if address is being updated and has changed
- let coords = { x: currentEmp.x, y: currentEmp.y };
- if (address && address !== currentEmp.address) {
- const settings = await prisma.systemSettings.upsert({
- where: { id: "default" }, update: {}, create: { id: "default" }
- });
- const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
- const resolved = await geocodePlace(
- address,
- settings.defaultCity,
- settings.defaultCountry,
- depot,
- settings.maxPickupRadiusKm
- );
- if (!resolved) {
- return NextResponse.json({
- error: `Address is outside the configured ${settings.maxPickupRadiusKm}km pickup radius from ${settings.depotName}.`
- }, { status: 400 });
- }
- coords = resolved;
- }
+  // Use autocomplete coordinates from client, or re-geocode if address changed
+  let coords: { x: number; y: number; placeId?: string | null } = { x: currentEmp.x, y: currentEmp.y, placeId: currentEmp.placeId };
+  if (autoLat && autoLon && Number.isFinite(autoLat) && Number.isFinite(autoLon)) {
+    coords = { x: autoLon, y: autoLat, placeId: placeId || null };
+  } else if (address && address !== currentEmp.address) {
+    const settings = await prisma.systemSettings.upsert({
+      where: { id: "default" }, update: {}, create: { id: "default" }
+    });
+    const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
+    const resolved = await geocodePlace(
+      address,
+      settings.defaultCity,
+      settings.defaultCountry,
+      depot,
+      settings.maxPickupRadiusKm
+    );
+    if (!resolved) {
+      return NextResponse.json({
+        error: `Address is outside the configured ${settings.maxPickupRadiusKm}km pickup radius from ${settings.depotName}.`
+      }, { status: 400 });
+    }
+    coords = resolved;
+  }
 
- const employee = await prisma.employee.update({
- where: { id },
- data: {
- name: name !== undefined ? name : undefined,
- gender: gender !== undefined ? gender : undefined,
- phone: phone !== undefined ? phone : undefined,
- email: email !== undefined ? email : undefined,
- address: address !== undefined ? address : undefined,
- x: coords.x,
- y: coords.y,
- department: department !== undefined ? department : undefined,
- designation: designation !== undefined ? designation : undefined,
- managerId: managerId !== undefined ? (managerId || null) : undefined,
- shiftId: shiftId !== undefined ? (shiftId || null) : undefined,
- status: status !== undefined ? status : undefined,
- },
- });
+  const employee = await prisma.employee.update({
+  where: { id },
+   data: {
+   name: name !== undefined ? name : undefined,
+   gender: gender !== undefined ? gender : undefined,
+   phone: phone !== undefined ? phone : undefined,
+   email: email !== undefined ? email : undefined,
+   address: address !== undefined ? address : undefined,
+   formattedAddress: formattedAddress !== undefined ? formattedAddress : undefined,
+   x: coords.x,
+   y: coords.y,
+   placeId: coords.placeId !== undefined ? (coords.placeId || null) : undefined,
+   department: department !== undefined ? department : undefined,
+   designation: designation !== undefined ? designation : undefined,
+   managerId: managerId !== undefined ? (managerId || null) : undefined,
+   shiftId: shiftId !== undefined ? (shiftId || null) : undefined,
+   status: status !== undefined ? status : undefined,
+   },
+  });
 
  return NextResponse.json(employee);
  } catch (e) {

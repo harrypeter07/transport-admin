@@ -18,9 +18,10 @@ export default function EmployeesPage() {
  const [sortBy, setSortBy] = useState("name");
  const [showModal, setShowModal] = useState(false);
  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
- const [submitting, setSubmitting] = useState(false);
- const [formError, setFormError] = useState<string | null>(null);
- const formRef = useRef<HTMLFormElement>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [autoAddress, setAutoAddress] = useState<{ displayName?: string; placeId?: string; lat?: number; lon?: number } | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
  const fetchEmployees = async (q = search) => {
  setLoading(true);
@@ -52,25 +53,29 @@ export default function EmployeesPage() {
  return () => clearTimeout(t);
  }, [search]);
 
- const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
- e.preventDefault();
- setSubmitting(true);
- setFormError(null);
- const data = new FormData(e.currentTarget);
- const payload = {
- employeeCode: data.get("employeeCode"),
- name: data.get("name"),
- gender: data.get("gender"),
- phone: data.get("phone"),
- email: data.get("email"),
- address: data.get("address"),
- department: data.get("department"),
- designation: data.get("designation"),
- managerId: data.get("managerId") || null,
- shiftId: data.get("shiftId") || null,
- ...(editingEmployee && { id: editingEmployee.id })
- };
- try {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  setSubmitting(true);
+  setFormError(null);
+  const data = new FormData(e.currentTarget);
+  const payload = {
+  employeeCode: data.get("employeeCode"),
+  name: data.get("name"),
+  gender: data.get("gender"),
+  phone: data.get("phone"),
+  email: data.get("email"),
+  address: data.get("address"),
+  formattedAddress: autoAddress?.displayName || data.get("address"),
+  placeId: autoAddress?.placeId || null,
+  lat: autoAddress?.lat ?? null,
+  lon: autoAddress?.lon ?? null,
+  department: data.get("department"),
+  designation: data.get("designation"),
+  managerId: data.get("managerId") || null,
+  shiftId: data.get("shiftId") || null,
+  ...(editingEmployee && { id: editingEmployee.id })
+  };
+  try {
  const url = "/api/employees";
  const method = editingEmployee ? "PATCH" : "POST";
  const res = await fetch(url, {
@@ -147,7 +152,7 @@ export default function EmployeesPage() {
  <p className="text-[#6b6b6b] text-sm mt-0.5">Manage workforce, designations, and reporting structure.</p>
  </div>
  <button
- onClick={() => { setShowModal(true); setFormError(null); }}
+  onClick={() => { setShowModal(true); setFormError(null); setAutoAddress(null); }}  
  className="bg-[#1c1b1f] text-white px-4 py-2 rounded-none text-xs font-bold hover:bg-black flex items-center gap-2 transition"
  >
  <Plus className="w-3.5 h-3.5" /> Add Employee
@@ -192,8 +197,9 @@ export default function EmployeesPage() {
  <thead className="text-[10px] font-black text-[#9a9a9a] uppercase tracking-widest bg-[#f7f7f7] border-b border-[#e8e8e8]">
  <tr>
  <th className="px-5 py-3">Employee</th>
- <th className="px-5 py-3">Contact</th>
- <th className="px-5 py-3">Designation</th>
+                  <th className="px-5 py-3">Contact</th>
+                  <th className="px-5 py-3">Address</th>
+                  <th className="px-5 py-3">Designation</th>
  <th className="px-5 py-3">Shift</th>
  <th className="px-5 py-3">Manager</th>
  <th className="px-5 py-3 text-right">Actions</th>
@@ -201,9 +207,9 @@ export default function EmployeesPage() {
  </thead>
  <tbody className="divide-y divide-slate-100 text-sm text-[#4a4a4a]">
  {loading ? (
- <tr><td colSpan={6} className="px-5 py-10 text-center text-[#9a9a9a] text-xs">Loading…</td></tr>
- ) : processedEmployees.length === 0 ? (
- <tr><td colSpan={6} className="px-5 py-12 text-center text-[#9a9a9a] text-xs">No employees match the filters.</td></tr>
+                  <tr><td colSpan={7} className="px-5 py-10 text-center text-[#9a9a9a] text-xs">Loading…</td></tr>
+                ) : processedEmployees.length === 0 ? (
+                  <tr><td colSpan={7} className="px-5 py-12 text-center text-[#9a9a9a] text-xs">No employees match the filters.</td></tr>
  ) : (
  processedEmployees.map((emp) => (
  <tr key={emp.id} className="hover:bg-[#f7f7f7] transition-colors">
@@ -211,11 +217,14 @@ export default function EmployeesPage() {
  <div className="font-semibold text-[#1c1b1f]">{emp.name}</div>
  <div className="text-[11px] text-[#9a9a9a] mt-0.5 font-mono">{emp.employeeCode} · {emp.gender}</div>
  </td>
- <td className="px-5 py-3.5">
- <div>{emp.email}</div>
- <div className="text-[#9a9a9a] mt-0.5">{emp.phone}</div>
- </td>
- <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5">
+                    <div>{emp.email}</div>
+                    <div className="text-[#9a9a9a] mt-0.5">{emp.phone}</div>
+                  </td>
+                  <td className="px-5 py-3.5 max-w-[160px]">
+                    <div className="truncate text-[11px] text-[#4a4a4a]" title={emp.formattedAddress || emp.address}>{emp.formattedAddress || emp.address}</div>
+                  </td>
+                  <td className="px-5 py-3.5">
  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#f7f7f7] text-[#4a4a4a] border border-[#e8e8e8] uppercase tracking-wide">
  {emp.designation || "Engineer"}
  </span>
@@ -236,11 +245,12 @@ export default function EmployeesPage() {
  <td className="px-5 py-3.5 text-right">
  <div className="flex items-center justify-end gap-1.5">
  <button 
- onClick={() => {
- setEditingEmployee(emp);
- setShowModal(true);
- setFormError(null);
- }}
+  onClick={() => {
+  setEditingEmployee(emp);
+  setShowModal(true);
+  setFormError(null);
+  setAutoAddress(null);
+  }}
  className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"
  >
  <Edit className="w-3.5 h-3.5" />
@@ -310,13 +320,14 @@ export default function EmployeesPage() {
  
  <div>
  <label className="block text-xs font-bold text-[#4a4a4a] mb-1.5">Address / Locality<span className="text-[#6b6b6b] ml-0.5">*</span></label>
- <LocationAutocomplete
- name="address"
- className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]"
- defaultValue={editingEmployee?.address}
- placeholder="e.g. Sadar, Nagpur"
- required={true}
- />
+  <LocationAutocomplete
+  name="address"
+  className="w-full border border-[#e8e8e8] rounded-none px-4 py-2.5 text-sm bg-[#f7f7f7]/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-[#ff4f00] transition-all placeholder:text-[#9a9a9a] text-[#1c1b1f]"
+  defaultValue={editingEmployee?.address}
+  placeholder="e.g. Sadar, Nagpur"
+  required={true}
+  onSelect={(loc) => setAutoAddress(loc)}
+  />
  </div>
 
  <SelectField label="Shift" name="shiftId" defaultValue={editingEmployee?.shiftId || ""}>

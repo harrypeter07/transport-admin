@@ -8,10 +8,7 @@
     "start": "cross-env NODE_OPTIONS=--max-old-space-size=1536 next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "db:push": "prisma db push",
     "db:seed": "npx ts-node prisma/seed.ts",
-    "db:prepare-import": "npx ts-node scripts/prepareForExcelImport.ts",
-    "db:import-roster": "npx ts-node scripts/importRosterFile.ts",
     "db:seed:test": "npx ts-node scripts/seedTestData.ts"
   },
   "dependencies": {
@@ -24,7 +21,6 @@
     "cross-env": "^7.0.3",
     "framer-motion": "^12.40.0",
     "jose": "^6.2.3",
-    "leaflet": "^1.9.4",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "prisma": "^6.2.1",
@@ -33,12 +29,10 @@
     "recharts": "^3.8.1",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.6.0",
-    "xlsx": "^0.18.5",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -141,6 +141,8 @@ export async function computeGoogleRoute(
   }
 }
 
+const MAX_BATCH_SIZE = 25;
+
 export async function computeGoogleRouteMatrix(
   points: MapPoint[],
   apiKey: string
@@ -148,78 +150,101 @@ export async function computeGoogleRouteMatrix(
   const n = points.length;
   if (!apiKey || n === 0) return null;
 
-  const elementCount = n * n;
-  if (elementCount > 625) return null;
+  const distanceMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
+  const durationMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
+  let totalResolvedElements = 0;
+  let totalExpectedElements = 0;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const body = {
-      origins: points.map((point) => ({ waypoint: pointToWaypoint(point) })),
-      destinations: points.map((point) => ({ waypoint: pointToWaypoint(point) })),
-      travelMode: "DRIVE",
-      routingPreference: "TRAFFIC_AWARE",
-      units: "METRIC",
-    };
-
-    const res = await fetch(`${GOOGLE_ROUTES_BASE_URL}/distanceMatrix/v2:computeRouteMatrix`, {
-      method: "POST",
-      signal: controller.signal,
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "originIndex,destinationIndex,status,condition,distanceMeters,duration",
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    if (!Array.isArray(data)) return null;
-
-    const distanceMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
-    const durationMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
-    let resolvedElements = 0;
-
-    for (const element of data) {
-      const originIndex = Number(element?.originIndex);
-      const destinationIndex = Number(element?.destinationIndex);
-      const distanceMeters = Number(element?.distanceMeters);
-      const durationSeconds = parseGoogleDurationSeconds(element?.duration);
-      const condition = element?.condition;
-
-      if (
-        originIndex < 0 ||
-        originIndex >= n ||
-        destinationIndex < 0 ||
-        destinationIndex >= n ||
-        originIndex === destinationIndex
-      ) {
-        continue;
-      }
-
-      if (
-        condition === "ROUTE_EXISTS" &&
-        Number.isFinite(distanceMeters) &&
-        durationSeconds !== null
-      ) {
-        distanceMatrix[originIndex][destinationIndex] = Math.round((distanceMeters / 1000) * 10) / 10;
-        durationMatrix[originIndex][destinationIndex] = Math.max(1, Math.round(durationSeconds / 60));
-        resolvedElements += 1;
-      }
-    }
-
-    const expectedElements = n * n - n;
-    return expectedElements === 0 || resolvedElements >= expectedElements
-      ? { distanceMatrix, durationMatrix }
-      : null;
-  } catch (e) {
-    console.error("Google Routes computeRouteMatrix failed:", e);
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
+  // Partition points into fixed-size chunks (the API has a 25-point limit per call)
+  const chunks: MapPoint[][] = [];
+  for (let i = 0; i < n; i += MAX_BATCH_SIZE) {
+    chunks.push(points.slice(i, i + MAX_BATCH_SIZE));
   }
+
+  async function fetchChunkPair(
+    origins: MapPoint[], originOffset: number,
+    destinations: MapPoint[], destOffset: number,
+  ): Promise<boolean> {
+    const oLen = origins.length;
+    const dLen = destinations.length;
+    const isSelf = originOffset === destOffset;
+    const expected = isSelf ? oLen * dLen - oLen : oLen * dLen;
+    totalExpectedElements += expected;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const body = {
+        origins: origins.map(p => ({ waypoint: pointToWaypoint(p) })),
+        destinations: destinations.map(p => ({ waypoint: pointToWaypoint(p) })),
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_AWARE",
+        units: "METRIC",
+      };
+
+      const res = await fetch(`${GOOGLE_ROUTES_BASE_URL}/distanceMatrix/v2:computeRouteMatrix`, {
+        method: "POST",
+        signal: controller.signal,
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": "originIndex,destinationIndex,status,condition,distanceMeters,duration",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      if (!Array.isArray(data)) return false;
+
+      for (const element of data) {
+        const originIndex = Number(element?.originIndex);
+        const destinationIndex = Number(element?.destinationIndex);
+
+        if (originIndex < 0 || originIndex >= oLen || destinationIndex < 0 || destinationIndex >= dLen) continue;
+
+        const gi = originOffset + originIndex;
+        const gj = destOffset + destinationIndex;
+        if (gi === gj) continue;
+
+        const condition = element?.condition;
+        if (condition !== "ROUTE_EXISTS") continue;
+
+        const distanceMeters = Number(element?.distanceMeters);
+        const durationSeconds = parseGoogleDurationSeconds(element?.duration);
+        if (!Number.isFinite(distanceMeters) || durationSeconds === null) continue;
+
+        distanceMatrix[gi][gj] = Math.round((distanceMeters / 1000) * 10) / 10;
+        durationMatrix[gi][gj] = Math.max(1, Math.round(durationSeconds / 60));
+        totalResolvedElements++;
+      }
+
+      return true;
+    } catch (e) {
+      console.error("Google Routes computeRouteMatrix chunk failed:", e);
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  const requests: Promise<boolean>[] = [];
+  for (let oi = 0; oi < chunks.length; oi++) {
+    for (let dj = 0; dj < chunks.length; dj++) {
+      requests.push(fetchChunkPair(
+        chunks[oi], oi * MAX_BATCH_SIZE,
+        chunks[dj], dj * MAX_BATCH_SIZE,
+      ));
+    }
+  }
+
+  const results = await Promise.all(requests);
+  if (results.some(r => !r)) return null;
+
+  return totalExpectedElements === 0 || totalResolvedElements >= totalExpectedElements
+    ? { distanceMatrix, durationMatrix }
+    : null;
 }

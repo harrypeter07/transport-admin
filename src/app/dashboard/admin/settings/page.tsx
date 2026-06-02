@@ -15,17 +15,19 @@ import {
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 
 type Settings = {
- leaveApprovalRequired: boolean;
- timingChangeApprovalRequired: boolean;
- defaultCity: string;
- defaultCountry: string;
- defaultDepotLat: number;
- defaultDepotLng: number;
- depotName: string;
- maxPickupRadiusKm: number;
- currencySymbol: string;
- fuelPricePerLitre: number;
- avgFuelMileageKmL: number;
+  leaveApprovalRequired: boolean;
+  timingChangeApprovalRequired: boolean;
+  defaultCity: string;
+  defaultCountry: string;
+  defaultDepotLat: number;
+  defaultDepotLng: number;
+  depotName: string;
+  depotPlaceId: string | null;
+  depotFormattedAddress: string | null;
+  maxPickupRadiusKm: number;
+  currencySymbol: string;
+  fuelPricePerLitre: number;
+  avgFuelMileageKmL: number;
 };
 
 function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
@@ -197,24 +199,30 @@ export default function SettingsPage() {
  className={inputClass}
  defaultValue={settings.depotName}
  placeholder="Type address or landmark..."
- onSelect={(loc) => {
- const elCity = document.getElementById("defaultCity") as HTMLInputElement;
- const elCountry = document.getElementById("defaultCountry") as HTMLInputElement;
- const elLat = document.getElementById("defaultDepotLat") as HTMLInputElement;
- const elLng = document.getElementById("defaultDepotLng") as HTMLInputElement;
- const elName = document.getElementById("depotName") as HTMLInputElement;
- 
- if (elLat) elLat.value = loc.lat.toString();
- if (elLng) elLng.value = loc.lon.toString();
- // Only overwrite city/country if the result contains them
- if (elCity && loc.city) elCity.value = loc.city;
- if (elCountry && loc.country) elCountry.value = loc.country;
- }}
+  onSelect={(loc) => {
+  const elCity = document.getElementById("defaultCity") as HTMLInputElement;
+  const elCountry = document.getElementById("defaultCountry") as HTMLInputElement;
+  const elLat = document.getElementById("defaultDepotLat") as HTMLInputElement;
+  const elLng = document.getElementById("defaultDepotLng") as HTMLInputElement;
+  const elName = document.getElementById("depotName") as HTMLInputElement;
+  const elPlaceId = document.getElementById("depotPlaceId") as HTMLInputElement;
+  const elFormatted = document.getElementById("depotFormattedAddress") as HTMLInputElement;
+
+  if (elLat) elLat.value = loc.lat.toString();
+  if (elLng) elLng.value = loc.lon.toString();
+  // Only overwrite city/country if the result contains them
+  if (elCity && loc.city) elCity.value = loc.city;
+  if (elCountry && loc.country) elCountry.value = loc.country;
+  if (elPlaceId && loc.placeId) elPlaceId.value = loc.placeId;
+  if (elFormatted && loc.displayName) elFormatted.value = loc.displayName;
+  }}
  />
  </Field>
- {/* Hidden inputs to store the fetched coordinates */}
- <input type="hidden" id="defaultDepotLat" defaultValue={settings.defaultDepotLat} />
- <input type="hidden" id="defaultDepotLng" defaultValue={settings.defaultDepotLng} />
+  {/* Hidden inputs to store the fetched coordinates */}
+  <input type="hidden" id="defaultDepotLat" defaultValue={settings.defaultDepotLat} />
+  <input type="hidden" id="defaultDepotLng" defaultValue={settings.defaultDepotLng} />
+  <input type="hidden" id="depotPlaceId" defaultValue={settings.depotPlaceId || ""} />
+  <input type="hidden" id="depotFormattedAddress" defaultValue={settings.depotFormattedAddress || ""} />
  <Field
  label={`Max Pickup Radius: ${settings.maxPickupRadiusKm} km`}
  note="Employees beyond this radius are treated as outliers and excluded from routing."
@@ -240,14 +248,16 @@ export default function SettingsPage() {
  <div className="flex justify-end">
  <button
  onClick={() =>
- saveSection("location", {
- defaultCity: (document.getElementById("defaultCity") as HTMLInputElement)?.value,
- defaultCountry: (document.getElementById("defaultCountry") as HTMLInputElement)?.value,
- depotName: (document.getElementById("depotName") as HTMLInputElement)?.value,
- defaultDepotLat: Number((document.getElementById("defaultDepotLat") as HTMLInputElement)?.value),
- defaultDepotLng: Number((document.getElementById("defaultDepotLng") as HTMLInputElement)?.value),
- maxPickupRadiusKm: settings.maxPickupRadiusKm,
- })
+  saveSection("location", {
+  defaultCity: (document.getElementById("defaultCity") as HTMLInputElement)?.value,
+  defaultCountry: (document.getElementById("defaultCountry") as HTMLInputElement)?.value,
+  depotName: (document.getElementById("depotName") as HTMLInputElement)?.value,
+  defaultDepotLat: Number((document.getElementById("defaultDepotLat") as HTMLInputElement)?.value),
+  defaultDepotLng: Number((document.getElementById("defaultDepotLng") as HTMLInputElement)?.value),
+  depotPlaceId: (document.getElementById("depotPlaceId") as HTMLInputElement)?.value || null,
+  depotFormattedAddress: (document.getElementById("depotFormattedAddress") as HTMLInputElement)?.value || null,
+  maxPickupRadiusKm: settings.maxPickupRadiusKm,
+  })
  }
  disabled={saving === "location"}
  className="flex items-center gap-2 px-5 py-2.5 bg-[#1c1b1f] hover:bg-black text-white text-xs font-bold rounded-none transition disabled:opacity-50 shadow-none"

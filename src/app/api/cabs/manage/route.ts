@@ -9,37 +9,49 @@ export async function POST(req: NextRequest) {
  const auth = await requireApiRole(["ADMIN"]);
  if (auth.response) return auth.response;
 
- const body = await req.json();
- const { vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress } = body;
+  const body = await req.json();
+  const { vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress } = body;
+  const formattedAddress = body.formattedAddress || driverAddress;
+  const placeId = body.placeId || null;
+  const autoLat = body.lat ? Number(body.lat) : null;
+  const autoLon = body.lon ? Number(body.lon) : null;
 
- if (!vehicleNumber || !capacity || !driverName) {
- return NextResponse.json({ error: "Missing required fields (vehicleNumber, capacity, driverName)" }, { status: 400 });
- }
+  if (!vehicleNumber || !capacity || !driverName) {
+  return NextResponse.json({ error: "Missing required fields (vehicleNumber, capacity, driverName)" }, { status: 400 });
+  }
 
- let driverX = null;
- let driverY = null;
- if (driverAddress) {
-  const coords = await mapsProvider.geocode(driverAddress);
-  if (coords) {
-  driverX = coords.x;
-  driverY = coords.y;
- }
- }
+  let driverX = null;
+  let driverY = null;
+  let driverPlaceId = null;
+  if (autoLat && autoLon && Number.isFinite(autoLat) && Number.isFinite(autoLon)) {
+    driverX = autoLon;
+    driverY = autoLat;
+    driverPlaceId = placeId;
+  } else if (driverAddress) {
+    const coords = await mapsProvider.geocode(driverAddress);
+    if (coords) {
+    driverX = coords.x;
+    driverY = coords.y;
+    driverPlaceId = coords.placeId || null;
+    }
+  }
 
- const cab = await prisma.cab.create({
- data: {
- vehicleNumber,
- capacity: parseInt(capacity),
- vendor: vendor || "Manual Registry",
- status: "AVAILABLE",
- driverName: driverName,
- driverPhone: driverPhone || "+91 99000 00000",
- licenseNumber: licenseNumber || `DL-MANUAL-${Math.floor(1000 + Math.random() * 9000)}`,
- driverAddress: driverAddress || null,
- driverX,
- driverY,
- },
- });
+  const cab = await prisma.cab.create({
+  data: {
+  vehicleNumber,
+  capacity: parseInt(capacity),
+  vendor: vendor || "Manual Registry",
+  status: "AVAILABLE",
+  driverName: driverName,
+  driverPhone: driverPhone || "+91 99000 00000",
+  licenseNumber: licenseNumber || `DL-MANUAL-${Math.floor(1000 + Math.random() * 9000)}`,
+  driverAddress: driverAddress || null,
+  formattedAddress,
+  driverX,
+  driverY,
+  placeId: driverPlaceId,
+  },
+  });
 
  return NextResponse.json(cab);
  } catch (e) {
@@ -97,55 +109,69 @@ export async function PATCH(req: NextRequest) {
  const auth = await requireApiRole(["ADMIN"]);
  if (auth.response) return auth.response;
 
- const body = await req.json();
- const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress, driverStartAddress, status } = body;
+  const body = await req.json();
+  const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress, driverStartAddress, status } = body;
+  const formattedAddress = body.formattedAddress;
+  const placeId = body.placeId;
+  const autoLat = body.lat ? Number(body.lat) : null;
+  const autoLon = body.lon ? Number(body.lon) : null;
 
- if (!id) {
- return NextResponse.json({ error: "Cab ID is required" }, { status: 400 });
- }
+  if (!id) {
+  return NextResponse.json({ error: "Cab ID is required" }, { status: 400 });
+  }
 
- const cab = await prisma.cab.findUnique({
- where: { id },
- });
+  const cab = await prisma.cab.findUnique({
+  where: { id },
+  });
 
- if (!cab) {
- return NextResponse.json({ error: "Cab not found" }, { status: 404 });
- }
+  if (!cab) {
+  return NextResponse.json({ error: "Cab not found" }, { status: 404 });
+  }
 
   const nextDriverAddress = driverAddress !== undefined ? driverAddress : driverStartAddress;
   let driverX: number | null | undefined;
   let driverY: number | null | undefined;
-  if (nextDriverAddress !== undefined) {
-  if (nextDriverAddress) {
-  const coords = await mapsProvider.geocode(nextDriverAddress);
-  if (coords) {
-  driverX = coords.x;
-  driverY = coords.y;
- } else {
- driverX = null;
- driverY = null;
- }
- } else {
- driverX = null;
- driverY = null;
- }
- }
+  let driverPlaceId: string | null | undefined;
+  if (autoLat && autoLon && Number.isFinite(autoLat) && Number.isFinite(autoLon)) {
+    driverX = autoLon;
+    driverY = autoLat;
+    driverPlaceId = placeId || null;
+  } else if (nextDriverAddress !== undefined) {
+    if (nextDriverAddress) {
+    const coords = await mapsProvider.geocode(nextDriverAddress);
+    if (coords) {
+    driverX = coords.x;
+    driverY = coords.y;
+    driverPlaceId = coords.placeId || null;
+   } else {
+   driverX = null;
+   driverY = null;
+   driverPlaceId = null;
+   }
+   } else {
+   driverX = null;
+   driverY = null;
+   driverPlaceId = null;
+   }
+  }
 
- const updatedCab = await prisma.cab.update({
- where: { id },
- data: {
- vehicleNumber: vehicleNumber !== undefined ? vehicleNumber : undefined,
- capacity: capacity !== undefined ? parseInt(capacity) : undefined,
- vendor: vendor !== undefined ? vendor : undefined,
- status: status !== undefined ? status : undefined,
- driverName: driverName !== undefined ? driverName : undefined,
- driverPhone: driverPhone !== undefined ? driverPhone : undefined,
- licenseNumber: licenseNumber !== undefined ? licenseNumber : undefined,
- driverAddress: nextDriverAddress !== undefined ? (nextDriverAddress || null) : undefined,
- driverX,
- driverY,
- },
- });
+  const updatedCab = await prisma.cab.update({
+  where: { id },
+  data: {
+  vehicleNumber: vehicleNumber !== undefined ? vehicleNumber : undefined,
+  capacity: capacity !== undefined ? parseInt(capacity) : undefined,
+  vendor: vendor !== undefined ? vendor : undefined,
+  status: status !== undefined ? status : undefined,
+  driverName: driverName !== undefined ? driverName : undefined,
+  driverPhone: driverPhone !== undefined ? driverPhone : undefined,
+  licenseNumber: licenseNumber !== undefined ? licenseNumber : undefined,
+  driverAddress: nextDriverAddress !== undefined ? (nextDriverAddress || null) : undefined,
+  formattedAddress: formattedAddress !== undefined ? formattedAddress : undefined,
+  driverX,
+  driverY,
+  placeId: driverPlaceId !== undefined ? driverPlaceId : undefined,
+  },
+  });
 
  return NextResponse.json(updatedCab);
  } catch (e) {

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getDistance, checkSafetyViolations, DEPOT, fetchOSRMRoute } from "@/lib/optimization";
+import { checkSafetyViolations, DEPOT, fetchGoogleRouteMetrics, fetchGoogleMapsMatrix } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
-
-const AVG_SPEED = 0.5; // units per minute (30 km/h)
 
 export async function PATCH(
  req: NextRequest,
@@ -101,38 +99,23 @@ export async function PATCH(
  stop.stopOrder = idx + 1;
  });
 
- // Recalculate distance and ETAs
- const isPickup = route.isPickup;
- let currentDistance = 0;
+  // Recalculate ETAs using Google Routes Matrix API
+  const isPickup = route.isPickup;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || "";
+  const stopsCoords = stops.map(s => ({ x: s.employee.x, y: s.employee.y }));
+  const { durationMatrix: legDur } = await fetchGoogleMapsMatrix(stopsCoords, apiKey);
 
- if (isPickup) {
- for (let j = 0; j < stops.length; j++) {
- const s = stops[j];
- if (j > 0) {
- const prev = stops[j - 1];
- currentDistance += getDistance(
- { x: prev.employee.x, y: prev.employee.y },
- { x: s.employee.x, y: s.employee.y }
- );
- }
- s.etaMinutes = Math.round(currentDistance / AVG_SPEED) + 10;
- }
- } else {
- for (let j = 0; j < stops.length; j++) {
- const s = stops[j];
- if (j > 0) {
- const prev = stops[j - 1];
- currentDistance += getDistance(
- { x: prev.employee.x, y: prev.employee.y },
- { x: s.employee.x, y: s.employee.y }
- );
- }
- s.etaMinutes = Math.round(currentDistance / AVG_SPEED);
- }
- }
+  let cumulativeMinutes = 0;
+  for (let j = 0; j < stops.length; j++) {
+    const s = stops[j];
+    if (j > 0) {
+      cumulativeMinutes += legDur[j - 1][j];
+    }
+    s.etaMinutes = cumulativeMinutes + (isPickup ? 10 : 0);
+  }
 
- // Fetch actual OSRM road distance and duration for the new stop order
- const osrmResult = await fetchOSRMRoute(
+  // Fetch road distance and duration for the new stop order
+  const routeMetrics = await fetchGoogleRouteMetrics(
  stops.map(s => ({ x: s.employee.x, y: s.employee.y })),
  isPickup
  );
@@ -172,13 +155,13 @@ export async function PATCH(
 
  // Update Route parameters
  const penalty = finalViolations.length * 30;
- const score = Math.max(30, Math.round(100 - osrmResult.distance * 0.8 - penalty));
+  const score = Math.max(30, Math.round(100 - routeMetrics.distance * 0.8 - penalty));
 
  await tx.route.update({
  where: { id: routeId },
  data: {
- totalDistance: osrmResult.distance,
- totalDuration: osrmResult.duration,
+  totalDistance: routeMetrics.distance,
+  totalDuration: routeMetrics.duration,
  optimizationScore: score,
  },
  });
@@ -206,19 +189,19 @@ export async function PATCH(
  };
  });
 
- // Recalculate ETAs for the new order
- let currentDist = 0;
- const isPickup = route.isPickup;
- reorderedStops.forEach((stop, idx) => {
- if (idx > 0) {
- const prev = reorderedStops[idx - 1];
- currentDist += getDistance(
- { x: prev.employee.x, y: prev.employee.y },
- { x: stop.employee.x, y: stop.employee.y }
- );
- }
- stop.etaMinutes = Math.round(currentDist / AVG_SPEED) + (isPickup ? 10 : 0);
- });
+  // Recalculate ETAs using Google Routes Matrix API
+  const isPickup = route.isPickup;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || "";
+  const stopsCoords = reorderedStops.map(s => ({ x: s.employee.x, y: s.employee.y }));
+  const { durationMatrix: legDur } = await fetchGoogleMapsMatrix(stopsCoords, apiKey);
+
+  let cumulativeMinutes = 0;
+  reorderedStops.forEach((stop, idx) => {
+    if (idx > 0) {
+      cumulativeMinutes += legDur[idx - 1][idx];
+    }
+    stop.etaMinutes = cumulativeMinutes + (isPickup ? 10 : 0);
+  });
 
  // Re-evaluate safety violations
  const finalViolations = checkSafetyViolations(

@@ -51,6 +51,8 @@ model Cab {
   driverAddress String?
   driverX       Float?
   driverY       Float?
+  placeId       String?
+  formattedAddress String?
   routes        Route[]
   shifts        Shift[]
 }
@@ -67,6 +69,8 @@ model Employee {
   address      String
   x            Float                 // coordinate X
   y            Float                 // coordinate Y
+  placeId      String?
+  formattedAddress String?
   department   String
   designation  String?               @default("Engineer") // Manager, Senior Manager, Lead, Engineer, Intern
   managerId    String?
@@ -91,6 +95,7 @@ model Route {
   totalDuration     Float       
   status            String      // PLANNED, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELLED
   tripSequence      Int         @default(1)
+  routeNumber       Int?
   startedAt         DateTime?
   completedAt       DateTime?
   currentLat        Float?
@@ -175,6 +180,8 @@ model SystemSettings {
   defaultDepotLat              Float   @default(21.0625)
   defaultDepotLng              Float   @default(79.0526)
   depotName                    String  @default("MIHAN Depot")
+  depotPlaceId                 String?
+  depotFormattedAddress        String?
   maxPickupRadiusKm            Int     @default(70)
   // Financial
   currencySymbol               String  @default("₹")

@@ -46,14 +46,24 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { vehicleNumber, capacity, vendor, status, driverName, driverPhone, licenseNumber, driverAddress, shiftIds } = body;
+    const formattedAddress = body.formattedAddress || driverAddress;
+    const placeId = body.placeId || null;
+    const autoLat = body.lat ? Number(body.lat) : null;
+    const autoLon = body.lon ? Number(body.lon) : null;
 
     let finalDriverX = null;
     let finalDriverY = null;
-    if (driverAddress) {
+    let finalDriverPlaceId = null;
+    if (autoLat && autoLon && Number.isFinite(autoLat) && Number.isFinite(autoLon)) {
+      finalDriverX = autoLon;
+      finalDriverY = autoLat;
+      finalDriverPlaceId = placeId;
+    } else if (driverAddress) {
       const coords = await mapsProvider.geocode(driverAddress);
       if (coords) {
         finalDriverX = coords.x;
         finalDriverY = coords.y;
+        finalDriverPlaceId = coords.placeId || null;
       }
     }
 
@@ -67,8 +77,10 @@ export async function POST(req: Request) {
         driverPhone: driverPhone || "",
         licenseNumber: licenseNumber || "",
         driverAddress: driverAddress || null,
+        formattedAddress,
         driverX: finalDriverX,
         driverY: finalDriverY,
+        placeId: finalDriverPlaceId,
         shifts: shiftIds && shiftIds.length > 0 ? {
           connect: shiftIds.map((id: string) => ({ id }))
         } : undefined

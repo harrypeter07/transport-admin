@@ -8,6 +8,7 @@ interface LocationResult {
   display_name: string;
   lat: string;
   lon: string;
+  location_type?: string;
   address?: {
     city?: string;
     town?: string;
@@ -36,6 +37,7 @@ interface LocationAutocompleteProps {
     placeId?: string;
     street?: string;
     pincode?: string;
+    locationType?: string;
   }) => void;
 }
 
@@ -111,6 +113,7 @@ export default function LocationAutocomplete({
           display_name: p.description,
           lat: "",
           lon: "",
+          location_type: "",
         }));
         setResults(mapped);
         setShowDropdown(true);
@@ -146,7 +149,7 @@ export default function LocationAutocomplete({
 
   const resolvePlaceDetails = async (item: LocationResult): Promise<{
     lat: number; lon: number; city: string; country: string;
-    displayName: string; placeId?: string; street?: string; pincode?: string;
+    displayName: string; placeId?: string; street?: string; pincode?: string; locationType?: string;
   }> => {
     if (item.lat && item.lon) {
       const cityName = item.address?.city || item.address?.town || item.address?.village || "";
@@ -159,6 +162,7 @@ export default function LocationAutocomplete({
         placeId: item.place_id,
         street: item.address?.street,
         pincode: item.address?.pincode,
+        locationType: item.location_type,
       };
     }
 
@@ -182,6 +186,11 @@ export default function LocationAutocomplete({
         const components = details.address_components || [];
         const findComp = (type: string) => components.find((c) => c.types.includes(type))?.long_name || "";
 
+        let locationType: string | undefined;
+        if (details.geometry) {
+          locationType = (details.geometry as { location_type?: string }).location_type;
+        }
+
         return {
           lat: details.geometry?.location?.lat() || 0,
           lon: details.geometry?.location?.lng() || 0,
@@ -191,6 +200,7 @@ export default function LocationAutocomplete({
           placeId: item.place_id,
           street: findComp("route"),
           pincode: findComp("postal_code"),
+          locationType,
         };
       } catch {
         // fall through
@@ -212,6 +222,7 @@ export default function LocationAutocomplete({
           placeId: first.place_id,
           street: first.address?.street,
           pincode: first.address?.pincode,
+          locationType: first.location_type,
         };
       }
     }
@@ -248,18 +259,37 @@ export default function LocationAutocomplete({
 
       {showDropdown && results.length > 0 && (
         <ul className="absolute z-[100] w-full mt-1 bg-white border border-[#e8e8e8] rounded-none shadow-sm max-h-60 overflow-y-auto divide-y divide-slate-50">
-          {results.map((item) => (
-            <li
-              key={item.place_id}
-              onClick={() => handleSelect(item)}
-              className="px-4 py-2.5 hover:bg-[#f7f7f7] cursor-pointer flex items-start gap-2.5 transition"
-            >
-              <MapPin className="w-4 h-4 text-[#9a9a9a] mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-[#4a4a4a] font-medium leading-tight line-clamp-2">
-                {item.display_name}
-              </div>
-            </li>
-          ))}
+          {results.map((item) => {
+            const precisionLabel = item.location_type === "ROOFTOP" ? "Exact"
+              : item.location_type === "RANGE_INTERPOLATED" ? "Approx"
+              : item.location_type === "GEOMETRIC_CENTER" ? "Area"
+              : item.location_type === "APPROXIMATE" ? "Rough"
+              : null;
+            const precisionColor = item.location_type === "ROOFTOP" ? "bg-emerald-100 text-emerald-700"
+              : item.location_type === "RANGE_INTERPOLATED" ? "bg-blue-100 text-blue-700"
+              : item.location_type === "GEOMETRIC_CENTER" ? "bg-amber-100 text-amber-700"
+              : item.location_type === "APPROXIMATE" ? "bg-red-100 text-red-700"
+              : "";
+            return (
+              <li
+                key={item.place_id}
+                onClick={() => handleSelect(item)}
+                className="px-4 py-2.5 hover:bg-[#f7f7f7] cursor-pointer flex items-start gap-2.5 transition"
+              >
+                <MapPin className="w-4 h-4 text-[#9a9a9a] mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-[#4a4a4a] font-medium leading-tight line-clamp-2">
+                    {item.display_name}
+                  </div>
+                  {precisionLabel && (
+                    <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 leading-none font-medium ${precisionColor}`}>
+                      {precisionLabel}
+                    </span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

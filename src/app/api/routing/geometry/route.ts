@@ -68,6 +68,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const coords = body?.coords;
 
+    console.log("[geometry:server] received coords:", JSON.stringify(coords?.slice(0, 2)), "...", coords?.length, "pts");
+
     if (!Array.isArray(coords) || coords.length < 2 || coords.length > 30) {
       return NextResponse.json(
         { error: "coords must contain 2 to 30 [lat, lng] points" },
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!coords.every(isValidLatLng)) {
+      console.warn("[geometry:server] REJECTED — coords has invalid format. first:", JSON.stringify(coords[0]));
       return NextResponse.json({ error: "coords contains invalid coordinates" }, { status: 400 });
     }
 
