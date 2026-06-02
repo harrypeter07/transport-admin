@@ -5,9 +5,10 @@ import { Car, Clock, Navigation, CheckCircle, Calendar, User, Phone, MapPin, Ale
 import CalendarWidget from "@/components/CalendarWidget";
 
 export default function EmployeeDashboardPage() {
- const [routeData, setRouteData] = useState<any>(null);
- const [calendarData, setCalendarData] = useState<any>(null);
- const [loading, setLoading] = useState(true);
+  const [routeData, setRouteData] = useState<any>(null);
+  const [calendarData, setCalendarData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
  useEffect(() => {
  fetchDashboardData();
@@ -28,9 +29,10 @@ export default function EmployeeDashboardPage() {
  const data = await calRes.json();
  setCalendarData(data);
  }
- } catch (e) {
- console.error("Error fetching employee dashboard data:", e);
- } finally {
+  } catch (e) {
+  setLoadError("Failed to load dashboard data");
+  console.error("Error fetching employee dashboard data:", e);
+  } finally {
  setLoading(false);
  }
  }
@@ -58,10 +60,11 @@ export default function EmployeeDashboardPage() {
  ?.slice(0, 3) || [];
 
  return (
- <div className="space-y-6">
- <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
- <div>
- <h1 className="text-2xl font-bold text-[#1c1b1f]">Employee Portal</h1>
+  <div className="space-y-6">
+  {loadError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{loadError}</div>}
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+  <div>
+  <h1 className="text-2xl font-bold text-[#1c1b1f]">Employee Portal</h1>
  <p className="text-sm text-[#6b6b6b] mt-1">
  Welcome to your transportation hub.
  </p>

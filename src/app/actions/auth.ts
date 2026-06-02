@@ -149,7 +149,7 @@ export async function forgotPassword(
 
  // In a real application, send this token via email here.
  // Example: await sendEmail(email, `Your reset link: /reset-password?token=${token}`);
- console.log(`[DEV] Password reset link for ${email}: http://localhost:3000/reset-password?token=${token}`);
+  console.info(`[auth] 🔑 Password reset link for ${email}: http://localhost:3000/reset-password?token=${token}`);
 
  return { success: true };
 }

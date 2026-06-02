@@ -3,16 +3,23 @@ import { verifySession } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
 import { resolveCabOriginFromSnapshot, getRouteDestinationPoint } from "@/lib/vehicleState";
+import { audit } from "@/lib/audit";
 
 export async function POST(req: Request) {
- try {
- const session = await verifySession();
- // Only Drivers or Admins can manipulate route state in this endpoint
- if (session.role !== "DRIVER" && session.role !== "ADMIN") {
- return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
- }
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  let action: string | undefined;
+  let routeId: string | undefined;
+  try {
+  const session = await verifySession();
+  // Only Drivers or Admins can manipulate route state in this endpoint
+   if (session.role !== "DRIVER" && session.role !== "ADMIN") {
+   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+   }
 
- const { routeId, action, metadata } = await req.json();
+   const body = await req.json();
+   routeId = body.routeId;
+   action = body.action;
+   const { metadata } = body;
 
  if (!routeId || !action) {
  return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -125,21 +132,23 @@ export async function POST(req: Request) {
  return r;
  });
 
- // NO-AWAIT Notifications for all passengers
- Promise.all(route.stops.map(async (stop) => {
- if (stop.employee?.userId) {
- await createNotification(
- stop.employee.userId,
- "Route Started",
- `Your assigned cab (${route.cab.vehicleNumber}) has started the route.`,
- "ROUTE",
- "/dashboard/employee/route"
- );
- }
- })).catch(console.error);
+  await audit({ userId: session.userId, role: session.role, action: "UPDATE", entity: "Route", entityId: routeId, after: { status: "IN_PROGRESS", startedAt: now }, ip });
 
- return NextResponse.json({ success: true, route: updatedRoute });
- }
+  // NO-AWAIT Notifications for all passengers
+  Promise.all(route.stops.map(async (stop) => {
+  if (stop.employee?.userId) {
+  await createNotification(
+  stop.employee.userId,
+  "Route Started",
+  `Your assigned cab (${route.cab.vehicleNumber}) has started the route.`,
+  "ROUTE",
+  "/dashboard/employee/route"
+  );
+  }
+  })).catch(console.error);
+
+  return NextResponse.json({ success: true, route: updatedRoute });
+  }
 
   if (action === "COMPLETE_ROUTE") {
     if (route.status !== "IN_PROGRESS") {
@@ -186,25 +195,28 @@ export async function POST(req: Request) {
  return r;
  });
 
- // NO-AWAIT Notify Admins
- prisma.user.findMany({ where: { role: "ADMIN" } }).then(admins => {
- admins.forEach(admin => {
- createNotification(
- admin.id,
- "Route Completed",
- `Cab ${route.cab.vehicleNumber} has completed its route.`,
- "SYSTEM",
- "/dashboard/admin"
- );
- });
- }).catch(console.error);
+  await audit({ userId: session.userId, role: session.role, action: "UPDATE", entity: "Route", entityId: routeId, after: { status: "COMPLETED", completedAt: now }, ip });
 
- return NextResponse.json({ success: true, route: updatedRoute });
- }
+  // NO-AWAIT Notify Admins
+  prisma.user.findMany({ where: { role: "ADMIN" } }).then(admins => {
+  admins.forEach(admin => {
+  createNotification(
+  admin.id,
+  "Route Completed",
+  `Cab ${route.cab.vehicleNumber} has completed its route.`,
+  "SYSTEM",
+  "/dashboard/admin"
+  );
+  });
+  }).catch(console.error);
 
- return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  return NextResponse.json({ success: true, route: updatedRoute });
+  }
 
- } catch (error: any) {
- return NextResponse.json({ error: error.message }, { status: 500 });
- }
+  return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+
+  } catch (error: any) {
+  console.error("[api] ❌ POST /api/execution/route", { action, routeId, ip }, error);
+  return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

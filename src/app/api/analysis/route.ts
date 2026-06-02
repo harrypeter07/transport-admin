@@ -4,9 +4,13 @@ import { getDistance, makeDepot } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
 
 export async function GET(req: Request) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  try {
+  const auth = await requireApiRole(["ADMIN"]);
+ if (auth.response) {
+  console.warn("[api] 🔒 GET /analysis — UNAUTHORIZED", { role: auth.session.role, ip });
+  return auth.response;
+ }
 
  const { searchParams } = new URL(req.url);
  const date = searchParams.get("date");
@@ -152,8 +156,8 @@ export async function GET(req: Request) {
  depotName: settings.depotName,
  });
 
- } catch (error) {
- console.error("Analysis Error:", error);
- return NextResponse.json({ error: "Failed to calculate analysis metrics" }, { status: 500 });
+  } catch (error) {
+  console.error("[api] ❌ GET /analysis", { ip }, error);
+  return NextResponse.json({ error: "Failed to calculate analysis metrics" }, { status: 500 });
  }
 }

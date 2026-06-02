@@ -8,6 +8,7 @@ function extractAddressComponent(
 }
 
 export async function GET(req: NextRequest) {
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
   try {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q");
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(results);
   } catch (e: any) {
-    console.error("Geocoding API error:", e);
+    console.error("[api] ❌ GET /geocode", { ip }, e);
     return NextResponse.json({ error: "Internal Server Error", details: e.message }, { status: 500 });
   }
 }

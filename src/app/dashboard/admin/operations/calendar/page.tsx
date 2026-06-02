@@ -28,11 +28,12 @@ export default function AdminHolidayManagement() {
  const data = await res.json();
  setHolidays(data);
  }
- } catch (e) {
- console.error(e);
- }
- setLoading(false);
- }
+  } catch (e) {
+  setError("Failed to load holidays");
+  console.error(e);
+  }
+  setLoading(false);
+  }
 
  // --- Calendar Logic ---
  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
@@ -117,9 +118,10 @@ export default function AdminHolidayManagement() {
  }
  fetchHolidays();
  }
- } catch (e) {
- console.error(e);
- }
+  } catch (e) {
+  setError("Failed to delete holiday");
+  console.error(e);
+  }
  }
 
  // --- Rendering Calendar Grid ---
@@ -154,10 +156,11 @@ export default function AdminHolidayManagement() {
  }
 
  return (
- <div className="space-y-6">
- <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
- <div>
- <h1 className="text-2xl font-bold text-[#1c1b1f]">Holiday Management</h1>
+  <div className="space-y-6">
+  {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{error}</div>}
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+  <div>
+  <h1 className="text-2xl font-bold text-[#1c1b1f]">Holiday Management</h1>
  <p className="text-sm text-[#6b6b6b] mt-1">
  Interactive calendar to manage company holidays. Click on any date to add or edit a holiday.
  </p>

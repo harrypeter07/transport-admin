@@ -5,17 +5,19 @@ import Link from "next/link";
 import { ChevronRight, Network } from "lucide-react";
 
 export default function HierarchyPage() {
- const [employees, setEmployees] = useState<any[]>([]);
- const [loading, setLoading] = useState(true);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
- useEffect(() => {
- async function load() {
- setLoading(true);
- try {
- const res = await fetch("/api/employees");
- if (res.ok) setEmployees(await res.json());
- } catch (e) {
- console.error(e);
+  useEffect(() => {
+  async function load() {
+  setLoading(true);
+  try {
+  const res = await fetch("/api/employees");
+  if (res.ok) setEmployees(await res.json());
+  } catch (e) {
+  setLoadError("Failed to load employee data");
+  console.error(e);
  } finally {
  setLoading(false);
  }
@@ -60,8 +62,9 @@ export default function HierarchyPage() {
  const levels = computeLevels(employees);
 
  return (
- <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto">
- {/* Breadcrumb */}
+  <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto">
+  {loadError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{loadError}</div>}
+  {/* Breadcrumb */}
  <nav className="flex items-center gap-1.5 text-xs text-[#6b6b6b]">
  <Link href="/dashboard/admin" className="hover:text-[#1c1b1f] transition">Dashboard</Link>
  <ChevronRight className="w-3 h-3" />

@@ -134,7 +134,7 @@ export async function computeGoogleRoute(
       source: "google-routes",
     };
   } catch (e) {
-    console.error("Google Routes computeRoutes failed:", e);
+    console.error("[maps] ❌ Google Routes computeRoutes failed:", e);
     return null;
   } finally {
     clearTimeout(timeoutId);
@@ -224,7 +224,7 @@ export async function computeGoogleRouteMatrix(
 
       return true;
     } catch (e) {
-      console.error("Google Routes computeRouteMatrix chunk failed:", e);
+      console.error("[maps] ❌ Google Routes computeRouteMatrix chunk failed:", e);
       return false;
     } finally {
       clearTimeout(timeoutId);

@@ -2,15 +2,22 @@ import { NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
+import { audit } from "@/lib/audit";
 
 export async function POST(req: Request) {
- try {
- const session = await verifySession();
- if (session.role !== "DRIVER" && session.role !== "ADMIN") {
- return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
- }
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  let action: string | undefined;
+  let stopId: string | undefined;
+  try {
+  const session = await verifySession();
+   if (session.role !== "DRIVER" && session.role !== "ADMIN") {
+   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+   }
 
- const { stopId, action, metadata } = await req.json();
+   const body = await req.json();
+   stopId = body.stopId;
+   action = body.action;
+   const metadata = body.metadata;
 
  if (!stopId || !action) {
  return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -75,20 +82,22 @@ export async function POST(req: Request) {
  return s;
  });
 
- if (stop.employee.userId) {
- createNotification(
- stop.employee.userId,
- "Driver is arriving!",
- "Your driver has reached your stop. Please proceed to board.",
- "ROUTE",
- "/dashboard/employee/route"
- ).catch(console.error);
- }
+  await audit({ userId: session.userId, role: session.role, action: "UPDATE", entity: "Route", entityId: stop.routeId, after: { stopId, status: "REACHED", actualArrivalTime: now }, ip });
 
- return NextResponse.json({ success: true, stop: updatedStop });
- }
+  if (stop.employee.userId) {
+  createNotification(
+  stop.employee.userId,
+  "Driver is arriving!",
+  "Your driver has reached your stop. Please proceed to board.",
+  "ROUTE",
+  "/dashboard/employee/route"
+  ).catch(console.error);
+  }
 
- if (action === "BOARD_EMPLOYEE" || action === "SKIP_STOP") {
+  return NextResponse.json({ success: true, stop: updatedStop });
+  }
+
+  if (action === "BOARD_EMPLOYEE" || action === "SKIP_STOP") {
  if (stop.status !== "REACHED" && stop.status !== "PENDING") {
  return NextResponse.json({ error: "Invalid status for boarding/skipping" }, { status: 400 });
  }
@@ -131,15 +140,17 @@ export async function POST(req: Request) {
  return s;
  });
 
- if (stop.employee.userId) {
- createNotification(
- stop.employee.userId,
- newStatus === "BOARDED" ? "You have boarded" : "You were skipped",
- newStatus === "BOARDED" ? "Have a safe trip!" : "The driver has marked you as skipped.",
- "ROUTE",
- "/dashboard/employee/route"
- ).catch(console.error);
- }
+  await audit({ userId: session.userId, role: session.role, action: "UPDATE", entity: "Route", entityId: stop.routeId, after: { stopId, status: newStatus, employeeDelayMins }, ip });
+
+  if (stop.employee.userId) {
+  createNotification(
+  stop.employee.userId,
+  newStatus === "BOARDED" ? "You have boarded" : "You were skipped",
+  newStatus === "BOARDED" ? "Have a safe trip!" : "The driver has marked you as skipped.",
+  "ROUTE",
+  "/dashboard/employee/route"
+  ).catch(console.error);
+  }
 
  // If employee was delayed by more than 5 minutes, notify their manager
  if (employeeDelayMins > 5 && stop.employee.managerId) {
@@ -160,7 +171,8 @@ export async function POST(req: Request) {
 
  return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 
- } catch (error: any) {
- return NextResponse.json({ error: error.message }, { status: 500 });
- }
+  } catch (error: any) {
+  console.error("[api] ❌ POST /api/execution/stop", { action, stopId, ip }, error);
+  return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

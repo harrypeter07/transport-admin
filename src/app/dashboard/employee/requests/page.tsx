@@ -39,9 +39,10 @@ export default function EmployeeRequestsPage() {
  setTimingChanges(data.timingChanges || []);
  setEmployee(data.employee || null);
  }
- } catch (e) {
- console.error("Failed to fetch requests", e);
- } finally {
+  } catch (e) {
+  setMessage({ text: "Failed to load requests", isError: true });
+  console.error("Failed to fetch requests", e);
+  } finally {
  setLoading(false);
  }
  }

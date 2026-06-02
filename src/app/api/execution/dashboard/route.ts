@@ -4,12 +4,12 @@ import { prisma } from "@/lib/db";
 import { getDistance, makeDepot } from "@/lib/optimization";
 
 export async function GET(req: Request) {
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
   try {
     const session = await verifySession();
     if (session.role !== "ADMIN" && session.role !== "MANAGER") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const today = new Date().toISOString().split("T")[0];
     let routesFilter: any = { date: today };
 
@@ -232,7 +232,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ activeRoutes, delayedEmployees, metrics });
 
   } catch (error: any) {
-    console.error("Dashboard API error:", error);
+    console.error("[api] ❌ GET /api/execution/dashboard", { ip }, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

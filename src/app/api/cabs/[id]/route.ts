@@ -1,16 +1,24 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 import prisma from "@/lib/db";
 import { mapsProvider } from "@/lib/maps";
+import { audit } from "@/lib/audit";
 
-export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+function reqIp(req: NextRequest | Request): string {
+  return (req as any).headers?.get?.("x-forwarded-for") || (req as any).headers?.get?.("x-real-ip") || "unknown";
+}
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await verifySession();
+  const ip = reqIp(req);
   if (session.role !== "ADMIN") {
+    console.warn("[api] 🔒 PUT /api/cabs/[id] — UNAUTHORIZED", { role: session.role, ip });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const { id } = await params;
+    const before = await prisma.cab.findUnique({ where: { id } });
     const body = await req.json();
     const { vehicleNumber, capacity, vendor, status, driverName, driverPhone, licenseNumber, driverAddress, shiftIds } = body;
     const formattedAddress = body.formattedAddress;
@@ -61,26 +69,32 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       },
       include: { shifts: true }
     });
+    await audit({ userId: session.userId, role: session.role, action: "UPDATE", entity: "Cab", entityId: id, before, after: { vehicleNumber: updated.vehicleNumber }, ip });
+    console.info("[api] ✅ PUT /api/cabs/[id] — OK", { vehicleNumber: updated.vehicleNumber, id, userId: session.userId, ip });
     return NextResponse.json(updated);
   } catch (error: any) {
+    console.error("[api] ❌ PUT /api/cabs/[id] — Failed", { ip }, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await verifySession();
+  const ip = reqIp(req);
   if (session.role !== "ADMIN") {
+    console.warn("[api] 🔒 DELETE /api/cabs/[id] — UNAUTHORIZED", { role: session.role, ip });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const { id } = await params;
+    const before = await prisma.cab.findUnique({ where: { id } });
     const routeReferences = await prisma.route.count({
       where: { cabId: id },
     });
 
     if (routeReferences > 0) {
-      const cab = await prisma.cab.findUnique({ where: { id } });
+      const cab = before;
       if (cab) {
         await prisma.cab.update({
           where: { id },
@@ -90,12 +104,17 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
           }
         });
       }
+      await audit({ userId: session.userId, role: session.role, action: "DELETE", entity: "Cab", entityId: id, before, after: { status: "INACTIVE" }, ip });
+      console.info("[api] ✅ DELETE /api/cabs/[id] — soft-deleted", { id, userId: session.userId, ip });
       return NextResponse.json({ success: true });
     }
 
     await prisma.cab.delete({ where: { id } });
+    await audit({ userId: session.userId, role: session.role, action: "DELETE", entity: "Cab", entityId: id, before, ip });
+    console.info("[api] ✅ DELETE /api/cabs/[id] — OK", { id, userId: session.userId, ip });
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("[api] ❌ DELETE /api/cabs/[id] — Failed", { ip }, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

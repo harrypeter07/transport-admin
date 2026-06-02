@@ -2,18 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { checkSafetyViolations, DEPOT, fetchGoogleRouteMetrics, fetchGoogleMapsMatrix } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
+import { audit } from "@/lib/audit";
 
 export async function PATCH(
  req: NextRequest,
- { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  let routeId = "";
+  let action = "";
+  try {
+  const auth = await requireApiRole(["ADMIN"]);
+  if (auth.response) return auth.response;
 
- const { id: routeId } = await params;
- const body = await req.json();
- const { action } = body;
+  routeId = (await params).id;
+  const body = await req.json();
+  action = body.action;
 
  // Fetch the target route
  const route = await prisma.route.findUnique({
@@ -27,11 +31,13 @@ export async function PATCH(
  },
  });
 
- if (!route) {
- return NextResponse.json({ error: "Route not found" }, { status: 404 });
- }
+	if (!route) {
+	return NextResponse.json({ error: "Route not found" }, { status: 404 });
+	}
 
- if (action === "UPDATE_STATUS") {
+	const beforeRoute = { ...route };
+
+	if (action === "UPDATE_STATUS") {
  const { stopId, status } = body;
  if (!["PENDING", "REACHED", "BOARDED", "SKIPPED"].includes(status)) {
  return NextResponse.json({ error: "Invalid stop status" }, { status: 400 });
@@ -56,10 +62,12 @@ export async function PATCH(
  data: { status: routeStatus },
  });
 
- return NextResponse.json({ success: true });
- }
+	await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Route", entityId: routeId, before: beforeRoute, after: { action }, ip });
+	console.info("[api] ✅ PATCH /api/routes/[id]", { action, routeId, userId: auth.session.userId, ip });
+	return NextResponse.json({ success: true });
+	}
 
- if (action === "REORDER") {
+	if (action === "REORDER") {
  const { stopId, direction } = body;
  const stops = [...route.stops];
 
@@ -165,12 +173,14 @@ export async function PATCH(
  optimizationScore: score,
  },
  });
- });
+	});
 
- return NextResponse.json({ success: true });
- }
+	await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Route", entityId: routeId, before: beforeRoute, after: { action }, ip });
+	console.info("[api] ✅ PATCH /api/routes/[id]", { action, routeId, userId: auth.session.userId, ip });
+	return NextResponse.json({ success: true });
+	}
 
- if (action === "APPLY_SEQUENCE") {
+	if (action === "APPLY_SEQUENCE") {
  const { stopIds, distance, duration } = body;
  if (!Array.isArray(stopIds)) {
  return NextResponse.json({ error: "stopIds array is required" }, { status: 400 });
@@ -245,15 +255,17 @@ export async function PATCH(
  data: {
  totalDistance: distance,
  totalDuration: duration,
- optimizationScore: score,
- },
- });
- });
+	optimizationScore: score,
+	},
+	});
+	});
 
- return NextResponse.json({ success: true });
- }
+	await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Route", entityId: routeId, before: beforeRoute, after: { action }, ip });
+	console.info("[api] ✅ PATCH /api/routes/[id]", { action, routeId, userId: auth.session.userId, ip });
+	return NextResponse.json({ success: true });
+	}
 
- if (action === "SWAP_CAB") {
+	if (action === "SWAP_CAB") {
  const { cabId } = body;
  if (!cabId) {
  return NextResponse.json({ error: "cabId is required" }, { status: 400 });
@@ -268,18 +280,20 @@ export async function PATCH(
  return NextResponse.json({ error: "Cab not found" }, { status: 404 });
  }
 
- // Update Route with new cabId
- await prisma.route.update({
- where: { id: routeId },
- data: { cabId },
- });
+	// Update Route with new cabId
+	await prisma.route.update({
+	where: { id: routeId },
+	data: { cabId },
+	});
 
- return NextResponse.json({ success: true });
- }
+	await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Route", entityId: routeId, before: beforeRoute, after: { action }, ip });
+	console.info("[api] ✅ PATCH /api/routes/[id]", { action, routeId, userId: auth.session.userId, ip });
+	return NextResponse.json({ success: true });
+	}
 
- return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+	return NextResponse.json({ error: "Invalid action" }, { status: 400 });
  } catch (e) {
- console.error("Failed route edit:", e);
+	console.error("[api] ❌ PATCH /api/routes/[id]", { action, routeId, ip }, e);
  return NextResponse.json({ error: "Failed to update route" }, { status: 500 });
  }
 }

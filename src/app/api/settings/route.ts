@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireApiRole } from "@/lib/apiAuth";
 import { verifySession } from "@/lib/dal";
+import { audit } from "@/lib/audit";
+
+function reqIp(req: NextRequest | Request): string {
+  if (req instanceof NextRequest) {
+    return req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  }
+  return (req as any).headers?.get?.("x-forwarded-for") || (req as any).headers?.get?.("x-real-ip") || "unknown";
+}
 
 const DEFAULT_SETTINGS = {
  id: "default",
@@ -19,72 +27,78 @@ const DEFAULT_SETTINGS = {
 };
 
 // GET — fetch system settings (ADMIN or MANAGER)
-export async function GET() {
- try {
- const session = await verifySession();
- if (session.role !== "ADMIN" && session.role !== "MANAGER") {
- return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
- }
+export async function GET(req: NextRequest) {
+	const ip = reqIp(req);
+	try {
+	const session = await verifySession();
+	if (session.role !== "ADMIN" && session.role !== "MANAGER") {
+	return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+	}
 
- // Upsert ensures defaults always exist on first read
- const settings = await prisma.systemSettings.upsert({
- where: { id: "default" },
- update: {},
- create: DEFAULT_SETTINGS,
- });
+	// Upsert ensures defaults always exist on first read
+	const settings = await prisma.systemSettings.upsert({
+	where: { id: "default" },
+	update: {},
+	create: DEFAULT_SETTINGS,
+	});
 
- return NextResponse.json(settings);
- } catch (e) {
- console.error("Failed to fetch settings:", e);
- return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
- }
+	return NextResponse.json(settings);
+	} catch (e) {
+	console.error("[api] ❌ GET /api/settings", { ip }, e);
+	return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
+	}
 }
 
 // PATCH — update system settings (ADMIN only)
 export async function PATCH(req: NextRequest) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+	const ip = reqIp(req);
+	try {
+	const auth = await requireApiRole(["ADMIN"]);
+	if (auth.response) return auth.response;
 
- const body = await req.json();
+	const body = await req.json();
 
- // Whitelist allowed fields to prevent malicious updates
- const allowed = [
- "leaveApprovalRequired",
- "timingChangeApprovalRequired",
- "defaultCity",
- "defaultCountry",
- "defaultDepotLat",
- "defaultDepotLng",
-  "depotName",
-  "depotPlaceId",
-  "depotFormattedAddress",
-  "maxPickupRadiusKm",
- "currencySymbol",
- "fuelPricePerLitre",
- "avgFuelMileageKmL",
- ];
+	// Whitelist allowed fields to prevent malicious updates
+	const allowed = [
+	"leaveApprovalRequired",
+	"timingChangeApprovalRequired",
+	"defaultCity",
+	"defaultCountry",
+	"defaultDepotLat",
+	"defaultDepotLng",
+	 "depotName",
+	 "depotPlaceId",
+	 "depotFormattedAddress",
+	 "maxPickupRadiusKm",
+	"currencySymbol",
+	"fuelPricePerLitre",
+	"avgFuelMileageKmL",
+	];
 
- const data: Record<string, any> = {};
- for (const key of allowed) {
- if (body[key] !== undefined) {
- data[key] = body[key];
- }
- }
+	const data: Record<string, any> = {};
+	for (const key of allowed) {
+	if (body[key] !== undefined) {
+	data[key] = body[key];
+	}
+	}
 
- if (Object.keys(data).length === 0) {
- return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
- }
+	if (Object.keys(data).length === 0) {
+	return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+	}
 
- const settings = await prisma.systemSettings.upsert({
- where: { id: "default" },
- update: data,
- create: { ...DEFAULT_SETTINGS, ...data },
- });
+	const before = await prisma.systemSettings.findUnique({ where: { id: "default" } });
+	const settings = await prisma.systemSettings.upsert({
+	where: { id: "default" },
+	update: data,
+	create: { ...DEFAULT_SETTINGS, ...data },
+	});
 
- return NextResponse.json(settings);
- } catch (e) {
- console.error("Failed to update settings:", e);
- return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });
- }
+	await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "SystemSettings", before, after: { data }, ip });
+	console.info("[api] ✅ PATCH /api/settings", { userId: auth.session.userId, ip });
+
+	return NextResponse.json(settings);
+	} catch (e) {
+	console.error("[api] ❌ PATCH /api/settings", { ip }, e);
+	return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });
+	}
 }

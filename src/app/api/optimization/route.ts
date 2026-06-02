@@ -11,9 +11,18 @@ import {
 } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
 import { resolveCabOriginFromSnapshot } from "@/lib/vehicleState";
+import { audit } from "@/lib/audit";
+
+function reqIp(req: NextRequest | Request): string {
+  if (req instanceof NextRequest) {
+    return req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  }
+  return (req as any).headers?.get?.("x-forwarded-for") || (req as any).headers?.get?.("x-real-ip") || "unknown";
+}
 
 // GET all routes with details
 export async function GET(req: NextRequest) {
+  const ip = reqIp(req);
   try {
     const auth = await requireApiRole(["ADMIN"]);
     if (auth.response) return auth.response;
@@ -40,7 +49,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(routes);
   } catch (e) {
-    console.error("Error fetching routes:", e);
+    console.error("[api] ❌ GET /api/optimization", { ip }, e);
     return NextResponse.json({ error: "Failed to fetch routes" }, { status: 500 });
   }
 }
@@ -343,6 +352,7 @@ async function persistPreviewRoutes(
 
 // POST: Run optimization
 export async function POST(req: NextRequest) {
+  const ip = reqIp(req);
   try {
     const auth = await requireApiRole(["ADMIN"]);
     if (auth.response) return auth.response;
@@ -391,9 +401,12 @@ export async function POST(req: NextRequest) {
     const { routes: optimizedRoutes, usingFallback } = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey, mode, depot);
     await persistRoutes(optimizedRoutes, currentDateStr, fallbackShiftId, isPickup, mode, cabTripSequenceMap);
 
+    await audit({ userId: auth.session.userId, role: auth.session.role, action: "OPTIMIZE", entity: "Route", after: { mode, count: optimizedRoutes.length, usingFallback }, ip });
+    console.info("[api] ✅ POST /api/optimization", { mode, count: optimizedRoutes.length, usingFallback, userId: auth.session.userId, ip });
+
     return NextResponse.json({ success: true, count: optimizedRoutes.length, usingFallback });
   } catch (e) {
-    console.error("Optimization failed:", e);
+    console.error("[api] ❌ POST /api/optimization — Failed", { ip }, e);
     return NextResponse.json({ error: "Optimization engine error" }, { status: 500 });
   }
 }

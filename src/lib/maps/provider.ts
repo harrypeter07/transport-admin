@@ -136,7 +136,7 @@ async function googleGeocode(name: string, options: GeocodeOptions = {}): Promis
     setSessionCache(cacheKey, result, 60 * 60 * 1000);
     return result;
   } catch (error) {
-    console.error("Google geocode failed:", error);
+    console.error("[maps] ❌ Google geocode failed:", error);
     return null;
   } finally {
     clearTimeout(timeoutId);
@@ -181,7 +181,7 @@ async function googleAutocomplete(query: string, options: GeocodeOptions = {}): 
       };
     });
   } catch (error) {
-    console.error("Google autocomplete failed:", error);
+    console.error("[maps] ❌ Google autocomplete failed:", error);
     return [];
   } finally {
     clearTimeout(timeoutId);

@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { mapsProvider } from "@/lib/maps";
 import { requireApiRole } from "@/lib/apiAuth";
+import { audit } from "@/lib/audit";
+
+function reqIp(req: NextRequest): string {
+  return req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+}
 
 // POST: Manually create a Cab and its Driver
 export async function POST(req: NextRequest) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+  const ip = reqIp(req);
+  try {
+  const auth = await requireApiRole(["ADMIN"]);
+  if (auth.response) return auth.response;
 
   const body = await req.json();
   const { vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress } = body;
@@ -53,18 +59,21 @@ export async function POST(req: NextRequest) {
   },
   });
 
- return NextResponse.json(cab);
- } catch (e) {
- console.error("Error creating cab manually:", e);
- return NextResponse.json({ error: "Failed to create cab record" }, { status: 500 });
- }
+  await audit({ userId: auth.session.userId, role: auth.session.role, action: "CREATE", entity: "Cab", entityId: cab.id, after: { vehicleNumber: cab.vehicleNumber }, ip });
+  console.info("[api] ✅ POST /api/cabs/manage — OK", { vehicleNumber: cab.vehicleNumber, id: cab.id, userId: auth.session.userId, ip });
+  return NextResponse.json(cab);
+  } catch (e) {
+  console.error("[api] ❌ POST /api/cabs/manage — Failed", { ip }, e);
+  return NextResponse.json({ error: "Failed to create cab record" }, { status: 500 });
+  }
 }
 
 // DELETE: Delete a Cab and its associated Driver
 export async function DELETE(req: NextRequest) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+  const ip = reqIp(req);
+  try {
+  const auth = await requireApiRole(["ADMIN"]);
+  if (auth.response) return auth.response;
 
  const { searchParams } = new URL(req.url);
  const id = searchParams.get("id");
@@ -96,18 +105,21 @@ export async function DELETE(req: NextRequest) {
  where: { id },
  });
 
- return NextResponse.json({ success: true });
- } catch (e) {
- console.error("Error deleting cab:", e);
- return NextResponse.json({ error: "Failed to delete cab record" }, { status: 500 });
- }
+  await audit({ userId: auth.session.userId, role: auth.session.role, action: "DELETE", entity: "Cab", entityId: id, ip });
+  console.info("[api] ✅ DELETE /api/cabs/manage — OK", { id, userId: auth.session.userId, ip });
+  return NextResponse.json({ success: true });
+  } catch (e) {
+  console.error("[api] ❌ DELETE /api/cabs/manage — Failed", { ip }, e);
+  return NextResponse.json({ error: "Failed to delete cab record" }, { status: 500 });
+  }
 }
 
 // PATCH: Edit Cab and associated Driver details
 export async function PATCH(req: NextRequest) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+  const ip = reqIp(req);
+  try {
+  const auth = await requireApiRole(["ADMIN"]);
+  if (auth.response) return auth.response;
 
   const body = await req.json();
   const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress, driverStartAddress, status } = body;
@@ -128,6 +140,7 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ error: "Cab not found" }, { status: 404 });
   }
 
+  const cabBefore = { ...cab };
   const nextDriverAddress = driverAddress !== undefined ? driverAddress : driverStartAddress;
   let driverX: number | null | undefined;
   let driverY: number | null | undefined;
@@ -173,9 +186,11 @@ export async function PATCH(req: NextRequest) {
   },
   });
 
- return NextResponse.json(updatedCab);
- } catch (e) {
- console.error("Error updating cab details:", e);
- return NextResponse.json({ error: "Failed to update cab details" }, { status: 500 });
- }
+  await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Cab", entityId: id, before: cabBefore, after: { vehicleNumber: updatedCab.vehicleNumber, driverName: updatedCab.driverName }, ip });
+  console.info("[api] ✅ PATCH /api/cabs/manage — OK", { vehicleNumber: updatedCab.vehicleNumber, id, userId: auth.session.userId, ip });
+  return NextResponse.json(updatedCab);
+  } catch (e) {
+  console.error("[api] ❌ PATCH /api/cabs/manage — Failed", { ip }, e);
+  return NextResponse.json({ error: "Failed to update cab details" }, { status: 500 });
+  }
 }

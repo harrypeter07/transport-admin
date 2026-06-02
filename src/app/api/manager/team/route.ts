@@ -3,10 +3,12 @@ import { verifySession } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 
 export async function GET(req: Request) {
- try {
- const session = await verifySession();
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  try {
+  const session = await verifySession();
  if (session.role !== "MANAGER") {
- return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  console.warn("[api] 🔒 GET /manager/team — UNAUTHORIZED", { role: session.role, ip });
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
  }
 
  const managerEmployee = await prisma.employee.findFirst({
@@ -33,8 +35,8 @@ export async function GET(req: Request) {
  });
 
  return NextResponse.json({ team });
- } catch (error: any) {
- console.error("GET manager team error:", error);
- return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: any) {
+  console.error("[api] ❌ GET /manager/team", { ip }, error);
+  return NextResponse.json({ error: error.message }, { status: 500 });
  }
 }

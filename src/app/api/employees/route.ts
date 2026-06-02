@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { verifySession } from "@/lib/dal";
 import { requireApiRole } from "@/lib/apiAuth";
+import { audit } from "@/lib/audit";
 
 function textValue(value: unknown): string {
  return typeof value === "string" ? value.trim() : "";
@@ -45,101 +46,111 @@ function prismaEmployeeWriteResponse(error: unknown) {
 }
 
 // GET all employees
+function reqIp(req: NextRequest): string {
+  return req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+}
+
 export async function GET(req: NextRequest) {
- const session = await verifySession();
- if (session.role !== "ADMIN" && session.role !== "MANAGER") {
- return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
- }
+  const session = await verifySession();
+  const ip = reqIp(req);
+  if (session.role !== "ADMIN" && session.role !== "MANAGER") {
+  console.warn("[api] 🔒 GET /api/employees — UNAUTHORIZED", { role: session.role, ip });
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
- const { searchParams } = new URL(req.url);
- const search = searchParams.get("search") || "";
- const shiftId = searchParams.get("shiftId");
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get("search") || "";
+  const shiftId = searchParams.get("shiftId");
 
- try {
- const whereClause: Prisma.EmployeeWhereInput = {
- status: "ACTIVE",
- ...(search && {
- OR: [
- { name: { contains: search, mode: "insensitive" as const } },
- { employeeCode: { contains: search, mode: "insensitive" as const } },
- { department: { contains: search, mode: "insensitive" as const } },
- ],
- }),
- ...(shiftId && { shiftId }),
- };
+  try {
+  const whereClause: Prisma.EmployeeWhereInput = {
+  status: "ACTIVE",
+  ...(search && {
+  OR: [
+  { name: { contains: search, mode: "insensitive" as const } },
+  { employeeCode: { contains: search, mode: "insensitive" as const } },
+  { department: { contains: search, mode: "insensitive" as const } },
+  ],
+  }),
+  ...(shiftId && { shiftId }),
+  };
 
- if (session.role === "MANAGER") {
- const managerEmployee = await prisma.employee.findFirst({
- where: { userId: session.userId },
- select: { id: true },
- });
+  if (session.role === "MANAGER") {
+  const managerEmployee = await prisma.employee.findFirst({
+  where: { userId: session.userId },
+  select: { id: true },
+  });
 
- if (!managerEmployee) {
- return NextResponse.json([]);
- }
+  if (!managerEmployee) {
+  return NextResponse.json([]);
+  }
 
- whereClause.managerId = managerEmployee.id;
- }
+  whereClause.managerId = managerEmployee.id;
+  }
 
- const employees = await prisma.employee.findMany({
- where: whereClause,
- include: {
- shift: true,
- manager: { select: { id: true, name: true } },
- },
- orderBy: { name: "asc" },
- });
- return NextResponse.json(employees);
- } catch (e) {
- console.error("Error fetching employees:", e);
- return NextResponse.json({ error: "Failed to fetch employees" }, { status: 500 });
- }
+  const employees = await prisma.employee.findMany({
+  where: whereClause,
+  include: {
+  shift: true,
+  manager: { select: { id: true, name: true } },
+  },
+  orderBy: { name: "asc" },
+  });
+  return NextResponse.json(employees);
+  } catch (e) {
+  console.error("[api] ❌ GET /api/employees — Failed to fetch", { ip, search: search || undefined }, e);
+  return NextResponse.json({ error: "Failed to fetch employees" }, { status: 500 });
+  }
 }
 
 // DELETE an employee
 export async function DELETE(req: NextRequest) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+  const ip = reqIp(req);
+  try {
+  const auth = await requireApiRole(["ADMIN"]);
+  if (auth.response) return auth.response;
 
- const { searchParams } = new URL(req.url);
- const id = searchParams.get("id");
- if (!id) {
- return NextResponse.json({ error: "Employee ID is required" }, { status: 400 });
- }
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) {
+  return NextResponse.json({ error: "Employee ID is required" }, { status: 400 });
+  }
 
- const employee = await prisma.employee.findUnique({
- where: { id },
- select: { userId: true },
- });
+  const before = await prisma.employee.findUnique({
+  where: { id },
+  });
 
- if (!employee) {
- return NextResponse.json({ error: "Employee not found" }, { status: 404 });
- }
+  if (!before) {
+  return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+  }
 
- await prisma.$transaction(async (tx) => {
- await tx.employee.update({
- where: { id },
- data: { status: "INACTIVE" },
- });
+  await prisma.$transaction(async (tx) => {
+  await tx.employee.update({
+  where: { id },
+  data: { status: "INACTIVE" },
+  });
 
- if (employee.userId) {
- await tx.user.update({
- where: { id: employee.userId },
- data: { isActive: false },
- });
- }
- });
+  if (before.userId) {
+  await tx.user.update({
+  where: { id: before.userId },
+  data: { isActive: false },
+  });
+  }
+  });
 
- return NextResponse.json({ success: true });
- } catch (e) {
- console.error("Error deleting employee:", e);
- return NextResponse.json({ error: "Failed to delete employee" }, { status: 500 });
- }
+  await audit({ userId: auth.session.userId, role: auth.session.role, action: "DELETE", entity: "Employee", entityId: id, before, after: { status: "INACTIVE" }, ip });
+  console.info("[api] ✅ DELETE /api/employees — OK", { employeeCode: before.employeeCode, id, userId: auth.session.userId, ip });
+
+  return NextResponse.json({ success: true });
+  } catch (e) {
+  console.error("[api] ❌ DELETE /api/employees — Failed", { ip }, e);
+  return NextResponse.json({ error: "Failed to delete employee" }, { status: 500 });
+  }
 }
 
 // POST: Add single employee
 export async function POST(req: NextRequest) {
+  const ip = reqIp(req);
   try {
     const auth = await requireApiRole(["ADMIN"]);
     if (auth.response) return auth.response;
@@ -254,20 +265,24 @@ export async function POST(req: NextRequest) {
    });
  });
 
+  await audit({ userId: auth.session.userId, role: auth.session.role, action: "CREATE", entity: "Employee", entityId: employee.id, after: { employeeCode: employee.employeeCode, name: employee.name }, ip });
+  console.info("[api] ✅ POST /api/employees — OK", { employeeCode: employee.employeeCode, id: employee.id, userId: auth.session.userId, ip });
+
   return NextResponse.json(employee);
   } catch (e) {
- console.error("Error creating employee(s):", e);
- const response = prismaEmployeeWriteResponse(e);
- if (response) return response;
- return NextResponse.json({ error: "Internal server error" }, { status: 500 });
- }
+  console.error("[api] ❌ POST /api/employees — Failed", { ip }, e);
+  const response = prismaEmployeeWriteResponse(e);
+  if (response) return response;
+  return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 // PATCH: Edit employee details
 export async function PATCH(req: NextRequest) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+  const ip = reqIp(req);
+  try {
+  const auth = await requireApiRole(["ADMIN"]);
+  if (auth.response) return auth.response;
 
   const body = await req.json();
   const { id, name, gender, phone, email, address, department, designation, managerId, shiftId, status } = body;
@@ -284,6 +299,8 @@ export async function PATCH(req: NextRequest) {
   if (!currentEmp) {
   return NextResponse.json({ error: "Employee not found" }, { status: 404 });
   }
+
+  const beforeSnapshot = { ...currentEmp };
 
   // Use autocomplete coordinates from client, or re-geocode if address changed
   let coords: { x: number; y: number; placeId?: string | null } = { x: currentEmp.x, y: currentEmp.y, placeId: currentEmp.placeId };
@@ -329,9 +346,12 @@ export async function PATCH(req: NextRequest) {
    },
   });
 
- return NextResponse.json(employee);
- } catch (e) {
- console.error("Error updating employee:", e);
- return NextResponse.json({ error: "Failed to update employee details" }, { status: 500 });
- }
+  await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Employee", entityId: id, before: beforeSnapshot, after: employee, ip });
+  console.info("[api] ✅ PATCH /api/employees — OK", { employeeCode: employee.employeeCode, id, userId: auth.session.userId, ip });
+
+  return NextResponse.json(employee);
+  } catch (e) {
+  console.error("[api] ❌ PATCH /api/employees — Failed", { ip }, e);
+  return NextResponse.json({ error: "Failed to update employee details" }, { status: 500 });
+  }
 }

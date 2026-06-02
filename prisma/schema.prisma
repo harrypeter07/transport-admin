@@ -243,3 +243,16 @@ model RouteDeviation {
   resolved  Boolean  @default(false)
   createdAt DateTime @default(now())
 }
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  role      String?
+  action    String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, OPTIMIZE, PUBLISH
+  entity    String   // Employee, Cab, Route, Shift, SystemSettings, Leave, User
+  entityId  String?
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+}

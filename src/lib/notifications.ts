@@ -48,7 +48,7 @@ export async function createNotification(
 
     return notification;
   } catch (error) {
-    console.error("Failed to create notification:", error);
+    console.error("[notifications] ❌ Failed to create notification:", error);
     return null;
   }
 }

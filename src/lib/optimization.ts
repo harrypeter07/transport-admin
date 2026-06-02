@@ -908,7 +908,7 @@ export async function fetchGoogleMapsMatrix(
     }
   }
 
-  console.warn("⚠️ Google Maps Matrix API call failed or no API key — using Haversine estimation");
+  console.warn("[optimization] ⚠️ Matrix API call failed or no API key — using Haversine estimation");
   const distanceMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
   const durationMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
 

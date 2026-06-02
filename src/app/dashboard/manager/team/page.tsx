@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { Users, Calendar, Mail, Phone, Clock, FileText, ChevronLeft, ChevronRight, UserCheck } from "lucide-react";
 
 export default function ManagerTeamPage() {
- const [team, setTeam] = useState<any[]>([]);
- const [loading, setLoading] = useState(true);
- const [activeTab, setActiveTab] = useState<"ROSTER" | "CALENDAR">("ROSTER");
+  const [team, setTeam] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [activeTab, setActiveTab] = useState<"ROSTER" | "CALENDAR">("ROSTER");
 
  // Roster Calendar States
  const [currentDate, setCurrentDate] = useState(new Date());
@@ -23,9 +24,10 @@ export default function ManagerTeamPage() {
  const data = await res.json();
  setTeam(data.team || []);
  }
- } catch (e) {
- console.error("Error loading manager team:", e);
- } finally {
+  } catch (e) {
+  setLoadError("Failed to load team data");
+  console.error("Error loading manager team:", e);
+  } finally {
  setLoading(false);
  }
  }
@@ -65,8 +67,9 @@ export default function ManagerTeamPage() {
  }
 
  return (
- <div className="space-y-6">
- <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+  <div className="space-y-6">
+  {loadError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{loadError}</div>}
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
  <div>
  <h1 className="text-2xl font-bold text-[#1c1b1f]">My Team</h1>
  <p className="text-sm text-[#6b6b6b] mt-1">

@@ -183,6 +183,10 @@ interface TransportStore {
   setRoutes: (routes: Route[]) => void;
 }
 
+function storeLog(...args: unknown[]) {
+  console.info("[store]", ...args);
+}
+
 export const useTransportStore = create<TransportStore>((set, get) => ({
   employees: [],
   cabs: [],
@@ -201,8 +205,8 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     const state = get();
     const currentShiftId = opts?.shiftId ?? state.activeShiftId;
     const dateToFetch = opts?.date ?? state.selectedDate ?? new Date().toISOString().split("T")[0];
+    storeLog("fetchInitialData", { date: dateToFetch, shiftId: currentShiftId });
     try {
-      // Session persistence: use cached employees/cabs/shifts if already loaded
       const hasCached = state.employees.length > 0 && state.cabs.length > 0;
       const [employees, cabs, shifts] = hasCached
         ? [state.employees, state.cabs, state.shifts]
@@ -226,8 +230,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         selectedDate: dateToFetch,
         loading: false,
       });
+      storeLog("fetchInitialData — OK", { employees: employees?.length, cabs: cabs?.length, routes: routes.length, shiftId: resolvedShiftId });
     } catch (e) {
-      console.error("Error fetching data:", e);
+      console.error("[store] ❌ fetchInitialData", e);
       set({ loading: false });
     }
   },
@@ -248,6 +253,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 
   runOptimization: async (isPickup, apiKey = "", mode = "FASTEST_TRAVEL") => {
     set({ loading: true });
+    storeLog("runOptimization", { isPickup, mode });
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (apiKey) headers["x-google-maps-key"] = apiKey;
@@ -262,6 +268,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const errData = await res.json().catch(() => ({}));
         const msg = errData.error || `Optimization failed (HTTP ${res.status})`;
         set({ loading: false });
+        console.error("[store] ❌ runOptimization", { status: res.status, error: msg });
         return { success: false, error: msg };
       }
 
@@ -269,15 +276,18 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       const resRoutes = await fetch(`/api/optimization?date=${dateStr}`);
       const routes = await resRoutes.json();
       set({ routes, loading: false });
+      storeLog("runOptimization — OK", { mode, routesCount: routes.length });
       return { success: true };
     } catch (e) {
       set({ loading: false });
+      console.error("[store] ❌ runOptimization — Network error", e);
       return { success: false, error: "Network error during optimization" };
     }
   },
 
   previewOptimization: async (isPickup) => {
     set({ previewing: true, optimizationPlans: null });
+    storeLog("previewOptimization", { isPickup });
     try {
       const state = get();
       const shiftsToOptimize = state.shifts.length > 0 ? state.shifts : [];
@@ -313,6 +323,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 
       if (previews.length === 0) {
         set({ previewing: false });
+        console.error("[store] ❌ previewOptimization — no previews", { hardErrors });
         return {
           success: false,
           error: hardErrors[0] || "No active employees found across the configured shifts.",
@@ -320,9 +331,11 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       }
 
       set({ optimizationPlans: mergeOptimizationPlans(previews), previewing: false });
+      storeLog("previewOptimization — OK", { shiftsCovered: previews.length });
       return { success: true };
     } catch (e) {
       set({ previewing: false });
+      console.error("[store] ❌ previewOptimization", e);
       return { success: false, error: "Network error during preview" };
     }
   },
@@ -334,6 +347,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     }
     const plan = (plans as any)[strategy] as { routes: any[] };
     set({ loading: true });
+    storeLog("applyOptimizationPlan", { strategy, isPickup, routeCount: plan.routes.length });
     try {
       const previewRoutes = plan.routes.map((route) => ({
         cabId: route.cabId,
@@ -358,6 +372,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 
       if (previewRoutes.length === 0) {
         set({ loading: false });
+        console.error("[store] ❌ applyOptimizationPlan — no valid routes", { strategy });
         return { success: false, error: "No valid preview routes to apply" };
       }
 
@@ -377,6 +392,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         set({ loading: false });
+        console.error("[store] ❌ applyOptimizationPlan — API error", { status: res.status, error: errData.error });
         return { success: false, error: errData.error || "Apply failed" };
       }
 
@@ -388,9 +404,11 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       }
       const routes = await resRoutes.json();
       set({ routes, loading: false, optimizationPlans: null, selectedRouteId: null });
+      storeLog("applyOptimizationPlan — OK", { strategy, routesApplied: routes.length });
       return { success: true };
     } catch (e) {
       set({ loading: false });
+      console.error("[store] ❌ applyOptimizationPlan", e);
       return { success: false, error: "Network error applying plan" };
     }
   },
@@ -398,6 +416,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
   clearOptimizationPreview: () => set({ optimizationPlans: null }),
 
   updateStopStatus: async (routeId, stopId, status) => {
+    storeLog("updateStopStatus", { routeId, stopId, status });
     try {
       const res = await fetch(`/api/routes/${routeId}`, {
         method: "PATCH",
@@ -405,14 +424,12 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         body: JSON.stringify({ action: "UPDATE_STATUS", stopId, status }),
       });
       if (res.ok) {
-        // Local state update
         set((state) => ({
           routes: state.routes.map((r) => {
             if (r.id === routeId) {
               const updatedStops = r.stops.map((s) =>
                 s.id === stopId ? { ...s, status } : s
               );
-              // Check if all stops are completed to update route status
               const allDone = updatedStops.every((s) => s.status === "BOARDED" || s.status === "SKIPPED");
               const routeStatus = allDone ? "COMPLETED" : "IN_PROGRESS";
               return { ...r, stops: updatedStops, status: routeStatus };
@@ -420,13 +437,15 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
             return r;
           }),
         }));
+        storeLog("updateStopStatus — OK", { routeId, stopId, status });
       }
     } catch (e) {
-      console.error(e);
+      console.error("[store] ❌ updateStopStatus", { routeId, stopId, status }, e);
     }
   },
 
   reorderRouteStops: async (routeId, stopId, direction) => {
+    storeLog("reorderRouteStops", { routeId, stopId, direction });
     try {
       const res = await fetch(`/api/routes/${routeId}`, {
         method: "PATCH",
@@ -438,15 +457,17 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const dateToFetch = get().selectedDate;
         const updatedRoutes = await (await fetch(`/api/optimization?date=${dateToFetch}`)).json();
         set({ routes: updatedRoutes });
+        storeLog("reorderRouteStops — OK", { routeId, direction });
       }
     } catch (e) {
-      console.error(e);
+      console.error("[store] ❌ reorderRouteStops", { routeId, stopId, direction }, e);
     }
   },
 
 
 
   overrideViolation: async (violationId) => {
+    storeLog("overrideViolation", { violationId });
     try {
       const res = await fetch(`/api/routes/violation`, {
         method: "POST",
@@ -458,14 +479,16 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const dateToFetch = get().selectedDate;
         const updatedRoutes = await (await fetch(`/api/optimization?date=${dateToFetch}`)).json();
         set({ routes: updatedRoutes });
+        storeLog("overrideViolation — OK", { violationId });
       }
     } catch (e) {
-      console.error(e);
+      console.error("[store] ❌ overrideViolation", { violationId }, e);
     }
   },
 
   addEmployee: async (employee) => {
     set({ loading: true });
+    storeLog("addEmployee", { employeeCode: employee.employeeCode, name: employee.name });
     try {
       const res = await fetch("/api/employees", {
         method: "POST",
@@ -476,14 +499,16 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resEmployees = await fetch("/api/employees");
         const employees = await resEmployees.json();
         set({ employees, loading: false });
+        storeLog("addEmployee — OK", { employeeCode: employee.employeeCode });
         return { success: true };
       } else {
         const errData = await res.json().catch(() => ({}));
         set({ loading: false });
+        console.error("[store] ❌ addEmployee", { status: res.status, error: errData.error });
         return { success: false, error: errData.error || "Failed to add employee. Employee code may already exist." };
       }
     } catch (e) {
-      console.error(e);
+      console.error("[store] ❌ addEmployee — Network error", e);
       set({ loading: false });
       return { success: false, error: "Network error while adding employee." };
     }
@@ -491,6 +516,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 
   deleteEmployee: async (id) => {
     set({ loading: true });
+    storeLog("deleteEmployee", { id });
     try {
       const res = await fetch(`/api/employees?id=${id}`, {
         method: "DELETE",
@@ -499,15 +525,20 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resEmployees = await fetch("/api/employees");
         const employees = await resEmployees.json();
         set({ employees, loading: false });
+        storeLog("deleteEmployee — OK", { id });
+      } else {
+        set({ loading: false });
+        console.error("[store] ❌ deleteEmployee", { id, status: res.status });
       }
     } catch (e) {
-      console.error(e);
+      console.error("[store] ❌ deleteEmployee", { id }, e);
       set({ loading: false });
     }
   },
 
   addCab: async (cab) => {
     set({ loading: true });
+    storeLog("addCab", { vehicleNumber: cab.vehicleNumber });
     try {
       const res = await fetch("/api/cabs/manage", {
         method: "POST",
@@ -518,15 +549,20 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resCabs = await fetch("/api/cabs");
         const cabs = await resCabs.json();
         set({ cabs, loading: false });
+        storeLog("addCab — OK", { vehicleNumber: cab.vehicleNumber });
+      } else {
+        set({ loading: false });
+        console.error("[store] ❌ addCab", { vehicleNumber: cab.vehicleNumber, status: res.status });
       }
     } catch (e) {
-      console.error(e);
+      console.error("[store] ❌ addCab", { vehicleNumber: cab.vehicleNumber }, e);
       set({ loading: false });
     }
   },
 
   deleteCab: async (id) => {
     set({ loading: true });
+    storeLog("deleteCab", { id });
     try {
       const res = await fetch(`/api/cabs/manage?id=${id}`, {
         method: "DELETE",
@@ -535,15 +571,20 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resCabs = await fetch("/api/cabs");
         const cabs = await resCabs.json();
         set({ cabs, loading: false });
+        storeLog("deleteCab — OK", { id });
+      } else {
+        set({ loading: false });
+        console.error("[store] ❌ deleteCab", { id, status: res.status });
       }
     } catch (e) {
-      console.error(e);
+      console.error("[store] ❌ deleteCab", { id }, e);
       set({ loading: false });
     }
   },
 
   updateEmployee: async (id, employee) => {
     set({ loading: true });
+    storeLog("updateEmployee", { id, changedFields: Object.keys(employee) });
     try {
       const res = await fetch("/api/employees", {
         method: "PATCH",
@@ -554,24 +595,26 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resEmployees = await fetch("/api/employees");
         const employees = await resEmployees.json();
         
-        // Refresh routes for the date
         const shiftId = get().activeShiftId;
         const dateToFetch = get().selectedDate;
         const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
         const routes = await resRoutes.json();
 
         set({ employees, routes, loading: false });
+        storeLog("updateEmployee — OK", { id });
       } else {
         set({ loading: false });
+        console.error("[store] ❌ updateEmployee — API error", { id, status: res.status });
       }
     } catch (e) {
-      console.error("Error updating employee:", e);
+      console.error("[store] ❌ updateEmployee", { id }, e);
       set({ loading: false });
     }
   },
 
   updateCab: async (id, cab) => {
     set({ loading: true });
+    storeLog("updateCab", { id, changedFields: Object.keys(cab) });
     try {
       const res = await fetch("/api/cabs/manage", {
         method: "PATCH",
@@ -582,24 +625,26 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resCabs = await fetch("/api/cabs");
         const cabs = await resCabs.json();
         
-        // Refresh routes for the date
         const shiftId = get().activeShiftId;
         const dateToFetch = get().selectedDate;
         const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
         const routes = await resRoutes.json();
 
         set({ cabs, routes, loading: false });
+        storeLog("updateCab — OK", { id });
       } else {
         set({ loading: false });
+        console.error("[store] ❌ updateCab — API error", { id, status: res.status });
       }
     } catch (e) {
-      console.error("Error updating cab details:", e);
+      console.error("[store] ❌ updateCab", { id }, e);
       set({ loading: false });
     }
   },
 
   applyRouteSequence: async (routeId, stopIds, distance, duration) => {
     set({ loading: true });
+    storeLog("applyRouteSequence", { routeId, stopCount: stopIds.length });
     try {
       const res = await fetch(`/api/routes/${routeId}`, {
         method: "PATCH",
@@ -617,17 +662,20 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
         const routes = await resRoutes.json();
         set({ routes, loading: false });
+        storeLog("applyRouteSequence — OK", { routeId });
       } else {
         set({ loading: false });
+        console.error("[store] ❌ applyRouteSequence — API error", { routeId, status: res.status });
       }
     } catch (e) {
-      console.error("Failed to apply route sequence:", e);
+      console.error("[store] ❌ applyRouteSequence", { routeId }, e);
       set({ loading: false });
     }
   },
 
   swapRouteCab: async (routeId, cabId) => {
     set({ loading: true });
+    storeLog("swapRouteCab", { routeId, cabId });
     try {
       const res = await fetch(`/api/routes/${routeId}`, {
         method: "PATCH",
@@ -643,11 +691,13 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
         const routes = await resRoutes.json();
         set({ routes, loading: false });
+        storeLog("swapRouteCab — OK", { routeId, cabId });
       } else {
         set({ loading: false });
+        console.error("[store] ❌ swapRouteCab — API error", { routeId, cabId, status: res.status });
       }
     } catch (e) {
-      console.error("Failed to swap cab:", e);
+      console.error("[store] ❌ swapRouteCab", { routeId, cabId }, e);
       set({ loading: false });
     }
   },

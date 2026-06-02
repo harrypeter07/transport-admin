@@ -1,11 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 import prisma from "@/lib/db";
 import { mapsProvider } from "@/lib/maps";
+import { audit } from "@/lib/audit";
 
-export async function GET(req: Request) {
+function reqIp(req: NextRequest | Request): string {
+  if (req instanceof NextRequest) {
+    return req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  }
+  return (req as any).headers?.get?.("x-forwarded-for") || (req as any).headers?.get?.("x-real-ip") || "unknown";
+}
+
+export async function GET(req: NextRequest) {
   const session = await verifySession();
+  const ip = reqIp(req);
   if (session.role !== "ADMIN" && session.role !== "MANAGER") {
+    console.warn("[api] 🔒 GET /api/cabs — UNAUTHORIZED", { role: session.role, ip });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -32,14 +42,16 @@ export async function GET(req: Request) {
     });
     return NextResponse.json(cabs);
   } catch (e) {
-    console.error("Error fetching cabs:", e);
+    console.error("[api] ❌ GET /api/cabs — Failed to fetch", { ip, search: search || undefined }, e);
     return NextResponse.json({ error: "Failed to fetch cabs" }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const session = await verifySession();
+  const ip = reqIp(req);
   if (session.role !== "ADMIN") {
+    console.warn("[api] 🔒 POST /api/cabs — UNAUTHORIZED", { role: session.role, ip });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -87,8 +99,11 @@ export async function POST(req: Request) {
       },
       include: { shifts: true }
     });
+    await audit({ userId: session.userId, role: session.role, action: "CREATE", entity: "Cab", entityId: newCab.id, after: { vehicleNumber: newCab.vehicleNumber }, ip });
+    console.info("[api] ✅ POST /api/cabs — OK", { vehicleNumber: newCab.vehicleNumber, id: newCab.id, userId: session.userId, ip });
     return NextResponse.json(newCab);
   } catch (error: any) {
+    console.error("[api] ❌ POST /api/cabs — Failed", { ip }, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

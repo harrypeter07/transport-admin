@@ -7,9 +7,13 @@ export async function GET(
  req: NextRequest,
  { params }: { params: Promise<{ id: string }> }
 ) {
- try {
- const auth = await requireApiRole(["ADMIN"]);
- if (auth.response) return auth.response;
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  try {
+  const auth = await requireApiRole(["ADMIN"]);
+ if (auth.response) {
+  console.warn("[api] 🔒 GET /routes/[id]/variations — UNAUTHORIZED", { role: auth.session.role, ip });
+  return auth.response;
+ }
 
  const { id: routeId } = await params;
  
@@ -55,8 +59,8 @@ export async function GET(
  );
 
  return NextResponse.json(variations);
- } catch (e) {
- console.error("Failed fetching route variations:", e);
- return NextResponse.json({ error: "Failed to calculate route variations" }, { status: 500 });
+  } catch (e) {
+  console.error("[api] ❌ GET /routes/[id]/variations", { ip }, e);
+  return NextResponse.json({ error: "Failed to calculate route variations" }, { status: 500 });
  }
 }
