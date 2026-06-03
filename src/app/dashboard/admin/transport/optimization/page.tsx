@@ -872,7 +872,7 @@ export default function TransitAdminSPA() {
   <Truck className="w-4 h-4 text-[#9a9a9a]" />
   {selectedRoute.cab.vehicleNumber}
   <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
-    r{selectedRoute.routeNumber}
+    r{selectedRoute.routeNumber || activeRoutes.indexOf(selectedRoute) + 1}
   </span>
   </span>
  </div>

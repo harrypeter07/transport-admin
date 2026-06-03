@@ -8,6 +8,7 @@ import {
   OptimizeCab,
   OptimizedRoute,
   makeDepot,
+  RouteConstraints,
 } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
 import { resolveCabOriginFromSnapshot } from "@/lib/vehicleState";
@@ -367,6 +368,12 @@ export async function POST(req: NextRequest) {
       create: { id: "default" },
     });
     const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
+    const constraints: RouteConstraints = {
+      maxRouteDistanceKm: settings.maxRouteDistanceKm ?? 45,
+      maxRouteDurationMin: settings.maxRouteDurationMin ?? 90,
+      maxClusterRadiusKm: settings.maxClusterRadiusKm ?? 15,
+      maxEmployeeDetourKm: settings.maxEmployeeDetourKm ?? 10,
+    };
     const apiKeyHeader = req.headers.get("x-google-maps-key") || "";
     const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
 
@@ -380,8 +387,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "No available cabs found" }, { status: 400 });
       }
 
-      const plans = await optimizeAllStrategies(optEmployees, optCabs, isPickup ?? true, apiKey, depot);
-      return NextResponse.json({ preview: plans });
+      const plans = await optimizeAllStrategies(optEmployees, optCabs, isPickup ?? true, apiKey, depot, constraints);
+      return NextResponse.json({ preview: plans, constraints });
     }
 
     if (mode === "APPLY" && selectedStrategy && Array.isArray(previewRoutes)) {
@@ -398,13 +405,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No available cabs found" }, { status: 400 });
     }
 
-    const { routes: optimizedRoutes, usingFallback } = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey, mode, depot);
-    await persistRoutes(optimizedRoutes, currentDateStr, fallbackShiftId, isPickup, mode, cabTripSequenceMap);
+    const result = await optimizeRoutes(optEmployees, optCabs, isPickup, apiKey, mode, depot, constraints);
+    await persistRoutes(result.routes, currentDateStr, fallbackShiftId, isPickup, mode, cabTripSequenceMap);
 
-    await audit({ userId: auth.session.userId, role: auth.session.role, action: "OPTIMIZE", entity: "Route", after: { mode, count: optimizedRoutes.length, usingFallback }, ip });
-    console.info("[api] ✅ POST /api/optimization", { mode, count: optimizedRoutes.length, usingFallback, userId: auth.session.userId, ip });
+    await audit({ userId: auth.session.userId, role: auth.session.role, action: "OPTIMIZE", entity: "Route", after: { mode, count: result.routes.length, usingFallback: result.usingFallback, warnings: result.warnings }, ip });
+    console.info("[api] ✅ POST /api/optimization", { mode, count: result.routes.length, usingFallback: result.usingFallback, userId: auth.session.userId, ip });
 
-    return NextResponse.json({ success: true, count: optimizedRoutes.length, usingFallback });
+    return NextResponse.json({ success: true, count: result.routes.length, usingFallback: result.usingFallback, warnings: result.warnings });
   } catch (e) {
     console.error("[api] ❌ POST /api/optimization — Failed", { ip }, e);
     return NextResponse.json({ error: "Optimization engine error" }, { status: 500 });

@@ -187,6 +187,11 @@ model SystemSettings {
   currencySymbol               String  @default("₹")
   fuelPricePerLitre            Float   @default(100.0)
   avgFuelMileageKmL            Float   @default(10.0)
+  // Route Optimization Constraints
+  maxRouteDistanceKm            Int     @default(45)
+  maxRouteDurationMin           Int     @default(90)
+  maxClusterRadiusKm            Int     @default(15)
+  maxEmployeeDetourKm           Int     @default(10)
 }
 
 model OperationalEvent {
