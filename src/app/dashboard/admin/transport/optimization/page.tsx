@@ -16,6 +16,7 @@ import {
 import { useTransportStore, Route, RouteStop } from "@/store/useTransportStore";
 import { useRouter } from "next/navigation";
 import RouteVisualizer from "@/components/RouteVisualizer";
+import CompareModal from "@/components/CompareModal";
 
 import {
  Compass,
@@ -38,7 +39,8 @@ import {
  MessageSquare,
  Sparkles,
  Info,
- Search
+  Search,
+  GitCompare,
 } from "lucide-react";
 
 export default function TransitAdminSPA() {
@@ -155,6 +157,7 @@ export default function TransitAdminSPA() {
   // Modals for editing and swapping
  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
  const [editingCab, setEditingCab] = useState<any | null>(null);
+ const [compareOpen, setCompareOpen] = useState(false);
  const [swappingCabRouteId, setSwappingCabRouteId] = useState<string | null>(null);
 
  // Sidebar attendance checklist toggle
@@ -534,13 +537,22 @@ export default function TransitAdminSPA() {
  </p>
  </div>
 
- {/* Controls bar */}
- <div className="flex flex-wrap items-center gap-3 bg-white p-2 border border-[#e8e8e8] rounded-none shadow-xs">
- {/* Date Dropdown */}
- <div className="flex items-center gap-1.5 px-1">
- <div className="flex items-center gap-1.5 px-2 py-1 bg-[#f7f7f7] border border-[#e8e8e8] rounded-none hover:border-slate-350 transition shadow-2xs">
- <Calendar className="w-3.5 h-3.5 text-slate-550" />
- <input
+  {/* Controls bar */}
+  <div className="flex flex-wrap items-center gap-3 bg-white p-2 border border-[#e8e8e8] rounded-none shadow-xs">
+  {/* Compare Button */}
+  <button
+    onClick={() => setCompareOpen(true)}
+    className="flex items-center gap-1.5 px-2.5 py-1 bg-[#f7f7f7] border border-[#e8e8e8] hover:border-slate-350 transition shadow-2xs text-[11px] font-bold text-[#4a4a4a] cursor-pointer"
+  >
+    <GitCompare className="w-3.5 h-3.5" />
+    Compare Current vs Optimized
+  </button>
+
+  {/* Date Dropdown */}
+  <div className="flex items-center gap-1.5 px-1">
+  <div className="flex items-center gap-1.5 px-2 py-1 bg-[#f7f7f7] border border-[#e8e8e8] rounded-none hover:border-slate-350 transition shadow-2xs">
+  <Calendar className="w-3.5 h-3.5 text-slate-550" />
+  <input
  type="date"
  value={selectedDate}
  onChange={(e) => {
@@ -2607,10 +2619,17 @@ export default function TransitAdminSPA() {
  </div>
  </div>
  </div>
- )}
+  )}
 
- </div>
- );
+  <CompareModal
+    isOpen={compareOpen}
+    onClose={() => setCompareOpen(false)}
+    date={selectedDate}
+    optimizedRoutes={previewRoutes || []}
+  />
+
+  </div>
+  );
 }
 
 

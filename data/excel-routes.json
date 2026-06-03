@@ -1,0 +1,1341 @@
+{
+  "generatedAt": "2026-06-03T00:48:22.615Z",
+  "totalEmployees": 32,
+  "totalRoutes": 21,
+  "skippedRows": 0,
+  "skippedStops": 2,
+  "routes": [
+    {
+      "id": "excel-route-0",
+      "cabId": "excel-cab-MH49CW0078",
+      "cab": {
+        "id": "excel-cab-MH49CW0078",
+        "vehicleNumber": "MH49CW0078",
+        "capacity": 6,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "DRIVER-SURAJ",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 24.6,
+      "totalDuration": 49,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "3ce80135-964d-4064-89e2-3da3daaa6ae5",
+          "employee": {
+            "id": "3ce80135-964d-4064-89e2-3da3daaa6ae5",
+            "name": "Prabhat Priydarshi",
+            "gender": "MALE",
+            "x": 79.0470181,
+            "y": 21.1182587,
+            "address": "Plot No, 11, IT Park Rd, Lokhande Nagar, Parsodi, Subhash Nagar, Pratap Nagar, Nagpur, Maharashtra 440022",
+            "email": "prabhat.priydarshi@globallogic.com",
+            "employeeCode": "PRABHAT-PRIYDARSHI",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-0-0",
+          "routeId": "excel-route-0"
+        },
+        {
+          "employeeId": "f6f548f2-f83d-41e1-9ede-795647bc06d1",
+          "employee": {
+            "id": "f6f548f2-f83d-41e1-9ede-795647bc06d1",
+            "name": "Pulavarthy Kumar",
+            "gender": "MALE",
+            "x": 79.05360209999999,
+            "y": 21.1156377,
+            "address": "Plot no 95, Shrikrushna negar, manewada, bese road, Nagpur Landmar: Jagannath Mandir",
+            "email": "pulavarthy.kumar@globallogic.com",
+            "employeeCode": "PULAVARTHY-KUMAR",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 2,
+          "etaMinutes": 2,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-0-1",
+          "routeId": "excel-route-0"
+        },
+        {
+          "employeeId": "edf3e9c6-4104-499e-8059-2bb8506ed5eb",
+          "employee": {
+            "id": "edf3e9c6-4104-499e-8059-2bb8506ed5eb",
+            "name": "Atharva Deo",
+            "gender": "MALE",
+            "x": 79.10790349999999,
+            "y": 21.1504311,
+            "address": "P.N. 678, Deshpande layout, Bhandara road,   Wardhaman Nagar, Near Haldiram's building, Nagpur-440008",
+            "email": "atharva.deo@globallogic.com",
+            "employeeCode": "ATHARVA-DEO",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 3,
+          "etaMinutes": 20,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-0-2",
+          "routeId": "excel-route-0"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 1
+    },
+    {
+      "id": "excel-route-1",
+      "cabId": "excel-cab-DRIVER-SURAJ",
+      "cab": {
+        "id": "excel-cab-DRIVER-SURAJ",
+        "vehicleNumber": "DRIVER-SURAJ",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "Driver-amol",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 17.4,
+      "totalDuration": 35,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "ae5ee8c7-4666-408e-ab23-e5d961455223",
+          "employee": {
+            "id": "ae5ee8c7-4666-408e-ab23-e5d961455223",
+            "name": "Pulipati Krishna",
+            "gender": "MALE",
+            "x": 79.0451758,
+            "y": 21.1139563,
+            "address": "Leela', Mahajan Building, Plot No. 15, near Shambhaji Square, Bandu Soni Layout, Subhash Nagar, Trimurti Nagar, Nagpur, Maharashtra 440022",
+            "email": "pulipati.krishna@globallogic.com",
+            "employeeCode": "PULIPATI-KRISHNA",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-1-0",
+          "routeId": "excel-route-1"
+        },
+        {
+          "employeeId": "2b0c421b-b51c-4420-9854-324e534234c8",
+          "employee": {
+            "id": "2b0c421b-b51c-4420-9854-324e534234c8",
+            "name": "Ravindra Farkade",
+            "gender": "MALE",
+            "x": 79.1056789,
+            "y": 21.1011597,
+            "address": "Rajat Gawre House, Gurukunj Nagar, Near Vigyan nagar,  Manewada Nagpur,440034",
+            "email": "ravindra.farkade@globallogic.com",
+            "employeeCode": "RAVINDRA-FARKADE",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 2,
+          "etaMinutes": 17,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-1-1",
+          "routeId": "excel-route-1"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 2
+    },
+    {
+      "id": "excel-route-2",
+      "cabId": "excel-cab-MOB-9561326459",
+      "cab": {
+        "id": "excel-cab-MOB-9561326459",
+        "vehicleNumber": "MOB-9561326459",
+        "capacity": 6,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "Driver-Shreekant",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 10.5,
+      "totalDuration": 21,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "61c25964-dd4d-427c-9ded-18697958e09c",
+          "employee": {
+            "id": "61c25964-dd4d-427c-9ded-18697958e09c",
+            "name": "Akansha Khode",
+            "gender": "FEMALE",
+            "x": 79.0507745,
+            "y": 21.1188888,
+            "address": "Plot No 22, Vijaya Nagar, opposite to VNIT main gate,   south ambazari road, IT park Nagpur - 440022",
+            "email": "akansha.khode@globallogic.com",
+            "employeeCode": "AKANSHA-KHODE",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-2-0",
+          "routeId": "excel-route-2"
+        },
+        {
+          "employeeId": "4da5c81d-5731-4bb9-b902-47ef783104dc",
+          "employee": {
+            "id": "4da5c81d-5731-4bb9-b902-47ef783104dc",
+            "name": "Himanshu ",
+            "gender": "MALE",
+            "x": 79.0757817,
+            "y": 21.0961882,
+            "address": "Plot No. 57, Samaj Bhushan Society,Somalwada, Wardha Road, Nagpur , Maharashtra",
+            "email": "himanshu.10@globallogic.com",
+            "employeeCode": "HIMANSHU-10",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 2,
+          "etaMinutes": 9,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-2-1",
+          "routeId": "excel-route-2"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 3
+    },
+    {
+      "id": "excel-route-3",
+      "cabId": "excel-cab-MH40CT4542",
+      "cab": {
+        "id": "excel-cab-MH40CT4542",
+        "vehicleNumber": "MH40CT4542",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MH40CT4542",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 8.4,
+      "totalDuration": 17,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "c0e1303e-d7d8-45a4-8903-baf012382ec7",
+          "employee": {
+            "id": "c0e1303e-d7d8-45a4-8903-baf012382ec7",
+            "name": "Rushabh Bhagate",
+            "gender": "MALE",
+            "x": 79.0643432,
+            "y": 21.1193596,
+            "address": "Plot no. 115, Geeta, RPTS road, Surendra Nagar, Near Jerry Lawns,",
+            "email": "rushabh.bhagate@globallogic.com",
+            "employeeCode": "RUSHABH-BHAGATE",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-3-0",
+          "routeId": "excel-route-3"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 4
+    },
+    {
+      "id": "excel-route-4",
+      "cabId": "excel-cab-Driver-amol",
+      "cab": {
+        "id": "excel-cab-Driver-amol",
+        "vehicleNumber": "Driver-amol",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "Driver-amol",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 5.8,
+      "totalDuration": 12,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "144352e1-4285-4791-868c-b7806498b2d6",
+          "employee": {
+            "id": "144352e1-4285-4791-868c-b7806498b2d6",
+            "name": "B P Kumar",
+            "gender": "MALE",
+            "x": 79.0757817,
+            "y": 21.0961882,
+            "address": "Plot No. 57, Samaj Bhushan Society, Somalwada, Wardha Road,",
+            "email": "b.p.kumar2@globallogic.com",
+            "employeeCode": "B-P-KUMAR2",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-4-0",
+          "routeId": "excel-route-4"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 5
+    },
+    {
+      "id": "excel-route-5",
+      "cabId": "excel-cab-MH49CW0876",
+      "cab": {
+        "id": "excel-cab-MH49CW0876",
+        "vehicleNumber": "MH49CW0876",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MH49CW0876",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 8.7,
+      "totalDuration": 17,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "4bd6fcef-cae7-42b3-9112-173299142a87",
+          "employee": {
+            "id": "4bd6fcef-cae7-42b3-9112-173299142a87",
+            "name": "Adarsh Kumar",
+            "gender": "MALE",
+            "x": 79.09694309999999,
+            "y": 21.0911269,
+            "address": "House no 17, gali no.4, atulya layout narhari nagar. manewada besa road.",
+            "email": "adarsh.kumar3@globallogic.com",
+            "employeeCode": "ADARSH-KUMAR3",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-5-0",
+          "routeId": "excel-route-5"
+        },
+        {
+          "employeeId": "9402d7ac-8dc9-4c20-9dc3-758b6b309252",
+          "employee": {
+            "id": "9402d7ac-8dc9-4c20-9dc3-758b6b309252",
+            "name": "Yash Dubey",
+            "gender": "MALE",
+            "x": 79.086105,
+            "y": 21.098689,
+            "address": " Jaywant co operative housing society, behind Ramteke nagar,  Omkar Nagar, Nagpur, Maharashtra 440027",
+            "email": "yash.dubey@globallogic.com",
+            "employeeCode": "YASH-DUBEY",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 2,
+          "etaMinutes": 4,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-5-1",
+          "routeId": "excel-route-5"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 6
+    },
+    {
+      "id": "excel-route-6",
+      "cabId": "excel-cab-Driver-Shreekant",
+      "cab": {
+        "id": "excel-cab-Driver-Shreekant",
+        "vehicleNumber": "Driver-Shreekant",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "Driver-Shreekant",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 5.9,
+      "totalDuration": 12,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "b0ec5a63-94d2-49e0-a981-ebcd3388f4c8",
+          "employee": {
+            "id": "b0ec5a63-94d2-49e0-a981-ebcd3388f4c8",
+            "name": "M F K",
+            "gender": "MALE",
+            "x": 79.0717707,
+            "y": 21.0990756,
+            "address": "335, Nagar Vikas Housing Society, Narendra Nagar,Nagpur, Maharashtra-440015",
+            "email": "m.f.k@globallogic.com",
+            "employeeCode": "M-F-K",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-6-0",
+          "routeId": "excel-route-6"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 7
+    },
+    {
+      "id": "excel-route-7",
+      "cabId": "excel-cab-MOB-9326604708",
+      "cab": {
+        "id": "excel-cab-MOB-9326604708",
+        "vehicleNumber": "MOB-9326604708",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MOB-9326604708",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 9.1,
+      "totalDuration": 18,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "9b91b418-a487-4ace-9238-56334a2d5d46",
+          "employee": {
+            "id": "9b91b418-a487-4ace-9238-56334a2d5d46",
+            "name": "Navneel Purohit",
+            "gender": "MALE",
+            "x": 79.0605884,
+            "y": 21.0696185,
+            "address": "Pioneer Orchid, Mouza Chinchbhuvan, Nagpur, Maharashtra",
+            "email": "navneel.purohit@globallogic.com",
+            "employeeCode": "NAVNEEL-PUROHIT",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-7-0",
+          "routeId": "excel-route-7"
+        },
+        {
+          "employeeId": "9f82a1b2-cc48-463b-9bbd-9b98f8ea58ac",
+          "employee": {
+            "id": "9f82a1b2-cc48-463b-9bbd-9b98f8ea58ac",
+            "name": "Nisha Shyamsukha",
+            "gender": "FEMALE",
+            "x": 79.0766857,
+            "y": 21.0912663,
+            "address": "Harihar Gokul Park 2, near Axis Bank, Manish Nagar, Nagpur, Maharashtra.",
+            "email": "nisha.shyamsukha@globallogic.com",
+            "employeeCode": "NISHA-SHYAMSUKHA",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 2,
+          "etaMinutes": 8,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-7-1",
+          "routeId": "excel-route-7"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 8
+    },
+    {
+      "id": "excel-route-8",
+      "cabId": "excel-cab-MH49BZ0910",
+      "cab": {
+        "id": "excel-cab-MH49BZ0910",
+        "vehicleNumber": "MH49BZ0910",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MH49BZ0910",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 23,
+      "totalDuration": 46,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "40c1f7cc-5141-4799-b404-f1361f4e5173",
+          "employee": {
+            "id": "40c1f7cc-5141-4799-b404-f1361f4e5173",
+            "name": "Sohit Mishra",
+            "gender": "MALE",
+            "x": 79.04609230000001,
+            "y": 21.2150373,
+            "address": "Near Saiba towers Beside Sky Blue Farmhouse Gorewada Nagpur 441123",
+            "email": "sohit.mishra@globallogic.com",
+            "employeeCode": "SOHIT-MISHRA",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-8-0",
+          "routeId": "excel-route-8"
+        },
+        {
+          "employeeId": "24906bec-c959-4c9b-a2c2-65156e089b09",
+          "employee": {
+            "id": "24906bec-c959-4c9b-a2c2-65156e089b09",
+            "name": "Nikhil Ambule",
+            "gender": "MALE",
+            "x": 79.0283626,
+            "y": 21.1078911,
+            "address": "Sadguru kirana and general store,Sai nagar near puliya, 1, Jaitala Rd, near dattey layout,  Wadeskar Layout, Jaitala, string:Nagpur, Nagpur, Maharashtra 440036",
+            "email": "nikhil.ambule@globallogic.com",
+            "employeeCode": "NIKHIL-AMBULE",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 2,
+          "etaMinutes": 31,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-8-1",
+          "routeId": "excel-route-8"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 9
+    },
+    {
+      "id": "excel-route-9",
+      "cabId": "excel-cab-Driver- Ashish",
+      "cab": {
+        "id": "excel-cab-Driver- Ashish",
+        "vehicleNumber": "Driver- Ashish",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "Driver- Ashish",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 11,
+      "totalDuration": 22,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "2eefa3d6-f295-4222-bfaf-0a8bc83650fc",
+          "employee": {
+            "id": "2eefa3d6-f295-4222-bfaf-0a8bc83650fc",
+            "name": "Nitin Gujar",
+            "gender": "MALE",
+            "x": 78.972747,
+            "y": 21.0793194,
+            "address": "C/O. Nandkishor Deshmukh H. No. 4526, Prabhag No. 10 Bhagiratha Park,  Mahajanwadi, Hingna Wanadongri (CT), Nagpur – 441110",
+            "email": "nitin.gujar@globallogic.com",
+            "employeeCode": "NITIN-GUJAR",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-9-0",
+          "routeId": "excel-route-9"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 10
+    },
+    {
+      "id": "excel-route-10",
+      "cabId": "excel-cab-DRIVER- ANIKET",
+      "cab": {
+        "id": "excel-cab-DRIVER- ANIKET",
+        "vehicleNumber": "DRIVER- ANIKET",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "DRIVER- ANIKET",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 26.4,
+      "totalDuration": 53,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "480cbf7c-61a6-40f4-8f91-59d48aff09db",
+          "employee": {
+            "id": "480cbf7c-61a6-40f4-8f91-59d48aff09db",
+            "name": "Dipali Sharma",
+            "gender": "FEMALE",
+            "x": 79.04545949999999,
+            "y": 21.1495672,
+            "address": "Lane-5, 315c Bharat Nagar behind Satya hotel, Kalmna Market Road Nagpur",
+            "email": "dipali.sharma@globallogic.com",
+            "employeeCode": "DIPALI-SHARMA",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-10-0",
+          "routeId": "excel-route-10"
+        },
+        {
+          "employeeId": "b07ef513-3ec5-41e6-938f-f4084ebde88d",
+          "employee": {
+            "id": "b07ef513-3ec5-41e6-938f-f4084ebde88d",
+            "name": "Likesh Barve",
+            "gender": "MALE",
+            "x": 79.0785795,
+            "y": 21.1909686,
+            "address": "Om sai nagar koradi road, plot no. 101 dhoke layout near sai mandir, Nagpur 440030",
+            "email": "likesh.barve@globallogic.com",
+            "employeeCode": "LIKESH-BARVE",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 2,
+          "etaMinutes": 15,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-10-1",
+          "routeId": "excel-route-10"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 11
+    },
+    {
+      "id": "excel-route-11",
+      "cabId": "excel-cab-MOB-9325911859",
+      "cab": {
+        "id": "excel-cab-MOB-9325911859",
+        "vehicleNumber": "MOB-9325911859",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MOB-9325911859",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 7.7,
+      "totalDuration": 15,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "c13fe317-9047-45fa-8ea2-5f02e5b76524",
+          "employee": {
+            "id": "c13fe317-9047-45fa-8ea2-5f02e5b76524",
+            "name": "Anushri Bhise",
+            "gender": "FEMALE",
+            "x": 79.05360209999999,
+            "y": 21.1156377,
+            "address": "Plot No 33, Balaji Jewellers Lane, Ayodhya Nagar, Nagpur - 440024",
+            "email": "anushri.bhise@globallogic.com",
+            "employeeCode": "ANUSHRI-BHISE",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-11-0",
+          "routeId": "excel-route-11"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 12
+    },
+    {
+      "id": "excel-route-12",
+      "cabId": "excel-cab-MH40DC0486",
+      "cab": {
+        "id": "excel-cab-MH40DC0486",
+        "vehicleNumber": "MH40DC0486",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MH40DC0486",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 12,
+      "totalDuration": 24,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "a6131121-ee38-4237-b23f-1768a114b997",
+          "employee": {
+            "id": "a6131121-ee38-4237-b23f-1768a114b997",
+            "name": "Abhay Marwade",
+            "gender": "MALE",
+            "x": 79.10931699999999,
+            "y": 21.126602,
+            "address": "Quarters, somwari quarter, 72/5, Gajanan Mandir Rd, New Somwari Peth, Raghuji Nagar, Nagpur, Maharashtra 440024",
+            "email": "abhay.marwade@globallogic.com",
+            "employeeCode": "ABHAY-MARWADE",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-12-0",
+          "routeId": "excel-route-12"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 13
+    },
+    {
+      "id": "excel-route-13",
+      "cabId": "excel-cab-DRIVER-OM",
+      "cab": {
+        "id": "excel-cab-DRIVER-OM",
+        "vehicleNumber": "DRIVER-OM",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "DRIVER-OM",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 6.7,
+      "totalDuration": 13,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "1fda6b75-2927-4a87-b148-25d0ae88fa98",
+          "employee": {
+            "id": "1fda6b75-2927-4a87-b148-25d0ae88fa98",
+            "name": "Kashameni Sanjana",
+            "gender": "FEMALE",
+            "x": 79.0832011,
+            "y": 21.0991833,
+            "address": "Behind Rahul Daily Needs , Beltarodi Road",
+            "email": "kashameni.sanjana@globallogic.com",
+            "employeeCode": "KASHAMENI-SANJANA",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-13-0",
+          "routeId": "excel-route-13"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 14
+    },
+    {
+      "id": "excel-route-14",
+      "cabId": "excel-cab-MOB-7719002637",
+      "cab": {
+        "id": "excel-cab-MOB-7719002637",
+        "vehicleNumber": "MOB-7719002637",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MOB-7719002637",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 6.7,
+      "totalDuration": 13,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "1a090cab-4d5d-45b0-8b73-1ea8612207d5",
+          "employee": {
+            "id": "1a090cab-4d5d-45b0-8b73-1ea8612207d5",
+            "name": "Kumkum Sahoo",
+            "gender": "FEMALE",
+            "x": 79.0832011,
+            "y": 21.0991833,
+            "address": "Behind Rahul Daily Needs , Beltarodi Road",
+            "email": "kumkum.sahoo@globallogic.com",
+            "employeeCode": "KUMKUM-SAHOO",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-14-0",
+          "routeId": "excel-route-14"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 15
+    },
+    {
+      "id": "excel-route-15",
+      "cabId": "excel-cab-MH49BZ4328",
+      "cab": {
+        "id": "excel-cab-MH49BZ4328",
+        "vehicleNumber": "MH49BZ4328",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MH49BZ4328",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 10.2,
+      "totalDuration": 20,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "cde52417-daa3-4484-a30a-c447b16da333",
+          "employee": {
+            "id": "cde52417-daa3-4484-a30a-c447b16da333",
+            "name": "Pranay Wekhande",
+            "gender": "MALE",
+            "x": 79.1069562,
+            "y": 21.111554,
+            "address": " Plot No.11/A, 3rd Lane, Behind Saibaba Temple, Ayodhya Nagar,Mahavir Kirana Stores",
+            "email": "pranay.wekhande@globallogic.com",
+            "employeeCode": "PRANAY-WEKHANDE",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-15-0",
+          "routeId": "excel-route-15"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 16
+    },
+    {
+      "id": "excel-route-16",
+      "cabId": "excel-cab-Driver-GOVINDA",
+      "cab": {
+        "id": "excel-cab-Driver-GOVINDA",
+        "vehicleNumber": "Driver-GOVINDA",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "Driver-GOVINDA",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 5.6,
+      "totalDuration": 11,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "4925201f-1a9f-4c33-853b-c06687cda39d",
+          "employee": {
+            "id": "4925201f-1a9f-4c33-853b-c06687cda39d",
+            "name": "Minal Ninawe",
+            "gender": "FEMALE",
+            "x": 79.081993,
+            "y": 21.090163,
+            "address": "Plot No 42, Near Puma showroom Manish Nagar, T-point Besa Road Nagpur- 440037",
+            "email": "minal.ninawe@globallogic.com",
+            "employeeCode": "MINAL-NINAWE",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-16-0",
+          "routeId": "excel-route-16"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 17
+    },
+    {
+      "id": "excel-route-17",
+      "cabId": "excel-cab-MOB-9028826494",
+      "cab": {
+        "id": "excel-cab-MOB-9028826494",
+        "vehicleNumber": "MOB-9028826494",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MOB-9028826494",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 11,
+      "totalDuration": 22,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "c3cb7434-5518-49e5-9392-86779b25e57a",
+          "employee": {
+            "id": "c3cb7434-5518-49e5-9392-86779b25e57a",
+            "name": "Raut Raghunath",
+            "gender": "MALE",
+            "x": 79.10321139999999,
+            "y": 21.1218408,
+            "address": "Flat no. 204, 2nd floor, Gruhalaxmi appartment 3, Maitree Nagar, Beltarodi, Nagpur",
+            "email": "raut.raghunath@globallogic.com",
+            "employeeCode": "RAUT-RAGHUNATH",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-17-0",
+          "routeId": "excel-route-17"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 18
+    },
+    {
+      "id": "excel-route-18",
+      "cabId": "excel-cab-MH31FC8407",
+      "cab": {
+        "id": "excel-cab-MH31FC8407",
+        "vehicleNumber": "MH31FC8407",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "MH31FC8407",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 16,
+      "totalDuration": 32,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "e0270746-1b1c-4091-9aba-891ca3d605c0",
+          "employee": {
+            "id": "e0270746-1b1c-4091-9aba-891ca3d605c0",
+            "name": "Krunal Wath",
+            "gender": "MALE",
+            "x": 79.04185009999999,
+            "y": 21.1725064,
+            "address": "213, Friends Colony, KT Nagar, Nagpur, Maharashtra 440013",
+            "email": "krunal.wath@globallogic.com",
+            "employeeCode": "KRUNAL-WATH",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-18-0",
+          "routeId": "excel-route-18"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 19
+    },
+    {
+      "id": "excel-route-19",
+      "cabId": "excel-cab-Driver=Prashant",
+      "cab": {
+        "id": "excel-cab-Driver=Prashant",
+        "vehicleNumber": "Driver=Prashant",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "Driver=Prashant",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 10.3,
+      "totalDuration": 21,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "197e757a-d524-48b2-93c4-bcf25d24ccda",
+          "employee": {
+            "id": "197e757a-d524-48b2-93c4-bcf25d24ccda",
+            "name": "Prashanth Pathlavath",
+            "gender": "MALE",
+            "x": 79.0555591,
+            "y": 21.1098261,
+            "address": "Sindhu residency 57 DRAP, Telecom Nagar, Nagpur, Maharashtra",
+            "email": "prashanth.pathlavath@globallogic.com",
+            "employeeCode": "PRASHANTH-PATHLAVATH",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-19-0",
+          "routeId": "excel-route-19"
+        },
+        {
+          "employeeId": "a4fb4250-6bd5-4d59-99ed-617a81f39ea2",
+          "employee": {
+            "id": "a4fb4250-6bd5-4d59-99ed-617a81f39ea2",
+            "name": "Pethanan Kumar",
+            "gender": "MALE",
+            "x": 79.0456025,
+            "y": 21.1199281,
+            "address": "Flat no B-408, Mangalmurti Residency,Plot no 365/2, KnNo 94/2   Parsodi.Wardha Road, Opp. MidasHospital,Nagpur,Maharastra",
+            "email": "pethanan.kumar@globallogic.com",
+            "employeeCode": "PETHANAN-KUMAR",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 2,
+          "etaMinutes": 4,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-19-1",
+          "routeId": "excel-route-19"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 20
+    },
+    {
+      "id": "excel-route-20",
+      "cabId": "excel-cab-Mob- 9767374856",
+      "cab": {
+        "id": "excel-cab-Mob- 9767374856",
+        "vehicleNumber": "Mob- 9767374856",
+        "capacity": 4,
+        "vendor": "Excel Roster",
+        "status": "AVAILABLE",
+        "driverName": "Mob- 9767374856",
+        "driverPhone": ""
+      },
+      "date": "2026-06-03",
+      "shiftId": "excel",
+      "shift": {
+        "id": "excel",
+        "name": "Excel Roster",
+        "startTime": "00:00",
+        "endTime": "23:59"
+      },
+      "isPickup": true,
+      "totalDistance": 7.5,
+      "totalDuration": 15,
+      "status": "PENDING",
+      "optimizationScore": 0,
+      "stops": [
+        {
+          "employeeId": "80357774-e084-4387-a8b3-4c891a8b40ac",
+          "employee": {
+            "id": "80357774-e084-4387-a8b3-4c891a8b40ac",
+            "name": "Vajja Prakash",
+            "gender": "MALE",
+            "x": 79.0451758,
+            "y": 21.1139563,
+            "address": "Near Drivven IT solutions LLP,near shambhaji square,Bandu soni layout, subhash nagar,trimurthi nagar,nagpur,maharashtra 440022",
+            "email": "vajja.prakash@globallogic.com",
+            "employeeCode": "VAJJA-PRAKASH",
+            "phone": "+91 99000 00000",
+            "department": "",
+            "shiftId": "",
+            "status": "ACTIVE"
+          },
+          "stopOrder": 1,
+          "etaMinutes": 1,
+          "status": "PENDING",
+          "id": "excel-stop-excel-route-20-0",
+          "routeId": "excel-route-20"
+        }
+      ],
+      "violations": [],
+      "hasEscort": false,
+      "tripSequence": 1,
+      "routeNumber": 21
+    }
+  ]
+}
