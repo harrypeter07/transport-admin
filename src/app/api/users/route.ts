@@ -78,8 +78,39 @@ export async function PATCH(req: Request) {
  return NextResponse.json({ success: true, message: "Password reset to default (Welcome@123)" });
  }
 
- return NextResponse.json({ error: "Invalid action" }, { status: 400 });
- } catch (error: any) {
- return NextResponse.json({ error: error.message }, { status: 500 });
- }
+  return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  } catch (error: any) {
+  return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const session = await verifySession();
+  if (session.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json();
+    const { id } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing user id" }, { status: 400 });
+    }
+
+    await prisma.employee.updateMany({
+      where: { userId: id },
+      data: { userId: null },
+    });
+
+    await prisma.user.delete({ where: { id } });
+    return NextResponse.json({ success: true, message: "User deleted permanently" });
+  } catch (error: any) {
+    if (error.code === "P2003") {
+      return NextResponse.json({
+        error: "Cannot delete user — linked to existing records (leaves, cabs, etc.). Remove those first."
+      }, { status: 409 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

@@ -36,24 +36,30 @@ export default function UsersPage() {
  setLoading(false);
  }
 
- async function handleAction(id: string, action: "ENABLE" | "DISABLE" | "RESET_PASSWORD") {
- if (action === "RESET_PASSWORD") {
- if (!confirm("Are you sure you want to reset this user's password to the default?")) return;
- }
+  async function handleAction(id: string, action: "ENABLE" | "DISABLE" | "RESET_PASSWORD" | "DELETE") {
+    if (action === "RESET_PASSWORD") {
+      if (!confirm("Are you sure you want to reset this user's password to the default?")) return;
+    }
+    if (action === "DELETE") {
+      const user = users.find((u) => u.id === id);
+      if (!confirm(`⚠️ Permanently delete user "${user?.name}"? This cannot be undone.`)) return;
+    }
 
- const res = await fetch("/api/users", {
- method: "PATCH",
- headers: { "Content-Type": "application/json" },
- body: JSON.stringify({ id, action }),
- });
+    const method = action === "DELETE" ? "DELETE" : "PATCH";
+    const res = await fetch("/api/users", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action }),
+    });
 
- if (res.ok) {
- alert("Action successful");
- fetchUsers();
- } else {
- alert("Action failed");
- }
- }
+    if (res.ok) {
+      alert(action === "DELETE" ? "User deleted permanently." : "Action successful");
+      fetchUsers();
+    } else {
+      const data = await res.json();
+      alert(data.error || "Action failed");
+    }
+  }
 
  return (
  <div className="space-y-6">
@@ -155,12 +161,18 @@ export default function UsersPage() {
  </td>
  <td className="px-6 py-4 text-right">
  <div className="flex items-center justify-end gap-2">
- <button
- onClick={() => handleAction(user.id, "RESET_PASSWORD")}
- className="px-3 py-1.5 text-xs font-bold text-[#6b6b6b] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded-none transition-colors"
- >
- Reset Pass
- </button>
+              <button
+                onClick={() => handleAction(user.id, "RESET_PASSWORD")}
+                className="px-3 py-1.5 text-xs font-bold text-[#6b6b6b] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded-none transition-colors"
+              >
+                Reset Pass
+              </button>
+              <button
+                onClick={() => handleAction(user.id, "DELETE")}
+                className="px-3 py-1.5 text-xs font-bold text-[#dc2626] hover:bg-[#fef2f2] rounded-none transition-colors"
+              >
+                Delete
+              </button>
  {user.isActive ? (
  <button
  onClick={() => handleAction(user.id, "DISABLE")}
