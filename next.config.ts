@@ -9,7 +9,7 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   outputFileTracingIncludes: {
-    "/api/**/*": ["./prisma/dev.db"],
+    "/api/**/*": ["./prisma/dev.db", "./data/excel_routes.json"],
   },
   turbopack: {},
   // Disable source maps in production to reduce build memory usage
