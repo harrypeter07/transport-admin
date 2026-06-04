@@ -742,9 +742,117 @@ export default function TransitAdminSPA() {
    </div>
    )}
    </div>
-  </div>
+   </div>
   )}
 
+  {/* ── Strategy Comparison Table ─────────────────────────── */}
+  {optimizationPlans && previewedStrategy && (
+  <div className="bg-white border border-[#e8e8e8] rounded-none p-4 shadow-none flex flex-col gap-3 animate-fadeIn">
+  <div className="flex items-center gap-2 text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">
+  <GitCompare className="w-3.5 h-3.5 text-[#6b6b6b]" />
+  Strategy Comparison
+  </div>
+  <div className="overflow-x-auto">
+  <table className="w-full text-xs">
+  <thead>
+  <tr className="border-b border-slate-100">
+  <th className="text-left py-2 pr-4 font-bold text-[#6b6b6b]">Metric</th>
+  <th className="text-center py-2 px-2 font-bold">MAX UTILIZATION</th>
+  <th className="text-center py-2 px-2 font-bold">MINIMIZE TIME</th>
+  <th className="text-center py-2 px-2 font-bold">BALANCED</th>
+  <th className="text-center py-2 px-2 font-bold text-green-700">Best</th>
+  </tr>
+  </thead>
+  <tbody>
+  {[
+  {
+  label: "Cabs Used",
+  values: [
+  optimizationPlans.MAXIMIZE_UTILIZATION.totalCabsUsed,
+  optimizationPlans.MINIMIZE_TIME.totalCabsUsed,
+  optimizationPlans.BALANCED.totalCabsUsed,
+  ],
+  lowerBetter: true,
+  suffix: "",
+  },
+  {
+  label: "Total Distance",
+  values: [
+  optimizationPlans.MAXIMIZE_UTILIZATION.totalDistance,
+  optimizationPlans.MINIMIZE_TIME.totalDistance,
+  optimizationPlans.BALANCED.totalDistance,
+  ],
+  lowerBetter: true,
+  suffix: " km",
+  },
+  {
+  label: "Avg Commute",
+  values: [
+  optimizationPlans.MAXIMIZE_UTILIZATION.avgCommuteMins,
+  optimizationPlans.MINIMIZE_TIME.avgCommuteMins,
+  optimizationPlans.BALANCED.avgCommuteMins,
+  ],
+  lowerBetter: true,
+  suffix: " min",
+  },
+  {
+  label: "Violations",
+  values: [
+  optimizationPlans.MAXIMIZE_UTILIZATION.totalViolations,
+  optimizationPlans.MINIMIZE_TIME.totalViolations,
+  optimizationPlans.BALANCED.totalViolations,
+  ],
+  lowerBetter: true,
+  suffix: "",
+  },
+  {
+  label: "Covered",
+  values: [
+  optimizationPlans.MAXIMIZE_UTILIZATION.totalEmployeesCovered,
+  optimizationPlans.MINIMIZE_TIME.totalEmployeesCovered,
+  optimizationPlans.BALANCED.totalEmployeesCovered,
+  ],
+  lowerBetter: false,
+  suffix: ` / ${optimizationPlans.totalEmployees}`,
+  },
+  ].map((row) => {
+  const best = row.lowerBetter
+  ? Math.min(...row.values)
+  : Math.max(...row.values);
+  const allSame = row.values.every(v => v === row.values[0]);
+  return (
+  <tr key={row.label} className="border-b border-slate-50">
+  <td className="py-2 pr-4 font-medium text-[#4a4a4a]">{row.label}</td>
+  {row.values.map((v, i) => {
+  const isBest = !allSame && v === best;
+  return (
+  <td
+  key={i}
+  className={`text-center py-2 px-2 ${isBest ? "font-bold text-green-700" : ""}`}
+  >
+  {v}{row.suffix}
+  </td>
+  );
+  })}
+  <td className="text-center py-2 px-2">
+  {allSame ? (
+  <span className="text-[#9a9a9a]">—</span>
+  ) : (
+  <span className="text-green-700 font-bold flex items-center justify-center gap-1">
+  <CheckCircle2 className="w-3 h-3" />
+  {best}{row.suffix}
+  </span>
+  )}
+  </td>
+  </tr>
+  );
+  })}
+  </tbody>
+  </table>
+  </div>
+  </div>
+  )}
+ 
  {/* System Configuration & Diagnostics Panel */}
  <div className="p-4 rounded-none bg-white border border-[#e8e8e8] shadow-xs flex flex-col gap-3">
  <button
