@@ -417,7 +417,7 @@ export default function TransitAdminSPA() {
  })
  : dbActiveRoutes;
  const activeRoutes = activeRoutesRaw as Route[];
- const manifestRoutes = activeRoutes;
+  const manifestRoutes = activeRoutes.filter(r => (r.stops || []).length > 0);
  const getRouteShiftLabel = (route: any) =>
  route.shift?.name || route.shiftName || shifts.find((shift) => shift.id === route.shiftId)?.name || "Shift";
  const isInitialOptimizerDataLoading = !initialDataLoaded || (loading && cabs.length === 0);
@@ -726,7 +726,7 @@ export default function TransitAdminSPA() {
  <div className="flex flex-col gap-1 text-left bg-[#f7f7f7] p-3 rounded-none border border-[#e8e8e8]">
  <span className="text-[10px] font-bold text-[#4a4a4a] uppercase">Routing API Key Status</span>
  <p className="text-[11px] text-[#6b6b6b] leading-relaxed mt-1">
- The Google Maps API Key is configured securely on the server via <code>.env.local</code>. All optimizations, route comparisons, and geocoding use Google Maps Platform exclusively for precise road-accurate data.
+  The API key is configured securely on the server via <code>.env.local</code>. Route distance matrices use OSRM (open-source road network data) with automatic Haversine fallback. Geocoding and route preview maps continue using Google Maps Platform.
  </p>
  </div>
  </div>
@@ -888,14 +888,20 @@ export default function TransitAdminSPA() {
   </span>
   </span>
  </div>
- <div className="flex flex-col items-end">
- <span className="text-[9px] uppercase font-bold tracking-widest text-[#9a9a9a]">
- Score
- </span>
- <span className="text-sm font-bold text-[#1c1b1f] mt-0.5 font-mono">
- {selectedRoute.optimizationScore}/100
- </span>
- </div>
+  <div className="flex flex-col items-end">
+  <button
+  onClick={() => setSelectedRouteId(null)}
+  className="text-[#9a9a9a] hover:text-[#6b6b6b] font-bold cursor-pointer text-xs leading-none mb-1"
+  >
+  ✕
+  </button>
+  <span className="text-[9px] uppercase font-bold tracking-widest text-[#9a9a9a]">
+  Score
+  </span>
+  <span className="text-sm font-bold text-[#1c1b1f] mt-0.5 font-mono">
+  {selectedRoute.optimizationScore}/100
+  </span>
+  </div>
  </div>
 
  <div className="grid grid-cols-2 gap-2 bg-[#f7f7f7] p-2.5 rounded-none border border-[#e8e8e8] text-center font-mono text-[11px] text-[#6b6b6b]">
@@ -1354,13 +1360,13 @@ export default function TransitAdminSPA() {
  className="text-[9px] font-extrabold text-[#ff4f00] hover:text-[#1c1b1f] flex items-center gap-1 cursor-pointer"
  >
  <RefreshCw className={`w-3 h-3 ${isLoadingVars ? "animate-spin-fast" : ""}`} />
- {routeVariations.length > 0 ? "Recalculate Variations" : "Load Google Matrix"}
+  {routeVariations.length > 0 ? "Recalculate Variations" : "Load Variations"}
  </button>
  </div>
 
  {isLoadingVars ? (
  <div className="text-center py-4 bg-[#f7f7f7]/50 rounded-none border border-dashed border-[#e8e8e8] text-[10px] font-semibold text-[#9a9a9a]">
- Calling Google Maps Distance Matrix API...
+ Computing route variations...
  </div>
  ) : routeVariations.length > 0 ? (
  <div className="flex flex-col gap-3">

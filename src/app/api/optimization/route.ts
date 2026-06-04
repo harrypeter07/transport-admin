@@ -189,7 +189,11 @@ async function persistRoutes(
       await tx.route.deleteMany({ where: { id: { in: oldIds } } });
     }
 
-    for (const [index, optRoute] of optimizedRoutes.entries()) {
+    const nonEmptyRoutes = optimizedRoutes.filter(
+      r => r.cabId && Array.isArray(r.stops) && r.stops.length > 0
+    );
+
+    for (const [index, optRoute] of nonEmptyRoutes.entries()) {
       const route = await tx.route.create({
         data: {
           cabId: optRoute.cabId,

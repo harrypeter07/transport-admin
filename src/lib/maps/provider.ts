@@ -1,9 +1,7 @@
 import {
   computeGoogleRoute,
-  computeGoogleRouteMatrix,
   type MapPoint,
   type RouteGeometryResult,
-  type RouteMatrixResult,
 } from "@/lib/maps/googleMaps";
 import { getSessionCache, setSessionCache } from "@/lib/sessionCache";
 
@@ -29,7 +27,6 @@ const LOCATION_TYPE_WEIGHTS: Record<string, number> = {
 
 export interface MapsProvider {
   computeRouteGeometry(points: MapPoint[], apiKey: string): Promise<RouteGeometryResult | null>;
-  computeMatrix(points: MapPoint[], apiKey: string): Promise<RouteMatrixResult | null>;
   geocode(name: string, options?: GeocodeOptions): Promise<GeocodeResult | null>;
   autocomplete(query: string, options?: GeocodeOptions): Promise<{ label: string; point: MapPoint }[]>;
   computeETA(distanceKm: number, speedKmPerMin?: number): number;
@@ -191,10 +188,6 @@ async function googleAutocomplete(query: string, options: GeocodeOptions = {}): 
 class GoogleMapsProvider implements MapsProvider {
   async computeRouteGeometry(points: MapPoint[], apiKey: string) {
     return computeGoogleRoute(points, apiKey);
-  }
-
-  async computeMatrix(points: MapPoint[], apiKey: string) {
-    return computeGoogleRouteMatrix(points, apiKey);
   }
 
   async geocode(name: string, options?: GeocodeOptions): Promise<GeocodeResult | null> {

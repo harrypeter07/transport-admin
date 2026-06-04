@@ -1,5 +1,6 @@
 import { mapsProvider } from "@/lib/maps";
 import { getSessionCache, setSessionCache } from "@/lib/sessionCache";
+import { computeOsrmRouteMatrix } from "@/lib/maps/osrm";
 
 export interface Point {
   x: number;
@@ -1379,35 +1380,34 @@ export async function geocodeNagpurPlace(name: string): Promise<Point | null> {
 
 /**
  * Fetches pairwise road distance (km) and duration (mins) for points.
- * Google Routes Matrix API is the primary provider; Haversine is last-resort fallback.
+ * OSRM Table API is the primary provider; Haversine is last-resort fallback.
  */
 export async function fetchGoogleMapsMatrix(
   points: Point[],
-  apiKey: string
+  _apiKey: string
 ): Promise<{ distanceMatrix: number[][]; durationMatrix: number[][]; usingFallback: boolean }> {
   const n = points.length;
   if (n === 0) return { distanceMatrix: [], durationMatrix: [], usingFallback: false };
 
-  // Check in-memory cache (5 min TTL) for identical point sets
-  const cacheKey = apiKey
-    ? `matrix:${apiKey.slice(-8)}:${points.map(p => `${p.x.toFixed(5)},${p.y.toFixed(5)}`).join("|")}`
-    : "";
-  if (apiKey) {
-    const cached = getSessionCache<{ dist: number[][]; dur: number[][] }>(cacheKey);
-    if (cached) {
-      return { distanceMatrix: cached.dist, durationMatrix: cached.dur, usingFallback: false };
+  const cacheKey = `matrix_v2:${points.map(p => `${p.x.toFixed(5)},${p.y.toFixed(5)}`).join("|")}`;
+  const cached = getSessionCache<{ dist: number[][]; dur: number[][] }>(cacheKey);
+  if (cached) {
+    console.info(`[matrix] CACHE_HIT POINTS=${n}`);
+    return { distanceMatrix: cached.dist, durationMatrix: cached.dur, usingFallback: false };
+  }
+
+  const providerConfig = (process.env.ROUTING_PROVIDER || "auto").toLowerCase();
+  const useOsrm = providerConfig === "auto" || providerConfig === "osrm";
+
+  if (useOsrm) {
+    const osrmResult = await computeOsrmRouteMatrix(points);
+    if (osrmResult) {
+      setSessionCache(cacheKey, { dist: osrmResult.distanceMatrix, dur: osrmResult.durationMatrix }, 30 * 60 * 1000);
+      return { ...osrmResult };
     }
   }
 
-  if (apiKey) {
-    const routesMatrix = await mapsProvider.computeMatrix(points, apiKey);
-    if (routesMatrix) {
-      setSessionCache(cacheKey, { dist: routesMatrix.distanceMatrix, dur: routesMatrix.durationMatrix }, 5 * 60 * 1000);
-      return { ...routesMatrix, usingFallback: false };
-    }
-  }
-
-  console.warn("[optimization] ⚠️ Matrix API call failed or no API key — using Haversine estimation");
+  console.info(`[matrix] PROVIDER=haversine POINTS=${n} REASON=${useOsrm ? "osrm_failed" : "config_direct"}`);
   const distanceMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
   const durationMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
 
@@ -1419,6 +1419,7 @@ export async function fetchGoogleMapsMatrix(
       durationMatrix[i][j] = mapsProvider.computeETA(d, AVG_SPEED);
     }
   }
+  setSessionCache(cacheKey, { dist: distanceMatrix, dur: durationMatrix }, 30 * 60 * 1000);
   return { distanceMatrix, durationMatrix, usingFallback: true };
 }
 

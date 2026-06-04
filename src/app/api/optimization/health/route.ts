@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { mapsProvider } from "@/lib/maps";
 import { requireApiRole } from "@/lib/apiAuth";
 
 export async function GET() {
@@ -7,49 +6,72 @@ export async function GET() {
     const auth = await requireApiRole(["ADMIN"]);
     if (auth.response) return auth.response;
 
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || "";
-    if (!apiKey) {
-      return NextResponse.json({
-        status: "MISSING_KEY",
-        message: "GOOGLE_MAPS_API_KEY is not configured",
-      });
-    }
+    const osrmBaseUrl = process.env.OSRM_BASE_URL || "https://router.project-osrm.org";
+    const provider = process.env.ROUTING_PROVIDER || "auto";
+    const googleKey = process.env.GOOGLE_MAPS_API_KEY || "";
 
-    // Test with a simple 2-point matrix call using Nagpur depot coords
     const testPoints = [
       { x: 79.0526, y: 21.0625 },
       { x: 79.0882, y: 21.1458 },
     ];
+    const coords = testPoints.map(p => `${p.x.toFixed(6)},${p.y.toFixed(6)}`).join(";");
+    const url = `${osrmBaseUrl}/table/v1/driving/${coords}?annotations=duration,distance`;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const startTime = Date.now();
-    const result = await mapsProvider.computeMatrix(testPoints, apiKey);
+
+    let osrmOk = false;
+    let errorMsg = "";
+    let testResult = null;
+
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { "Accept": "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.code === "Ok" && Array.isArray(data.distances) && Array.isArray(data.durations)) {
+          osrmOk = true;
+          testResult = {
+            distanceKm: Math.round((data.distances[0][1] / 1000) * 10) / 10,
+            durationMin: Math.max(1, Math.round(data.durations[0][1] / 60)),
+          };
+        } else {
+          errorMsg = `OSRM returned code: ${data.code}`;
+        }
+      } else {
+        errorMsg = `HTTP ${res.status}`;
+      }
+    } catch (err) {
+      errorMsg = err instanceof DOMException && err.name === "AbortError" ? "timeout (5s)" : err instanceof Error ? err.message : "Unknown error";
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
     const elapsedMs = Date.now() - startTime;
 
-    if (!result) {
+    if (!osrmOk) {
       return NextResponse.json({
         status: "API_ERROR",
-        message: "Google Routes Matrix API returned null — check API key validity and billing",
+        message: `OSRM Table API test failed: ${errorMsg}`,
         elapsedMs,
+        provider,
+        googleMapsKeyConfigured: !!googleKey,
       });
     }
 
-    const dist = result.distanceMatrix[0][1];
-    const dur = result.durationMatrix[0][1];
-
     return NextResponse.json({
       status: "OK",
-      message: "Google Routes Matrix API is reachable and returning data",
+      message: "OSRM Table API is reachable and returning data",
       elapsedMs,
-      testResult: {
-        distanceKm: dist,
-        durationMin: dur,
-      },
+      provider,
+      googleMapsKeyConfigured: !!googleKey,
+      testResult,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
-    return NextResponse.json(
-      { status: "ERROR", message },
-      { status: 500 }
-    );
+    return NextResponse.json({ status: "ERROR", message }, { status: 500 });
   }
 }
