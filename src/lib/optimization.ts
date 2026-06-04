@@ -704,7 +704,6 @@ export async function optimizeRoutes(
   let remainingEmployees = [...employees];
   const optimizedRoutes: OptimizedRoute[] = [];
   const warnings: OptimizationWarning[] = [];
-  const seedStrategy = (process.env.SEED_STRATEGY || "depot").toLowerCase();
 
   for (let i = 0; i < sortedCabs.length; i++) {
     if (remainingEmployees.length === 0) break;
@@ -713,23 +712,16 @@ export async function optimizeRoutes(
     const capacity = cab.capacity;
     const startPoint = cab.startPoint || depot;
 
-    // Pick a seed employee
-    // depot: furthest from depot by road distance
-    // driver: best score = dist_to_depot - dist_to_cab_start (balance)
+    // Pick a seed employee (furthest from depot by road distance)
     let seedIdx = 0;
-    let bestScore = -Infinity;
-    const cabGlobalIdx = i;
+    let maxDist = -1;
     for (let j = 0; j < remainingEmployees.length; j++) {
       const gIdx = empToGlobalIdx.get(remainingEmployees[j].id);
       if (gIdx === undefined) continue;
-      const distToDepot = globalDist[gIdx][depotGlobalIdx];
-
-      if (seedStrategy === "driver") {
-        const distToCab = globalDist[gIdx][cabGlobalIdx];
-        const score = distToDepot - distToCab;
-        if (score > bestScore) { bestScore = score; seedIdx = j; }
-      } else {
-        if (distToDepot > bestScore) { bestScore = distToDepot; seedIdx = j; }
+      const dist = globalDist[gIdx][depotGlobalIdx];
+      if (dist > maxDist) {
+        maxDist = dist;
+        seedIdx = j;
       }
     }
 
@@ -1793,24 +1785,6 @@ function idxFurthestFromDepot(employees: OptimizeEmployee[], depot: Point, roadD
   return idx;
 }
 
-function idxBestSeed(
-  employees: OptimizeEmployee[],
-  cabGlobalIdx: number,
-  roadData: GlobalRoadData
-): number {
-  let idx = 0;
-  let bestScore = -Infinity;
-  for (let i = 0; i < employees.length; i++) {
-    const empGlobalIdx = roadData.empToGlobalIdx.get(employees[i].id);
-    if (empGlobalIdx === undefined) continue;
-    const distToDepot = roadData.dist[empGlobalIdx][roadData.depotGlobalIdx];
-    const distToCab = roadData.dist[empGlobalIdx][cabGlobalIdx];
-    const score = distToDepot - distToCab;
-    if (score > bestScore) { bestScore = score; idx = i; }
-  }
-  return idx;
-}
-
 function idxNearestTo(employees: OptimizeEmployee[], ref: OptimizeEmployee, roadData?: GlobalRoadData): { idx: number; dist: number; roadDur?: number } {
   let idx = 0, minD = Infinity, durAtMin: number | undefined;
   const refGlobalIdx = roadData?.empToGlobalIdx.get(ref.id);
@@ -1853,10 +1827,7 @@ function clusterMaxUtilization(
 
   for (const cab of sortedCabs) {
     if (remaining.length === 0) break;
-    const cabGlobalIdx = roadData?.cabToGlobalIdx.get(cab.id) ?? roadData?.depotGlobalIdx ?? 0;
-    const seedIdx = roadData && seedStrategy === "driver"
-      ? idxBestSeed(remaining, cabGlobalIdx, roadData)
-      : idxFurthestFromDepot(remaining, depot, roadData);
+    const seedIdx = idxFurthestFromDepot(remaining, depot, roadData);
     const seed = remaining.splice(seedIdx, 1)[0];
     const cluster: OptimizeEmployee[] = [seed];
 
@@ -1888,14 +1859,9 @@ function clusterMinTime(
   const remaining = [...employees];
   const assignments: ClusterAssignment[] = [];
 
-  const seedStrategy = (process.env.SEED_STRATEGY || "depot").toLowerCase();
-
   for (const cab of sortedCabs) {
     if (remaining.length === 0) break;
-    const cabGlobalIdx = roadData?.cabToGlobalIdx.get(cab.id) ?? roadData?.depotGlobalIdx ?? 0;
-    const seedIdx = roadData && seedStrategy === "driver"
-      ? idxBestSeed(remaining, cabGlobalIdx, roadData)
-      : idxFurthestFromDepot(remaining, depot, roadData);
+    const seedIdx = idxFurthestFromDepot(remaining, depot, roadData);
     const seed = remaining.splice(seedIdx, 1)[0];
     const cluster: OptimizeEmployee[] = [seed];
 
@@ -1929,15 +1895,10 @@ function clusterBalanced(
   const remaining = [...employees];
   const assignments: ClusterAssignment[] = [];
 
-  const seedStrategy = (process.env.SEED_STRATEGY || "depot").toLowerCase();
-
   for (const cab of sortedCabs) {
     if (remaining.length === 0) break;
     const targetFill = Math.max(1, Math.ceil(cab.capacity * FILL_RATIO));
-    const cabGlobalIdx = roadData?.cabToGlobalIdx.get(cab.id) ?? roadData?.depotGlobalIdx ?? 0;
-    const seedIdx = roadData && seedStrategy === "driver"
-      ? idxBestSeed(remaining, cabGlobalIdx, roadData)
-      : idxFurthestFromDepot(remaining, depot, roadData);
+    const seedIdx = idxFurthestFromDepot(remaining, depot, roadData);
     const seed = remaining.splice(seedIdx, 1)[0];
     const cluster: OptimizeEmployee[] = [seed];
 
