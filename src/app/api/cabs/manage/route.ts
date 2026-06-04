@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (auth.response) return auth.response;
 
   const body = await req.json();
-  const { vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress } = body;
+  const { vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress, shiftIds } = body;
   const formattedAddress = body.formattedAddress || driverAddress;
   const placeId = body.placeId || null;
   const autoLat = body.lat ? Number(body.lat) : null;
@@ -56,6 +56,9 @@ export async function POST(req: NextRequest) {
   driverX,
   driverY,
   placeId: driverPlaceId,
+  shifts: Array.isArray(shiftIds) && shiftIds.length > 0
+    ? { connect: shiftIds.map((id: string) => ({ id })) }
+    : undefined,
   },
   });
 
@@ -122,7 +125,7 @@ export async function PATCH(req: NextRequest) {
   if (auth.response) return auth.response;
 
   const body = await req.json();
-  const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress, driverStartAddress, status } = body;
+  const { id, vehicleNumber, capacity, vendor, driverName, driverPhone, licenseNumber, driverAddress, driverStartAddress, status, shiftIds } = body;
   const formattedAddress = body.formattedAddress;
   const placeId = body.placeId;
   const autoLat = body.lat ? Number(body.lat) : null;
@@ -183,6 +186,9 @@ export async function PATCH(req: NextRequest) {
   driverX,
   driverY,
   placeId: driverPlaceId !== undefined ? driverPlaceId : undefined,
+  shifts: Array.isArray(shiftIds) && shiftIds.length > 0
+    ? { set: shiftIds.map((id: string) => ({ id })) }
+    : undefined,
   },
   });
 

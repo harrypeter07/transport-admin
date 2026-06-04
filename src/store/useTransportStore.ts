@@ -97,6 +97,7 @@ export interface OptimizationPlans {
   totalEmployees: number;
 }
 
+const STORAGE_PLANS_KEY = "opencode-opt-plans";
 const STRATEGY_KEYS = ["MAXIMIZE_UTILIZATION", "MINIMIZE_TIME", "BALANCED"] as const;
 
 function mergeStrategyPlan(plans: StrategyPlan[]): StrategyPlan {
@@ -180,6 +181,7 @@ interface TransportStore {
   deleteCab: (id: string) => Promise<void>;
   applyRouteSequence: (routeId: string, stopIds: string[], distance: number, duration: number) => Promise<void>;
   swapRouteCab: (routeId: string, cabId: string) => Promise<void>;
+  assignShiftsToAllCabs: () => Promise<{ fixed: number; total: number }>;
   setRoutes: (routes: Route[]) => void;
 }
 
@@ -207,14 +209,11 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     const dateToFetch = opts?.date ?? state.selectedDate ?? new Date().toISOString().split("T")[0];
     storeLog("fetchInitialData", { date: dateToFetch, shiftId: currentShiftId });
     try {
-      const hasCached = state.employees.length > 0 && state.cabs.length > 0;
-      const [employees, cabs, shifts] = hasCached
-        ? [state.employees, state.cabs, state.shifts]
-        : await Promise.all([
-            fetch("/api/employees").then(r => r.json()),
-            fetch("/api/cabs").then(r => r.json()),
-            fetch("/api/shifts").then(r => r.json()),
-          ]);
+      const [employees, cabs, shifts] = await Promise.all([
+        fetch("/api/employees").then(r => r.json()),
+        fetch("/api/cabs").then(r => r.json()),
+        fetch("/api/shifts").then(r => r.json()),
+      ]);
 
       const resolvedShiftId = currentShiftId || (Array.isArray(shifts) ? shifts[0]?.id : "") || "";
       const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
@@ -330,7 +329,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         };
       }
 
-      set({ optimizationPlans: mergeOptimizationPlans(previews), previewing: false });
+      const mergedPlans = mergeOptimizationPlans(previews);
+      set({ optimizationPlans: mergedPlans, previewing: false });
+      try { sessionStorage.setItem(STORAGE_PLANS_KEY, JSON.stringify(mergedPlans)); } catch {}
       storeLog("previewOptimization — OK", { shiftsCovered: previews.length });
       return { success: true };
     } catch (e) {
@@ -403,7 +404,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         return { success: false, error: "Plan applied, but route refresh failed. Reload the page to view it." };
       }
       const routes = await resRoutes.json();
-      set({ routes, loading: false, optimizationPlans: null, selectedRouteId: null });
+      set({ routes, loading: false, selectedRouteId: null });
       storeLog("applyOptimizationPlan — OK", { strategy, routesApplied: routes.length });
       return { success: true };
     } catch (e) {
@@ -413,7 +414,10 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     }
   },
 
-  clearOptimizationPreview: () => set({ optimizationPlans: null }),
+  clearOptimizationPreview: () => {
+    try { sessionStorage.removeItem(STORAGE_PLANS_KEY); } catch {}
+    set({ optimizationPlans: null });
+  },
 
   updateStopStatus: async (routeId, stopId, status) => {
     storeLog("updateStopStatus", { routeId, stopId, status });
@@ -543,7 +547,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       const res = await fetch("/api/cabs/manage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cab),
+        body: JSON.stringify({ ...cab, shiftIds: get().shifts.map(s => s.id) }),
       });
       if (res.ok) {
         const resCabs = await fetch("/api/cabs");
@@ -619,7 +623,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       const res = await fetch("/api/cabs/manage", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, ...cab }),
+        body: JSON.stringify({ id, ...cab, shiftIds: get().shifts.map(s => s.id) }),
       });
       if (res.ok) {
         const resCabs = await fetch("/api/cabs");
@@ -699,6 +703,49 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     } catch (e) {
       console.error("[store] ❌ swapRouteCab", { routeId, cabId }, e);
       set({ loading: false });
+    }
+  },
+
+  assignShiftsToAllCabs: async () => {
+    set({ loading: true });
+    storeLog("assignShiftsToAllCabs");
+    try {
+      let shiftIds = get().shifts.map(s => s.id);
+      if (shiftIds.length === 0) {
+        const res = await fetch("/api/shifts");
+        const shifts = await res.json();
+        shiftIds = (Array.isArray(shifts) ? shifts : []).map(s => s.id);
+      }
+      if (shiftIds.length === 0) {
+        console.error("[store] No shifts found in store or API");
+        set({ loading: false });
+        return { fixed: 0, total: 0 };
+      }
+
+      const res = await fetch("/api/cabs");
+      const cabs = await res.json();
+      let fixedCount = 0;
+
+      for (const cab of cabs) {
+        if (!cab.shifts || cab.shifts.length === 0) {
+          const fixRes = await fetch("/api/cabs/manage", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: cab.id, shiftIds }),
+          });
+          if (fixRes.ok) fixedCount++;
+        }
+      }
+
+      const resCabs = await fetch("/api/cabs");
+      const updatedCabs = await resCabs.json();
+      set({ cabs: updatedCabs, loading: false });
+      storeLog("assignShiftsToAllCabs — OK", { fixed: fixedCount, total: cabs.length });
+      return { fixed: fixedCount, total: cabs.length };
+    } catch (e) {
+      console.error("[store] ❌ assignShiftsToAllCabs", e);
+      set({ loading: false });
+      return { fixed: 0, total: 0 };
     }
   },
 }));

@@ -2079,10 +2079,17 @@ export async function optimizeAllStrategies(
     depotGlobalIdx,
   };
 
+  const maxUtilConstraints: RouteConstraints = {
+    ...constraints,
+    maxRouteDistanceKm: Infinity,
+    maxRouteDurationMin: Infinity,
+    maxClusterRadiusKm: Infinity,
+  };
+
   const [maxRoutes, minRoutes, balRoutes] = await Promise.all([
     buildRoutesFromAssignments(
-      clusterMaxUtilization(employees, sortedCabs, depot, constraints.maxClusterRadiusKm, roadData),
-      employees, isPickup, apiKey, depot, roadData, constraints
+      clusterMaxUtilization(employees, sortedCabs, depot, Infinity, roadData),
+      employees, isPickup, apiKey, depot, roadData, maxUtilConstraints
     ),
     buildRoutesFromAssignments(
       clusterMinTime(employees, sortedCabs, depot, 20, constraints.maxClusterRadiusKm, roadData),

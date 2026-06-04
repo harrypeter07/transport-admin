@@ -72,9 +72,10 @@ export default function TransitAdminSPA() {
  addCab,
  updateCab,
   deleteCab,
-  applyRouteSequence,
-  swapRouteCab,
- } = useTransportStore();
+   applyRouteSequence,
+   swapRouteCab,
+   assignShiftsToAllCabs,
+  } = useTransportStore();
 
  const router = useRouter();
 
@@ -193,6 +194,8 @@ export default function TransitAdminSPA() {
       await fetchInitialData();
       if (isActive) {
         setInitialDataLoaded(true);
+
+        // Preview restored from Zustand store (persists across SPA navigation)
       }
     };
 
@@ -228,15 +231,17 @@ export default function TransitAdminSPA() {
   const handleGeneratePlans = async () => {
  setOptimizing(true);
  setOptimizeError(null);
- try {
- const result = await previewOptimization(isPickup);
+  try {
+  await fetchInitialData();
+  const result = await previewOptimization(isPickup);
  if (!result.success) {
  setOptimizeError(result.error || "Failed to generate plans. Check you have employees and cabs registered.");
- } else {
- setPreviewedStrategy("BALANCED"); // Default preview
- }
- } catch (err: any) {
- setOptimizeError(err.message || "Unexpected error generating plans.");
+  } else {
+  setPreviewedStrategy("BALANCED"); // Default preview
+  try { sessionStorage.setItem("opencode-opt-strategy", "BALANCED"); } catch {}
+  }
+  } catch (err: any) {
+  setOptimizeError(err.message || "Unexpected error generating plans.");
  } finally {
  setOptimizing(false);
  }
@@ -247,12 +252,13 @@ export default function TransitAdminSPA() {
  setOptimizeError(null);
  try {
  const result = await applyOptimizationPlan(strategy, isPickup);
- if (!result.success) {
- setOptimizeError(result.error || "Failed to apply plan.");
- } else {
- setVariations({});
- setActiveVarIndices({});
- }
+  if (!result.success) {
+  setOptimizeError(result.error || "Failed to apply plan.");
+  } else {
+  setVariations({});
+  setActiveVarIndices({});
+  try { sessionStorage.removeItem("opencode-opt-strategy"); } catch {}
+  }
  } catch (err: any) {
  setOptimizeError(err.message || "Unexpected error applying plan.");
  } finally {
@@ -513,15 +519,31 @@ export default function TransitAdminSPA() {
  </button>
  </nav>
 
- <button
- onClick={() => fetchInitialData()}
- className="p-1.5 border border-[#e8e8e8] bg-white rounded-none hover:bg-[#f7f7f7] text-[#6b6b6b] transition"
- title="Sync Database"
- >
- <RefreshCw className="w-3.5 h-3.5" />
- </button>
- </div>
- </div>
+  <button
+  onClick={() => fetchInitialData()}
+  className="p-1.5 border border-[#e8e8e8] bg-white rounded-none hover:bg-[#f7f7f7] text-[#6b6b6b] transition"
+  title="Sync Database"
+  >
+  <RefreshCw className="w-3.5 h-3.5" />
+  </button>
+  <button
+  onClick={async () => {
+  const result = await assignShiftsToAllCabs();
+  if (result.fixed > 0) {
+  alert(`Fixed ${result.fixed} cab(s) that were missing shift assignments.`);
+  } else if (result.total > 0) {
+  alert("All cabs already have shifts assigned.");
+  } else {
+  alert("No cabs found to fix.");
+  }
+  }}
+  className="px-2.5 py-1.5 text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-800 rounded-none hover:bg-amber-100 transition cursor-pointer"
+  title="Assign all shifts to cabs missing them"
+  >
+  Fix Cab Shifts
+  </button>
+  </div>
+  </div>
 
  {/* Module Content */}
  <main className="flex-grow w-full px-6 py-6 flex flex-col gap-6">
@@ -572,7 +594,10 @@ export default function TransitAdminSPA() {
  <span className="text-xs font-bold text-[#6b6b6b]">Preview:</span>
  <select
  value={previewedStrategy || "BALANCED"}
- onChange={(e) => setPreviewedStrategy(e.target.value as any)}
+  onChange={(e) => {
+  setPreviewedStrategy(e.target.value as any);
+  try { sessionStorage.setItem("opencode-opt-strategy", e.target.value); } catch {}
+  }}
  className="bg-transparent border-none text-xs font-bold text-[#1c1b1f] outline-none cursor-pointer focus:ring-0"
  >
  <option value="MAXIMIZE_UTILIZATION">Maximize Utilization</option>
@@ -640,10 +665,11 @@ export default function TransitAdminSPA() {
  )}
  </button>
  <button
- onClick={() => {
- clearOptimizationPreview();
- setPreviewedStrategy(null);
- }}
+  onClick={() => {
+  clearOptimizationPreview();
+  setPreviewedStrategy(null);
+  try { sessionStorage.removeItem("opencode-opt-strategy"); } catch {}
+  }}
  className="flex items-center gap-1.5 bg-white text-[#6b6b6b] border border-[#e8e8e8] px-3 py-1.5 rounded-none text-xs font-bold hover:bg-[#f7f7f7] transition shadow-2xs cursor-pointer"
  >
  Cancel
@@ -695,20 +721,29 @@ export default function TransitAdminSPA() {
  <div className="font-black text-sm text-[#1c1b1f]">{optimizationPlans[previewedStrategy].avgCommuteMins} min</div>
  <div className="text-[#6b6b6b] text-[9px] font-bold uppercase tracking-wide">Avg Commute</div>
  </div>
- {optimizationPlans[previewedStrategy].totalViolations > 0 ? (
- <div className="bg-[#f7f7f7] border border-[#e8e8e8] rounded-none px-3 py-1.5 text-center text-[#1c1b1f]">
- <div className="font-black text-sm">{optimizationPlans[previewedStrategy].totalViolations}</div>
- <div className="text-[9px] font-bold uppercase tracking-wide">Violations</div>
- </div>
- ) : (
- <div className="bg-[#f7f7f7] border border-[#e8e8e8] rounded-none px-3 py-1.5 text-center text-[#1c1b1f]">
- <div className="font-black text-sm flex items-center justify-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> 0</div>
- <div className="text-[9px] font-bold uppercase tracking-wide">Violations</div>
- </div>
- )}
- </div>
- </div>
- )}
+  {optimizationPlans[previewedStrategy].totalViolations > 0 ? (
+  <div className="bg-[#f7f7f7] border border-[#e8e8e8] rounded-none px-3 py-1.5 text-center text-[#1c1b1f]">
+  <div className="font-black text-sm">{optimizationPlans[previewedStrategy].totalViolations}</div>
+  <div className="text-[9px] font-bold uppercase tracking-wide">Violations</div>
+  </div>
+  ) : (
+  <div className="bg-[#f7f7f7] border border-[#e8e8e8] rounded-none px-3 py-1.5 text-center text-[#1c1b1f]">
+  <div className="font-black text-sm flex items-center justify-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> 0</div>
+  <div className="text-[9px] font-bold uppercase tracking-wide">Violations</div>
+  </div>
+  )}
+   <div className="bg-[#f7f7f7] border border-slate-100 rounded-none px-3 py-1.5 text-center">
+   <div className="font-black text-sm text-[#1c1b1f]">{optimizationPlans[previewedStrategy].totalEmployeesCovered} / {optimizationPlans.totalEmployees}</div>
+   <div className="text-[#6b6b6b] text-[9px] font-bold uppercase tracking-wide">Covered</div>
+   </div>
+   {(optimizationPlans.totalEmployees - optimizationPlans[previewedStrategy].totalEmployeesCovered) > 0 && (
+   <div className="bg-amber-50 border border-amber-300 rounded-none px-3 py-1.5 text-xs font-bold text-amber-800 flex items-center gap-1.5">
+   <AlertTriangle className="w-3.5 h-3.5 shrink-0"/> {optimizationPlans.totalEmployees - optimizationPlans[previewedStrategy].totalEmployeesCovered} employees unassigned, need more cabs
+   </div>
+   )}
+   </div>
+  </div>
+  )}
 
  {/* System Configuration & Diagnostics Panel */}
  <div className="p-4 rounded-none bg-white border border-[#e8e8e8] shadow-xs flex flex-col gap-3">
