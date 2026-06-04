@@ -80,7 +80,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
     }
     setSelectedCurrentId(id);
     if (id) {
-      const route = currentRoutes.find((r) => r.id === id);
+      const route = filteredCurrentRoutes.find((r) => r.id === id);
       if (route) {
         const match = findBestMatch(route, optimizedRoutes);
         setSelectedOptimizedId(match?.id || null);
@@ -100,7 +100,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
     if (id) {
       const route = optimizedRoutes.find((r) => r.id === id);
       if (route) {
-        const match = findBestMatch(route, currentRoutes);
+        const match = findBestMatch(route, filteredCurrentRoutes);
         setSelectedCurrentId(match?.id || null);
       }
     } else {
@@ -112,14 +112,26 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
   const depotLng = settings?.defaultDepotLng ?? 79.0526;
   const depotName = settings?.depotName ?? "Depot";
 
+  // Auto-detect direction from optimized routes, then filter Excel baseline to match
+  const isPickupMode = useMemo(() => {
+    if (optimizedRoutes.length === 0) return true;
+    const pickupCount = optimizedRoutes.filter((r) => r.isPickup).length;
+    return pickupCount >= optimizedRoutes.length / 2;
+  }, [optimizedRoutes]);
+
+  const filteredCurrentRoutes = useMemo(() => {
+    if (currentRoutes.length === 0) return [];
+    return currentRoutes.filter((r) => r.isPickup === isPickupMode);
+  }, [currentRoutes, isPickupMode]);
+
   const currentStats = useMemo(() => {
-    const routeCount = currentRoutes.length;
+    const routeCount = filteredCurrentRoutes.length;
     const cabCount = routeCount;
-    const empCount = currentRoutes.reduce((s, r) => s + r.stops.length, 0);
-    const totalDist = Math.round(currentRoutes.reduce((s, r) => s + (r.totalDistance || 0), 0) * 10) / 10;
-    const totalDur = currentRoutes.reduce((s, r) => s + (r.totalDuration || 0), 0);
+    const empCount = filteredCurrentRoutes.reduce((s, r) => s + r.stops.length, 0);
+    const totalDist = Math.round(filteredCurrentRoutes.reduce((s, r) => s + (r.totalDistance || 0), 0) * 10) / 10;
+    const totalDur = filteredCurrentRoutes.reduce((s, r) => s + (r.totalDuration || 0), 0);
     return { routeCount, cabCount, empCount, totalDist, totalDur };
-  }, [currentRoutes]);
+  }, [filteredCurrentRoutes]);
 
   const optimizedStats = useMemo(() => {
     const routeCount = optimizedRoutes.length;
@@ -139,15 +151,15 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
   }, [currentStats, optimizedStats]);
 
   const selectedCurrent = useMemo(
-    () => currentRoutes.find((r) => r.id === selectedCurrentId) || null,
-    [currentRoutes, selectedCurrentId]
+    () => filteredCurrentRoutes.find((r) => r.id === selectedCurrentId) || null,
+    [filteredCurrentRoutes, selectedCurrentId]
   );
   const selectedOptimized = useMemo(
     () => optimizedRoutes.find((r) => r.id === selectedOptimizedId) || null,
     [optimizedRoutes, selectedOptimizedId]
   );
 
-  const canCompare = currentRoutes.length > 0 && optimizedRoutes.length > 0;
+  const canCompare = filteredCurrentRoutes.length > 0 && optimizedRoutes.length > 0;
 
   if (!isOpen) return null;
 
@@ -159,7 +171,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
           <div className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-[#1c1b1f]" />
             <h2 className="text-sm font-bold text-[#1c1b1f] tracking-tight">
-              Compare: Current vs Optimized Routes
+              Compare: Excel Baseline vs Optimized Routes
             </h2>
             <span className="text-[9px] text-[#9a9a9a] font-mono ml-2">{date}</span>
           </div>
@@ -184,16 +196,19 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
                 <div className="px-4 py-2 bg-[#fafafa] border-b border-[#e8e8e8] flex items-center gap-2">
                   <div className="w-2 h-2 bg-[#1c1b1f] rounded-full" />
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#4a4a4a]">
-                    Current Routes
+                    Excel Baseline
+                  </span>
+                  <span className="text-[10px] text-[#9a9a9a] font-mono ml-1">
+                    ({isPickupMode ? "Pickup" : "Drop"})
                   </span>
                   <span className="text-[10px] text-[#9a9a9a] ml-auto font-mono">
                     {currentStats.routeCount} routes
                   </span>
                 </div>
                 <div className="h-[320px]">
-                  {currentRoutes.length > 0 ? (
+                  {filteredCurrentRoutes.length > 0 ? (
                     <GoogleMapView
-                      routes={currentRoutes}
+                      routes={filteredCurrentRoutes}
                       selectedRouteId={selectedCurrentId}
                       onSelectRoute={handleSelectCurrent}
                       mode="OPTIMIZER"
@@ -204,8 +219,8 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-[#f7f7f7] flex-col gap-2 px-6 text-center">
-                      <div className="text-xs font-bold text-[#9a9a9a]">No current routes for {date}</div>
-                      <div className="text-[10px] text-[#b0b0b0]">Run optimization and apply results to create a baseline.</div>
+                      <div className="text-xs font-bold text-[#9a9a9a]">No Excel baseline routes available</div>
+                      <div className="text-[10px] text-[#b0b0b0]">The Excel baseline could not be loaded. Check data/excel_routes.json.</div>
                     </div>
                   )}
                 </div>
@@ -249,7 +264,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">Current Route</span>
+                      <span className="text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">Excel Route</span>
                       {selectedCurrent && (
                         <button
                           onClick={() => { setSelectedCurrentId(null); setSelectedOptimizedId(null); }}
@@ -334,7 +349,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
                     <thead>
                       <tr className="border-b border-[#e8e8e8]">
                         <th className="text-left py-2 pr-4 text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">Metric</th>
-                        <th className="text-right py-2 px-4 text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">Current</th>
+                        <th className="text-right py-2 px-4 text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">Excel Baseline</th>
                         <th className="text-right py-2 px-4 text-[9px] uppercase font-bold tracking-wider text-[#059669]">Optimized</th>
                         <th className="text-right py-2 pl-4 text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">Savings</th>
                       </tr>
@@ -380,11 +395,11 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
                 <div className="bg-[#f7f7f7] border border-[#e8e8e8] px-4 py-3 text-center">
                   <p className="text-xs font-bold text-[#9a9a9a]">Comparison data unavailable</p>
                   <p className="text-[10px] text-[#b0b0b0] mt-1">
-                    {currentRoutes.length === 0 && optimizedRoutes.length === 0
-                      ? "No current routes or optimized preview for this date."
-                      : currentRoutes.length === 0
-                        ? "No current routes for this date. Apply optimization results first."
-                        : "No optimized preview for this date. Run optimization first."}
+                    {filteredCurrentRoutes.length === 0 && optimizedRoutes.length === 0
+                      ? "No Excel baseline or optimized routes available."
+                      : filteredCurrentRoutes.length === 0
+                        ? "Excel baseline not loaded. Check data/excel_routes.json."
+                        : "No optimized routes for this date. Run optimization first."}
                   </p>
                 </div>
               </div>

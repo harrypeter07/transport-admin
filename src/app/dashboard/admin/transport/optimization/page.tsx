@@ -2631,7 +2631,7 @@ export default function TransitAdminSPA() {
     isOpen={compareOpen}
     onClose={() => setCompareOpen(false)}
     date={selectedDate}
-    optimizedRoutes={previewRoutes || []}
+    optimizedRoutes={activeRoutes}
   />
 
   </div>
