@@ -11,7 +11,7 @@ const STRATEGY_COLORS: Record<string, string> = {
   NORMAL: "#64748b",
 };
 
-// Shift-color palette — up to 8 distinct shifts
+// Shift-color palette — distinct vivid colors
 const SHIFT_PALETTE = [
   "#3b82f6", // blue
   "#f97316", // orange
@@ -21,16 +21,26 @@ const SHIFT_PALETTE = [
   "#eab308", // yellow
   "#06b6d4", // cyan
   "#f43f5e", // rose
+  "#84cc16", // lime
+  "#d946ef", // fuchsia
+  "#ef4444", // red
+  "#64748b", // slate
 ];
+
+// Module-level cache to ensure stable and unique colors across the session
+const shiftColorCache = new Map<string, string>();
+let nextColorIdx = 0;
 
 /** Returns a stable shiftId → color map built from the routes currently rendered */
 function buildShiftColorMap(routes: Route[]): Map<string, string> {
   const map = new Map<string, string>();
-  let paletteIdx = 0;
   for (const r of routes) {
-    if (r.shiftId && !map.has(r.shiftId)) {
-      map.set(r.shiftId, SHIFT_PALETTE[paletteIdx % SHIFT_PALETTE.length]);
-      paletteIdx++;
+    if (r.shiftId) {
+      if (!shiftColorCache.has(r.shiftId)) {
+        shiftColorCache.set(r.shiftId, SHIFT_PALETTE[nextColorIdx % SHIFT_PALETTE.length]);
+        nextColorIdx++;
+      }
+      map.set(r.shiftId, shiftColorCache.get(r.shiftId)!);
     }
   }
   return map;
@@ -57,7 +67,7 @@ function depotSvg(size: number): string {
   return svgToUri(`
     <svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
       <rect width="${s}" height="${s}" fill="#1c1b1f" stroke="#ffffff" stroke-width="2"/>
-      <text x="${s/2}" y="${s/2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffd700" font-size="${s * 0.5}">★</text>
+      <text x="${s / 2}" y="${s / 2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffd700" font-size="${s * 0.5}">★</text>
     </svg>
   `);
 }
@@ -72,7 +82,7 @@ function employeeSvg(size: number, label: string, color: string, gender: string,
   return svgToUri(`
     <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
       ${shape}
-      <text x="${size/2}" y="${size/2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="${size * 0.45}" font-weight="900" font-family="sans-serif">${label}</text>
+      <text x="${size / 2}" y="${size / 2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="${size * 0.45}" font-weight="900" font-family="sans-serif">${label}</text>
     </svg>
   `);
 }
@@ -492,11 +502,11 @@ export default function GoogleMapView({
           const startMarker = new google.maps.Marker({
             position: routeStart,
             map,
-          icon: {
-            url: driverStartSvg(32, selectedRouteColor),
-            anchor: new google.maps.Point(16, 16),
-          },
-          zIndex: 30,
+            icon: {
+              url: driverStartSvg(32, selectedRouteColor),
+              anchor: new google.maps.Point(16, 16),
+            },
+            zIndex: 30,
           });
           overlays.push(startMarker);
 
@@ -522,7 +532,7 @@ export default function GoogleMapView({
           }
 
           const empAddress = stop.employee.formattedAddress || stop.employee.address;
-const parts = empAddress.split(" | ");
+          const parts = empAddress.split(" | ");
           const pickupLabel = parts[0];
           const homeLabel = parts[1] || parts[0];
           const phoneParts = stop.employee.phone.split("/");
