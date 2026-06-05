@@ -106,9 +106,14 @@ export async function GET(req: Request) {
       });
       const leaveUserIds = new Set(usersOnLeaveToday.map(l => l.applicantId));
 
-      totalAbsencesCount = activeEmployees.filter(
-        emp => !assignedEmployeeIds.has(emp.id) && (!emp.userId || !leaveUserIds.has(emp.userId))
-      ).length;
+      const routesTodayCount = await prisma.route.count({ where: { date: today } });
+      if (routesTodayCount > 0) {
+        totalAbsencesCount = activeEmployees.filter(
+          emp => !assignedEmployeeIds.has(emp.id) && (!emp.userId || !leaveUserIds.has(emp.userId))
+        ).length;
+      } else {
+        totalAbsencesCount = 0;
+      }
 
       const pendingLeaves = await prisma.leaveRequest.count({ where: { status: "PENDING" } });
       const pendingTimings = await prisma.timingChangeRequest.count({ where: { status: "PENDING" } });

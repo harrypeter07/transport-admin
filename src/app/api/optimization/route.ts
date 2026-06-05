@@ -349,6 +349,13 @@ export async function POST(req: NextRequest) {
     const { shiftId, isPickup, date, mode = "FASTEST_TRAVEL", selectedStrategy, previewRoutes } = body;
     const currentDateStr = date || new Date().toISOString().split("T")[0];
 
+    const holiday = await prisma.holiday.findUnique({
+      where: { date: currentDateStr }
+    });
+    if (holiday) {
+      return NextResponse.json({ error: `Cannot generate routes: ${currentDateStr} is a holiday (${holiday.name}).` }, { status: 400 });
+    }
+
     const settings = await prisma.systemSettings.upsert({
       where: { id: "default" },
       update: {},
