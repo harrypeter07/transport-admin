@@ -444,14 +444,16 @@ export default function TransitAdminSPA() {
  });
  })
  : null;
- const activeRoutesRaw = previewRoutes
- ? [...previewRoutes].sort((a, b) => {
- const timeA = a.shift?.startTime || "";
- const timeB = b.shift?.startTime || "";
- if (timeA !== timeB) return timeA.localeCompare(timeB);
- return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
- })
- : dbActiveRoutes;
+ const activeRoutesRaw = (hasOptimized || previewRoutes)
+ ? (previewRoutes
+   ? [...previewRoutes].sort((a, b) => {
+       const timeA = a.shift?.startTime || "";
+       const timeB = b.shift?.startTime || "";
+       if (timeA !== timeB) return timeA.localeCompare(timeB);
+       return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
+     })
+   : dbActiveRoutes)
+ : [];
  const activeRoutes = activeRoutesRaw as Route[];
   const manifestRoutes = activeRoutes.filter(r => (r.stops || []).length > 0);
  const getRouteShiftLabel = (route: any) =>
@@ -705,8 +707,8 @@ export default function TransitAdminSPA() {
  disabled={optimizing || previewing || loading}
  className="flex items-center gap-1.5 bg-slate-800 text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
  >
- <RotateCw className={`w-3.5 h-3.5 ${previewing ? "animate-spin-fast" : ""}`} />
-  {previewing ? "Solving..." : "Optimize Routing"}
+ <RotateCw className={`w-3.5 h-3.5 ${optimizing || previewing ? "animate-spin-fast" : ""}`} />
+  {optimizing || previewing ? "Solving..." : "Optimize Routing"}
   </button>
 
   {addressChanged && (
