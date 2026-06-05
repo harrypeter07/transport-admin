@@ -32,14 +32,18 @@ interface CompareModalProps {
   isOpen: boolean;
   onClose: () => void;
   date: string;
-  optimizedRoutes: Route[];
+  optimizationPlans?: any | null;
+  fallbackRoutes: Route[];
 }
 
-export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }: CompareModalProps) {
+export default function CompareModal({ isOpen, onClose, date, optimizationPlans, fallbackRoutes }: CompareModalProps) {
   const [currentRoutes, setCurrentRoutes] = useState<Route[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCurrentId, setSelectedCurrentId] = useState<string | null>(null);
   const [selectedOptimizedId, setSelectedOptimizedId] = useState<string | null>(null);
+  const [selectedShift, setSelectedShift] = useState<string>("ALL");
+  const [selectedMode, setSelectedMode] = useState<"PICKUP" | "DROP" | "AUTO">("AUTO");
+  const [selectedStrategy, setSelectedStrategy] = useState<"MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED">("BALANCED");
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<any>(null);
   const [apiKey, setApiKey] = useState<string>("");
@@ -82,7 +86,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
     if (id) {
       const route = filteredCurrentRoutes.find((r) => r.id === id);
       if (route) {
-        const match = findBestMatch(route, optimizedRoutes);
+        const match = findBestMatch(route, filteredOptimizedRoutes);
         setSelectedOptimizedId(match?.id || null);
       }
     } else {
@@ -98,7 +102,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
     }
     setSelectedOptimizedId(id);
     if (id) {
-      const route = optimizedRoutes.find((r) => r.id === id);
+      const route = filteredOptimizedRoutes.find((r) => r.id === id);
       if (route) {
         const match = findBestMatch(route, filteredCurrentRoutes);
         setSelectedCurrentId(match?.id || null);
@@ -112,17 +116,44 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
   const depotLng = settings?.defaultDepotLng ?? 79.0526;
   const depotName = settings?.depotName ?? "Depot";
 
+  const optimizedRoutes = useMemo((): Route[] => {
+    if (optimizationPlans && optimizationPlans[selectedStrategy]) {
+      return optimizationPlans[selectedStrategy].routes || fallbackRoutes;
+    }
+    return fallbackRoutes;
+  }, [optimizationPlans, selectedStrategy, fallbackRoutes]);
+
   // Auto-detect direction from optimized routes, then filter Excel baseline to match
-  const isPickupMode = useMemo(() => {
+  const autoPickupMode = useMemo(() => {
     if (optimizedRoutes.length === 0) return true;
     const pickupCount = optimizedRoutes.filter((r) => r.isPickup).length;
     return pickupCount >= optimizedRoutes.length / 2;
   }, [optimizedRoutes]);
 
+  const activeIsPickup = selectedMode === "AUTO" ? autoPickupMode : selectedMode === "PICKUP";
+
+  const allShifts = useMemo(() => {
+    const shiftMap = new Map<string, string>();
+    currentRoutes.forEach(r => { if (r.shift) shiftMap.set(r.shiftId || r.shift.id, r.shift.name); });
+    optimizedRoutes.forEach(r => { if (r.shift) shiftMap.set(r.shiftId || r.shift.id, r.shift.name); });
+    return Array.from(shiftMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [currentRoutes, optimizedRoutes]);
+
   const filteredCurrentRoutes = useMemo(() => {
     if (currentRoutes.length === 0) return [];
-    return currentRoutes.filter((r) => r.isPickup === isPickupMode);
-  }, [currentRoutes, isPickupMode]);
+    return currentRoutes.filter((r) => 
+      r.isPickup === activeIsPickup &&
+      (selectedShift === "ALL" || r.shiftId === selectedShift || r.shift?.id === selectedShift)
+    );
+  }, [currentRoutes, activeIsPickup, selectedShift]);
+
+  const filteredOptimizedRoutes = useMemo(() => {
+    if (optimizedRoutes.length === 0) return [];
+    return optimizedRoutes.filter((r) => 
+      r.isPickup === activeIsPickup &&
+      (selectedShift === "ALL" || r.shiftId === selectedShift || r.shift?.id === selectedShift)
+    );
+  }, [optimizedRoutes, activeIsPickup, selectedShift]);
 
   const currentStats = useMemo(() => {
     const routeCount = filteredCurrentRoutes.length;
@@ -134,13 +165,13 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
   }, [filteredCurrentRoutes]);
 
   const optimizedStats = useMemo(() => {
-    const routeCount = optimizedRoutes.length;
+    const routeCount = filteredOptimizedRoutes.length;
     const cabCount = routeCount;
-    const empCount = optimizedRoutes.reduce((s, r) => s + r.stops.length, 0);
-    const totalDist = Math.round(optimizedRoutes.reduce((s, r) => s + (r.totalDistance || 0), 0) * 10) / 10;
-    const totalDur = optimizedRoutes.reduce((s, r) => s + (r.totalDuration || 0), 0);
+    const empCount = filteredOptimizedRoutes.reduce((s, r) => s + r.stops.length, 0);
+    const totalDist = Math.round(filteredOptimizedRoutes.reduce((s, r) => s + (r.totalDistance || 0), 0) * 10) / 10;
+    const totalDur = filteredOptimizedRoutes.reduce((s, r) => s + (r.totalDuration || 0), 0);
     return { routeCount, cabCount, empCount, totalDist, totalDur };
-  }, [optimizedRoutes]);
+  }, [filteredOptimizedRoutes]);
 
   const savings = useMemo(() => {
     return {
@@ -155,11 +186,11 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
     [filteredCurrentRoutes, selectedCurrentId]
   );
   const selectedOptimized = useMemo(
-    () => optimizedRoutes.find((r) => r.id === selectedOptimizedId) || null,
-    [optimizedRoutes, selectedOptimizedId]
+    () => filteredOptimizedRoutes.find((r) => r.id === selectedOptimizedId) || null,
+    [filteredOptimizedRoutes, selectedOptimizedId]
   );
 
-  const canCompare = filteredCurrentRoutes.length > 0 && optimizedRoutes.length > 0;
+  const canCompare = filteredCurrentRoutes.length > 0 && filteredOptimizedRoutes.length > 0;
 
   if (!isOpen) return null;
 
@@ -173,7 +204,38 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
             <h2 className="text-sm font-bold text-[#1c1b1f] tracking-tight">
               Compare: Excel Baseline vs Optimized Routes
             </h2>
-            <span className="text-[9px] text-[#9a9a9a] font-mono ml-2">{date}</span>
+            <span className="text-[9px] text-[#9a9a9a] font-mono ml-2 mr-2">{date}</span>
+            <div className="h-4 w-px bg-[#e8e8e8] mx-1" />
+            {optimizationPlans && (
+              <select
+                value={selectedStrategy}
+                onChange={(e) => setSelectedStrategy(e.target.value as any)}
+                className="text-xs font-bold text-[#059669] bg-[#ecfdf5] border border-[#a7f3d0] rounded-none px-2 py-0.5 ml-2 cursor-pointer outline-none focus:border-[#34d399]"
+              >
+                <option value="MAXIMIZE_UTILIZATION">Max Utilization</option>
+                <option value="MINIMIZE_TIME">Min Time</option>
+                <option value="BALANCED">Balanced</option>
+              </select>
+            )}
+            <select
+              value={selectedShift}
+              onChange={(e) => setSelectedShift(e.target.value)}
+              className="text-xs font-medium text-[#4a4a4a] bg-[#f7f7f7] border border-[#e8e8e8] rounded-none px-2 py-0.5 ml-2 cursor-pointer outline-none focus:border-slate-400"
+            >
+              <option value="ALL">All Shifts</option>
+              {allShifts.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <select
+              value={selectedMode}
+              onChange={(e) => setSelectedMode(e.target.value as "AUTO" | "PICKUP" | "DROP")}
+              className="text-xs font-medium text-[#4a4a4a] bg-[#f7f7f7] border border-[#e8e8e8] rounded-none px-2 py-0.5 ml-1 cursor-pointer outline-none focus:border-slate-400"
+            >
+              <option value="AUTO">Auto Mode</option>
+              <option value="PICKUP">Pickup Only</option>
+              <option value="DROP">Drop Only</option>
+            </select>
           </div>
           <button
             onClick={onClose}
@@ -199,7 +261,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
                     Excel Baseline
                   </span>
                   <span className="text-[10px] text-[#9a9a9a] font-mono ml-1">
-                    ({isPickupMode ? "Pickup" : "Drop"})
+                    ({activeIsPickup ? "Pickup" : "Drop"})
                   </span>
                   <span className="text-[10px] text-[#9a9a9a] ml-auto font-mono">
                     {currentStats.routeCount} routes
@@ -238,9 +300,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
                   </span>
                 </div>
                 <div className="h-[320px]">
-                  {optimizedRoutes.length > 0 ? (
+                  {filteredOptimizedRoutes.length > 0 ? (
                     <GoogleMapView
-                      routes={optimizedRoutes}
+                      routes={filteredOptimizedRoutes}
                       selectedRouteId={selectedOptimizedId}
                       onSelectRoute={handleSelectOptimized}
                       mode="OPTIMIZER"
@@ -395,11 +457,11 @@ export default function CompareModal({ isOpen, onClose, date, optimizedRoutes }:
                 <div className="bg-[#f7f7f7] border border-[#e8e8e8] px-4 py-3 text-center">
                   <p className="text-xs font-bold text-[#9a9a9a]">Comparison data unavailable</p>
                   <p className="text-[10px] text-[#b0b0b0] mt-1">
-                    {filteredCurrentRoutes.length === 0 && optimizedRoutes.length === 0
-                      ? "No Excel baseline or optimized routes available."
+                    {filteredCurrentRoutes.length === 0 && filteredOptimizedRoutes.length === 0
+                      ? "No routes available for the selected filters."
                       : filteredCurrentRoutes.length === 0
-                        ? "Excel baseline not loaded. Check data/excel_routes.json."
-                        : "No optimized routes for this date. Run optimization first."}
+                        ? "Excel baseline not loaded or no baseline for this shift."
+                        : "No optimized routes for this shift/mode. Run optimization first."}
                   </p>
                 </div>
               </div>

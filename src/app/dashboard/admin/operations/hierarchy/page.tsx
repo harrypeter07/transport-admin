@@ -2,12 +2,22 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronRight, Network } from "lucide-react";
+import { ChevronRight, Network, ChevronUp, ChevronDown } from "lucide-react";
 
 export default function HierarchyPage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [expandedLevels, setExpandedLevels] = useState<Record<number, boolean>>({});
+
+  const toggleLevel = (level: number) => {
+    setExpandedLevels(prev => ({
+      ...prev,
+      [level]: !prev[level]
+    }));
+  };
+
+  const isExpanded = (level: number) => !!expandedLevels[level]; // false by default
 
   useEffect(() => {
   async function load() {
@@ -95,17 +105,24 @@ export default function HierarchyPage() {
  ) : (
  levels.map(([level, empList]) => (
  <div key={level} className="bg-white rounded-none border border-[#e8e8e8] shadow-xs overflow-hidden">
- <div className="px-6 py-4 border-b border-slate-100 bg-[#f7f7f7] flex items-center justify-between">
+ <div 
+  className="px-6 py-4 border-b border-slate-100 bg-[#f7f7f7] flex items-center justify-between cursor-pointer hover:bg-[#f0f0f0] transition-colors"
+  onClick={() => toggleLevel(level)}
+ >
  <div className="flex items-center gap-3">
  <span className="flex items-center justify-center w-8 h-8 rounded-none bg-[#ff4f00] text-white font-black text-sm">
  L{level}
  </span>
  <h2 className="text-sm font-extrabold text-[#1c1b1f] tracking-tight">Level {level} Employees</h2>
  </div>
+ <div className="flex items-center gap-4">
  <span className="text-[10px] font-black text-[#9a9a9a] bg-slate-200/50 px-2.5 py-1 rounded-none uppercase tracking-wider">
  {empList.length} Headcount
  </span>
+ {isExpanded(level) ? <ChevronUp className="w-4 h-4 text-[#6b6b6b]" /> : <ChevronDown className="w-4 h-4 text-[#6b6b6b]" />}
  </div>
+ </div>
+ {isExpanded(level) && (
  <div className="overflow-x-auto">
  <table className="w-full text-left border-collapse">
  <thead>
@@ -157,6 +174,7 @@ export default function HierarchyPage() {
  </tbody>
  </table>
  </div>
+ )}
  </div>
  ))
  )}

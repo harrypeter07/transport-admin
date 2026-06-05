@@ -11,7 +11,7 @@ import {
   RouteConstraints,
 } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
-import { resolveCabOriginFromSnapshot } from "@/lib/vehicleState";
+
 import { audit } from "@/lib/audit";
 
 function reqIp(req: NextRequest | Request): string {
@@ -124,34 +124,15 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, 
       tripSequence = prevRoutes.length + 1;
     }
 
-    const origin = resolveCabOriginFromSnapshot(
-      {
-        id: cab.id,
-        driverX: cab.driverX,
-        driverY: cab.driverY,
-        routes: cab.routes.map((route) => ({
-          id: route.id,
-          status: route.status,
-          startedAt: route.startedAt,
-          completedAt: route.completedAt,
-          currentLat: route.currentLat,
-          currentLng: route.currentLng,
-          lastLocationAt: route.lastLocationAt,
-          locations: route.locations.map((location) => ({
-            lat: location.lat,
-            lng: location.lng,
-            timestamp: location.timestamp,
-          })),
-          stops: route.stops.map((stop) => ({
-            stopOrder: stop.stopOrder,
-            employee: stop.employee ? { x: stop.employee.x, y: stop.employee.y } : null,
-          })),
-        })),
-      },
-      depot
-    );
-
-    startPoint = origin.startPoint;
+    if (tripSequence === 1) {
+      if (typeof cab.driverX === "number" && typeof cab.driverY === "number") {
+        startPoint = { x: cab.driverX, y: cab.driverY };
+      } else {
+        startPoint = depot;
+      }
+    } else {
+      startPoint = depot;
+    }
 
     cabTripSequenceMap[cab.id] = tripSequence;
 

@@ -73,6 +73,10 @@ export async function PATCH(req: NextRequest) {
 	"currencySymbol",
 	"fuelPricePerLitre",
 	"avgFuelMileageKmL",
+	"maxRouteDistanceKm",
+	"maxRouteDurationMin",
+	"maxClusterRadiusKm",
+	"maxEmployeeDetourKm",
 	];
 
 	const data: Record<string, any> = {};

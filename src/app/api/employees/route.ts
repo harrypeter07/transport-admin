@@ -297,7 +297,7 @@ export async function PATCH(req: NextRequest) {
   if (auth.response) return auth.response;
 
   const body = await req.json();
-  const { id, name, gender, phone, email, address, department, designation, managerId, shiftId, status } = body;
+  const { id, employeeCode, name, gender, phone, email, address, department, designation, managerId, shiftId, status } = body;
   const formattedAddress = body.formattedAddress;
   const placeId = body.placeId;
   const autoLat = body.lat ? Number(body.lat) : null;
@@ -341,6 +341,7 @@ export async function PATCH(req: NextRequest) {
   const employee = await prisma.employee.update({
   where: { id },
    data: {
+   employeeCode: employeeCode !== undefined ? employeeCode : undefined,
    name: name !== undefined ? name : undefined,
    gender: gender !== undefined ? gender : undefined,
    phone: phone !== undefined ? phone : undefined,

@@ -11,6 +11,7 @@ import {
  Loader2,
  CheckCircle,
  AlertCircle,
+ Route as RouteIcon,
 } from "lucide-react";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 
@@ -28,6 +29,10 @@ type Settings = {
   currencySymbol: string;
   fuelPricePerLitre: number;
   avgFuelMileageKmL: number;
+  maxRouteDistanceKm: number;
+  maxRouteDurationMin: number;
+  maxClusterRadiusKm: number;
+  maxEmployeeDetourKm: number;
 };
 
 function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
@@ -369,6 +374,108 @@ export default function SettingsPage() {
  </button>
  </div>
  </Panel>
- </div>
+
+  {/* Panel 4 — Route Optimization Constraints */}
+  <Panel title="Routing & Optimization Constraints" icon={RouteIcon}>
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  <Field label={`Max Route Distance: ${settings.maxRouteDistanceKm} km`} note="Hard cap on total distance covered by one cab in a single trip.">
+  <input
+  type="range"
+  min={10}
+  max={100}
+  step={5}
+  defaultValue={settings.maxRouteDistanceKm}
+  id="maxRouteDistanceKm"
+  className="w-full accent-slate-900"
+  onChange={(e) =>
+  setSettings((s) => s ? { ...s, maxRouteDistanceKm: Number(e.target.value) } : s)
+  }
+  />
+  <div className="flex justify-between text-[10px] text-[#9a9a9a] font-bold mt-0.5">
+  <span>10 km</span>
+  <span className="text-[#4a4a4a] font-black">{settings.maxRouteDistanceKm} km selected</span>
+  <span>100 km</span>
+  </div>
+  </Field>
+
+  <Field label={`Max Route Duration: ${settings.maxRouteDurationMin} min`} note="Maximum allowable transit time per route including stops.">
+  <input
+  type="range"
+  min={30}
+  max={180}
+  step={10}
+  defaultValue={settings.maxRouteDurationMin}
+  id="maxRouteDurationMin"
+  className="w-full accent-slate-900"
+  onChange={(e) =>
+  setSettings((s) => s ? { ...s, maxRouteDurationMin: Number(e.target.value) } : s)
+  }
+  />
+  <div className="flex justify-between text-[10px] text-[#9a9a9a] font-bold mt-0.5">
+  <span>30 min</span>
+  <span className="text-[#4a4a4a] font-black">{settings.maxRouteDurationMin} min selected</span>
+  <span>180 min</span>
+  </div>
+  </Field>
+
+  <Field label={`Max Cluster Radius: ${settings.maxClusterRadiusKm} km`} note="Safety cap on the distance between passengers assigned to the same cab.">
+  <input
+  type="range"
+  min={5}
+  max={30}
+  step={1}
+  defaultValue={settings.maxClusterRadiusKm}
+  id="maxClusterRadiusKm"
+  className="w-full accent-slate-900"
+  onChange={(e) =>
+  setSettings((s) => s ? { ...s, maxClusterRadiusKm: Number(e.target.value) } : s)
+  }
+  />
+  <div className="flex justify-between text-[10px] text-[#9a9a9a] font-bold mt-0.5">
+  <span>5 km</span>
+  <span className="text-[#4a4a4a] font-black">{settings.maxClusterRadiusKm} km selected</span>
+  <span>30 km</span>
+  </div>
+  </Field>
+
+  <Field label={`Max Employee Detour: ${settings.maxEmployeeDetourKm} km`} note="Max allowable detour distance added to a passenger's direct commute.">
+  <input
+  type="range"
+  min={2}
+  max={20}
+  step={1}
+  defaultValue={settings.maxEmployeeDetourKm}
+  id="maxEmployeeDetourKm"
+  className="w-full accent-slate-900"
+  onChange={(e) =>
+  setSettings((s) => s ? { ...s, maxEmployeeDetourKm: Number(e.target.value) } : s)
+  }
+  />
+  <div className="flex justify-between text-[10px] text-[#9a9a9a] font-bold mt-0.5">
+  <span>2 km</span>
+  <span className="text-[#4a4a4a] font-black">{settings.maxEmployeeDetourKm} km selected</span>
+  <span>20 km</span>
+  </div>
+  </Field>
+  </div>
+  <div className="flex justify-end">
+  <button
+  onClick={() =>
+  saveSection("optimization", {
+  maxRouteDistanceKm: settings.maxRouteDistanceKm,
+  maxRouteDurationMin: settings.maxRouteDurationMin,
+  maxClusterRadiusKm: settings.maxClusterRadiusKm,
+  maxEmployeeDetourKm: settings.maxEmployeeDetourKm,
+  })
+  }
+  disabled={saving === "optimization"}
+  className="flex items-center gap-2 px-5 py-2.5 bg-[#1c1b1f] hover:bg-black text-white text-xs font-bold rounded-none transition disabled:opacity-50 shadow-none"
+  >
+  {saving === "optimization" ? <Loader2 className="w-3.5 h-3.5 animate-spin-fast" /> : <Save className="w-3.5 h-3.5" />}
+  Save Optimization Settings
+  </button>
+  </div>
+  </Panel>
+  </div>
  );
 }
