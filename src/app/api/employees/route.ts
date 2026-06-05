@@ -138,6 +138,18 @@ export async function DELETE(req: NextRequest) {
   }
   });
 
+  const pendingStops = await prisma.routeStop.findMany({
+    where: { employeeId: id, route: { status: { in: ["PENDING", "PLANNED"] } } },
+    select: { routeId: true }
+  });
+  if (pendingStops.length > 0) {
+    const routeIds = pendingStops.map(s => s.routeId);
+    await prisma.routeStop.deleteMany({ where: { routeId: { in: routeIds } } });
+    await prisma.violation.deleteMany({ where: { routeId: { in: routeIds } } });
+    await prisma.route.deleteMany({ where: { id: { in: routeIds } } });
+    console.info(`[api] Deleted ${routeIds.length} pending routes involving deleted employee ${id} to ensure fresh data.`);
+  }
+
   await audit({ userId: auth.session.userId, role: auth.session.role, action: "DELETE", entity: "Employee", entityId: id, before, after: { status: "INACTIVE" }, ip });
   console.info("[api] ✅ DELETE /api/employees — OK", { employeeCode: before.employeeCode, id, userId: auth.session.userId, ip });
 
@@ -345,6 +357,18 @@ export async function PATCH(req: NextRequest) {
    status: status !== undefined ? status : undefined,
    },
   });
+
+  const pendingStops = await prisma.routeStop.findMany({
+    where: { employeeId: id, route: { status: { in: ["PENDING", "PLANNED"] } } },
+    select: { routeId: true }
+  });
+  if (pendingStops.length > 0) {
+    const routeIds = pendingStops.map(s => s.routeId);
+    await prisma.routeStop.deleteMany({ where: { routeId: { in: routeIds } } });
+    await prisma.violation.deleteMany({ where: { routeId: { in: routeIds } } });
+    await prisma.route.deleteMany({ where: { id: { in: routeIds } } });
+    console.info(`[api] Deleted ${routeIds.length} pending routes involving updated employee ${id} to ensure fresh data.`);
+  }
 
   await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Employee", entityId: id, before: beforeSnapshot, after: employee, ip });
   console.info("[api] ✅ PATCH /api/employees — OK", { employeeCode: employee.employeeCode, id, userId: auth.session.userId, ip });

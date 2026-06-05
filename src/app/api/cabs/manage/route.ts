@@ -93,6 +93,18 @@ export async function DELETE(req: NextRequest) {
  return NextResponse.json({ error: "Cab not found" }, { status: 404 });
  }
 
+  const pendingRoutes = await prisma.route.findMany({
+    where: { cabId: id, status: { in: ["PENDING", "PLANNED"] } },
+    select: { id: true }
+  });
+  if (pendingRoutes.length > 0) {
+    const routeIds = pendingRoutes.map(r => r.id);
+    await prisma.routeStop.deleteMany({ where: { routeId: { in: routeIds } } });
+    await prisma.violation.deleteMany({ where: { routeId: { in: routeIds } } });
+    await prisma.route.deleteMany({ where: { id: { in: routeIds } } });
+    console.info(`[api] Deleted ${routeIds.length} pending routes for deleted cab ${id} to ensure fresh data.`);
+  }
+
  const routeReferences = await prisma.route.count({
  where: { cabId: id },
  });
@@ -191,6 +203,18 @@ export async function PATCH(req: NextRequest) {
     : undefined,
   },
   });
+
+  const pendingRoutes = await prisma.route.findMany({
+    where: { cabId: id, status: { in: ["PENDING", "PLANNED"] } },
+    select: { id: true }
+  });
+  if (pendingRoutes.length > 0) {
+    const routeIds = pendingRoutes.map(r => r.id);
+    await prisma.routeStop.deleteMany({ where: { routeId: { in: routeIds } } });
+    await prisma.violation.deleteMany({ where: { routeId: { in: routeIds } } });
+    await prisma.route.deleteMany({ where: { id: { in: routeIds } } });
+    console.info(`[api] Deleted ${routeIds.length} pending routes for updated cab ${id} to ensure fresh data.`);
+  }
 
   await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Cab", entityId: id, before: cabBefore, after: { vehicleNumber: updatedCab.vehicleNumber, driverName: updatedCab.driverName }, ip });
   console.info("[api] ✅ PATCH /api/cabs/manage — OK", { vehicleNumber: updatedCab.vehicleNumber, id, userId: auth.session.userId, ip });

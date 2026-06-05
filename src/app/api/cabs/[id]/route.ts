@@ -69,6 +69,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
       include: { shifts: true }
     });
+
+    const pendingRoutes = await prisma.route.findMany({
+      where: { cabId: id, status: { in: ["PENDING", "PLANNED"] } },
+      select: { id: true }
+    });
+    if (pendingRoutes.length > 0) {
+      const routeIds = pendingRoutes.map(r => r.id);
+      await prisma.routeStop.deleteMany({ where: { routeId: { in: routeIds } } });
+      await prisma.violation.deleteMany({ where: { routeId: { in: routeIds } } });
+      await prisma.route.deleteMany({ where: { id: { in: routeIds } } });
+      console.info(`[api] Deleted ${routeIds.length} pending routes for updated cab ${id} to ensure fresh data.`);
+    }
+
     await audit({ userId: session.userId, role: session.role, action: "UPDATE", entity: "Cab", entityId: id, before, after: { vehicleNumber: updated.vehicleNumber }, ip });
     console.info("[api] ✅ PUT /api/cabs/[id] — OK", { vehicleNumber: updated.vehicleNumber, id, userId: session.userId, ip });
     return NextResponse.json(updated);
@@ -89,6 +102,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const { id } = await params;
     const before = await prisma.cab.findUnique({ where: { id } });
+
+    const pendingRoutes = await prisma.route.findMany({
+      where: { cabId: id, status: { in: ["PENDING", "PLANNED"] } },
+      select: { id: true }
+    });
+    if (pendingRoutes.length > 0) {
+      const routeIds = pendingRoutes.map(r => r.id);
+      await prisma.routeStop.deleteMany({ where: { routeId: { in: routeIds } } });
+      await prisma.violation.deleteMany({ where: { routeId: { in: routeIds } } });
+      await prisma.route.deleteMany({ where: { id: { in: routeIds } } });
+      console.info(`[api] Deleted ${routeIds.length} pending routes for deleted cab ${id} to ensure fresh data.`);
+    }
+
     const routeReferences = await prisma.route.count({
       where: { cabId: id },
     });

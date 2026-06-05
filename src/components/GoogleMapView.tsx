@@ -11,9 +11,30 @@ const STRATEGY_COLORS: Record<string, string> = {
   NORMAL: "#64748b",
 };
 
-const OVERVIEW_COLORS = [
-  "#64748b", "#3b82f6", "#8b5cf6", "#ec4899", "#10b981", "#f97316",
+// Shift-color palette — up to 8 distinct shifts
+const SHIFT_PALETTE = [
+  "#3b82f6", // blue
+  "#f97316", // orange
+  "#8b5cf6", // purple
+  "#10b981", // green
+  "#ec4899", // pink
+  "#eab308", // yellow
+  "#06b6d4", // cyan
+  "#f43f5e", // rose
 ];
+
+/** Returns a stable shiftId → color map built from the routes currently rendered */
+function buildShiftColorMap(routes: Route[]): Map<string, string> {
+  const map = new Map<string, string>();
+  let paletteIdx = 0;
+  for (const r of routes) {
+    if (r.shiftId && !map.has(r.shiftId)) {
+      map.set(r.shiftId, SHIFT_PALETTE[paletteIdx % SHIFT_PALETTE.length]);
+      paletteIdx++;
+    }
+  }
+  return map;
+}
 
 const MAP_STYLES: google.maps.MapTypeStyle[] = [
   { featureType: "poi.business", stylers: [{ visibility: "off" }] },
@@ -363,13 +384,16 @@ export default function GoogleMapView({
 
     const overviewSeenCoords: Record<string, number> = {};
 
+    const shiftColorMap = buildShiftColorMap(routes);
+
     routes.forEach((route, idx) => {
       if (selectedRouteId && route.id !== selectedRouteId) return;
 
       const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
       if (sortedStops.length === 0) return;
 
-      const routeColor = OVERVIEW_COLORS[idx % OVERVIEW_COLORS.length];
+      // Color by shift — all routes in the same shift share the same color
+      const routeColor = shiftColorMap.get(route.shiftId) ?? SHIFT_PALETTE[idx % SHIFT_PALETTE.length];
       const isSelectedOverviewRoute = selectedRouteId === route.id;
 
       const lineCoords = buildRouteLatLngs(
@@ -453,7 +477,7 @@ export default function GoogleMapView({
       const selectedRoute = routes.find((r) => r.id === selectedRouteId);
       if (selectedRoute && selectedRoute.stops.length > 0) {
         const selectedRouteIdx = routes.findIndex((r) => r.id === selectedRouteId);
-        const selectedRouteColor = OVERVIEW_COLORS[selectedRouteIdx % OVERVIEW_COLORS.length];
+        const selectedRouteColor = shiftColorMap.get(selectedRoute.shiftId) ?? SHIFT_PALETTE[selectedRouteIdx % SHIFT_PALETTE.length];
         const stopsList = [...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder);
         const routeStart = getRouteStartLatLng(selectedRoute);
         const selectedRouteCoords = buildRouteLatLngs(
@@ -619,9 +643,29 @@ const parts = empAddress.split(" | ");
     };
   }, [routes, selectedRouteId, routeGeometries, variationGeometries, analyticsOptimizedGeom, analyticsNormalGeom, mode]);
 
+  const shiftLegend = buildShiftColorMap(routes);
+
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full z-0 bg-[#f7f7f7]" />
+
+      {/* Shift color legend — top-left */}
+      {shiftLegend.size > 1 && (
+        <div className="absolute top-3 left-3 z-[1000] p-2.5 bg-white/95 backdrop-blur-xs border border-[#e8e8e8] shadow-none flex flex-col gap-1.5 text-[10px] animate-fadeIn">
+          <div className="font-bold text-[#1c1b1f] uppercase tracking-wider text-[9px] border-b border-slate-100 pb-1 mb-0.5">Shifts</div>
+          {Array.from(shiftLegend.entries()).map(([shiftId, color]) => {
+            const shiftRoute = routes.find(r => r.shiftId === shiftId);
+            const shiftName = shiftRoute?.shift?.name || shiftId;
+            const shiftTime = shiftRoute?.shift?.startTime ? ` · ${shiftRoute.shift.startTime}` : "";
+            return (
+              <div key={shiftId} className="flex items-center gap-1.5 font-semibold text-[#4a4a4a]">
+                <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
+                <span>{shiftName}{shiftTime}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {selectedRouteId && (
         mode === "ANALYTICS" ? (

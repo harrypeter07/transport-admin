@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
  ResponsiveContainer,
  BarChart,
@@ -41,6 +41,8 @@ import {
  Info,
   Search,
   GitCompare,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export default function TransitAdminSPA() {
@@ -130,9 +132,9 @@ export default function TransitAdminSPA() {
  const [isPickup, setIsPickup] = useState(true);
  const [optimizeError, setOptimizeError] = useState<string | null>(null);
  const [optimizing, setOptimizing] = useState(false);
+ const [hasOptimized, setHasOptimized] = useState(false);
  const [previewedStrategy, setPreviewedStrategy] = useState<"MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED" | null>(null);
  const [applyingStrategy, setApplyingStrategy] = useState<string | null>(null);
-  const [visibleCabsCount, setVisibleCabsCount] = useState(4);
   const [searchQuery, setSearchQuery] = useState("");
 
  // Settings/Diagnostics states
@@ -140,6 +142,11 @@ export default function TransitAdminSPA() {
 
  // View modes: TABLE (manifest table) vs CARDS (large route cards)
  const [activeViewMode, setActiveViewMode] = useState<"TABLE" | "CARDS">("CARDS");
+
+ // Shift UI filters and states
+ const [compareShiftFilter, setCompareShiftFilter] = useState<string>("ALL");
+ const [mapShiftFilter, setMapShiftFilter] = useState<string>("ALL");
+ const [expandedShifts, setExpandedShifts] = useState<Record<string, boolean>>({});
 
  // Local variations caching for Google Maps preview
  interface RouteVariation {
@@ -195,7 +202,29 @@ export default function TransitAdminSPA() {
       if (isActive) {
         setInitialDataLoaded(true);
 
-        // Preview restored from Zustand store (persists across SPA navigation)
+        // Restore optimizationPlans from sessionStorage if Zustand lost it (tab switch / remount)
+        if (!useTransportStore.getState().optimizationPlans) {
+          try {
+            const saved = sessionStorage.getItem("opencode-opt-plans");
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              useTransportStore.setState({ optimizationPlans: parsed });
+              setHasOptimized(true);
+            }
+          } catch {}
+        } else {
+          // Plans already in Zustand store (in-session navigation) — mark hasOptimized
+          setHasOptimized(true);
+        }
+
+        // Restore last previewed strategy
+        try {
+          const savedStrategy = sessionStorage.getItem("opencode-opt-strategy") as
+            | "MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED" | null;
+          if (savedStrategy && ["MAXIMIZE_UTILIZATION", "MINIMIZE_TIME", "BALANCED"].includes(savedStrategy)) {
+            setPreviewedStrategy(savedStrategy);
+          }
+        } catch {}
       }
     };
 
@@ -239,6 +268,7 @@ export default function TransitAdminSPA() {
   } else {
   setPreviewedStrategy("BALANCED"); // Default preview
   try { sessionStorage.setItem("opencode-opt-strategy", "BALANCED"); } catch {}
+  setHasOptimized(true);
   }
   } catch (err: any) {
   setOptimizeError(err.message || "Unexpected error generating plans.");
@@ -426,7 +456,65 @@ export default function TransitAdminSPA() {
   const manifestRoutes = activeRoutes.filter(r => (r.stops || []).length > 0);
  const getRouteShiftLabel = (route: any) =>
  route.shift?.name || route.shiftName || shifts.find((shift) => shift.id === route.shiftId)?.name || "Shift";
+
+ // Group manifest routes by shiftId, sorted by shift startTime ascending
+ const shiftGroups: { shiftId: string; shiftLabel: string; shiftTime: string; routes: typeof manifestRoutes }[] = [];
+ const seenShiftIds = new Set<string>();
+ const sortedManifest = [...manifestRoutes].sort((a, b) => {
+   const tA = (a as any).shift?.startTime || "";
+   const tB = (b as any).shift?.startTime || "";
+   return tA.localeCompare(tB);
+ });
+ for (const route of sortedManifest) {
+   const sid = route.shiftId || "unknown";
+   if (!seenShiftIds.has(sid)) {
+     seenShiftIds.add(sid);
+     shiftGroups.push({
+       shiftId: sid,
+       shiftLabel: getRouteShiftLabel(route),
+       shiftTime: (route as any).shift?.startTime || "",
+       routes: [],
+     });
+   }
+   shiftGroups[shiftGroups.findIndex(g => g.shiftId === sid)].routes.push(route);
+ }
  const isInitialOptimizerDataLoading = !initialDataLoaded || (loading && cabs.length === 0);
+
+ const displayOptimizationPlans = useMemo(() => {
+   if (!optimizationPlans) return null;
+   if (compareShiftFilter === "ALL") return optimizationPlans;
+
+   const filterPlan = (plan: any) => {
+     if (!plan) return plan;
+     const routes = plan.routes.filter((r: any) => r.shiftId === compareShiftFilter);
+     const allDurations = routes.flatMap((route: any) =>
+       (route.stops || []).map((stop: any) => stop.etaMinutes).filter((mins: any) => typeof mins === "number")
+     );
+     
+     return {
+       ...plan,
+       routes,
+       totalCabsUsed: routes.length,
+       totalEmployeesCovered: new Set(routes.flatMap((route: any) => (route.stops || []).map((stop: any) => stop.employeeId))).size,
+       totalDistance: Math.round(routes.reduce((sum: number, route: any) => sum + (route.totalDistance || 0), 0) * 10) / 10,
+       avgCommuteMins: allDurations.length
+         ? Math.round(allDurations.reduce((sum: number, mins: number) => sum + mins, 0) / allDurations.length)
+         : 0,
+       totalViolations: routes.reduce(
+         (sum: number, route: any) => sum + (route.violations || []).filter((v: any) => !v.resolved).length,
+         0
+       )
+     };
+   };
+
+   return {
+     ...optimizationPlans,
+     MAXIMIZE_UTILIZATION: filterPlan(optimizationPlans.MAXIMIZE_UTILIZATION),
+     MINIMIZE_TIME: filterPlan(optimizationPlans.MINIMIZE_TIME),
+     BALANCED: filterPlan(optimizationPlans.BALANCED),
+     totalEmployees: employees.filter((e: any) => e.shiftId === compareShiftFilter).length
+   };
+ }, [optimizationPlans, compareShiftFilter, employees]);
 
  const selectedRoute = activeRoutes.find((r: any) => r.id === selectedRouteId);
  const totalViolations = activeRoutes.reduce(
@@ -434,10 +522,12 @@ export default function TransitAdminSPA() {
  0
  );
 
- // Calculate unassigned employees for the day
+ // Calculate unassigned employees — only meaningful after an optimization run
  const activeEmployees = employees.filter((emp) => emp.status === "ACTIVE");
  const assignedEmployeeIds = new Set(activeRoutes.flatMap((r) => r.stops.map((s) => s.employeeId)));
- const unassignedEmployees = activeEmployees.filter((emp) => !assignedEmployeeIds.has(emp.id));
+ const unassignedEmployees = (hasOptimized || optimizationPlans !== null)
+   ? activeEmployees.filter((emp) => !assignedEmployeeIds.has(emp.id))
+   : [];
 
  // Filter lists
  const filteredEmployees = employees.filter((emp) =>
@@ -520,7 +610,10 @@ export default function TransitAdminSPA() {
  </nav>
 
   <button
-  onClick={() => fetchInitialData()}
+  onClick={async () => {
+  setHasOptimized(false);
+  await fetchInitialData();
+  }}
   className="p-1.5 border border-[#e8e8e8] bg-white rounded-none hover:bg-[#f7f7f7] text-[#6b6b6b] transition"
   title="Sync Database"
   >
@@ -668,6 +761,7 @@ export default function TransitAdminSPA() {
   onClick={() => {
   clearOptimizationPreview();
   setPreviewedStrategy(null);
+  setHasOptimized(false);
   try { sessionStorage.removeItem("opencode-opt-strategy"); } catch {}
   }}
  className="flex items-center gap-1.5 bg-white text-[#6b6b6b] border border-[#e8e8e8] px-3 py-1.5 rounded-none text-xs font-bold hover:bg-[#f7f7f7] transition shadow-2xs cursor-pointer"
@@ -702,11 +796,6 @@ export default function TransitAdminSPA() {
  <h3 className="text-sm font-black text-[#1c1b1f]">
  Previewing: {previewedStrategy.replace("_", " ")}
  </h3>
- {optimizationPlans.capacityShortfall > 0 && (
- <p className="text-[11px] text-[#1c1b1f] font-bold mt-1">
- ⚠️ {optimizationPlans.capacityShortfall} employees unassigned (not enough cab seats).
- </p>
- )}
  </div>
  <div className="flex flex-wrap items-center gap-3">
  <div className="bg-[#f7f7f7] border border-slate-100 rounded-none px-3 py-1.5 text-center">
@@ -736,21 +825,28 @@ export default function TransitAdminSPA() {
    <div className="font-black text-sm text-[#1c1b1f]">{optimizationPlans[previewedStrategy].totalEmployeesCovered} / {optimizationPlans.totalEmployees}</div>
    <div className="text-[#6b6b6b] text-[9px] font-bold uppercase tracking-wide">Covered</div>
    </div>
-   {(optimizationPlans.totalEmployees - optimizationPlans[previewedStrategy].totalEmployeesCovered) > 0 && (
-   <div className="bg-amber-50 border border-amber-300 rounded-none px-3 py-1.5 text-xs font-bold text-amber-800 flex items-center gap-1.5">
-   <AlertTriangle className="w-3.5 h-3.5 shrink-0"/> {optimizationPlans.totalEmployees - optimizationPlans[previewedStrategy].totalEmployeesCovered} employees unassigned, need more cabs
-   </div>
-   )}
    </div>
    </div>
   )}
 
   {/* ── Strategy Comparison Table ─────────────────────────── */}
-  {optimizationPlans && previewedStrategy && (
+  {displayOptimizationPlans && previewedStrategy && (
   <div className="bg-white border border-[#e8e8e8] rounded-none p-4 shadow-none flex flex-col gap-3 animate-fadeIn">
-  <div className="flex items-center gap-2 text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">
+  <div className="flex items-center justify-between gap-2 text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">
+  <div className="flex items-center gap-2">
   <GitCompare className="w-3.5 h-3.5 text-[#6b6b6b]" />
   Strategy Comparison
+  </div>
+  <select
+    value={compareShiftFilter}
+    onChange={(e) => setCompareShiftFilter(e.target.value)}
+    className="bg-[#f7f7f7] border border-[#e8e8e8] text-xs font-bold text-[#1c1b1f] outline-none cursor-pointer focus:ring-0 px-2 py-1 rounded-none uppercase"
+  >
+    <option value="ALL">Overall</option>
+    {shifts.map((shift) => (
+      <option key={shift.id} value={shift.id}>{shift.name}</option>
+    ))}
+  </select>
   </div>
   <div className="overflow-x-auto">
   <table className="w-full text-xs">
@@ -768,9 +864,9 @@ export default function TransitAdminSPA() {
   {
   label: "Cabs Used",
   values: [
-  optimizationPlans.MAXIMIZE_UTILIZATION.totalCabsUsed,
-  optimizationPlans.MINIMIZE_TIME.totalCabsUsed,
-  optimizationPlans.BALANCED.totalCabsUsed,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION.totalCabsUsed,
+  displayOptimizationPlans.MINIMIZE_TIME.totalCabsUsed,
+  displayOptimizationPlans.BALANCED.totalCabsUsed,
   ],
   lowerBetter: true,
   suffix: "",
@@ -778,9 +874,9 @@ export default function TransitAdminSPA() {
   {
   label: "Total Distance",
   values: [
-  optimizationPlans.MAXIMIZE_UTILIZATION.totalDistance,
-  optimizationPlans.MINIMIZE_TIME.totalDistance,
-  optimizationPlans.BALANCED.totalDistance,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION.totalDistance,
+  displayOptimizationPlans.MINIMIZE_TIME.totalDistance,
+  displayOptimizationPlans.BALANCED.totalDistance,
   ],
   lowerBetter: true,
   suffix: " km",
@@ -788,9 +884,9 @@ export default function TransitAdminSPA() {
   {
   label: "Avg Commute",
   values: [
-  optimizationPlans.MAXIMIZE_UTILIZATION.avgCommuteMins,
-  optimizationPlans.MINIMIZE_TIME.avgCommuteMins,
-  optimizationPlans.BALANCED.avgCommuteMins,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION.avgCommuteMins,
+  displayOptimizationPlans.MINIMIZE_TIME.avgCommuteMins,
+  displayOptimizationPlans.BALANCED.avgCommuteMins,
   ],
   lowerBetter: true,
   suffix: " min",
@@ -798,9 +894,9 @@ export default function TransitAdminSPA() {
   {
   label: "Violations",
   values: [
-  optimizationPlans.MAXIMIZE_UTILIZATION.totalViolations,
-  optimizationPlans.MINIMIZE_TIME.totalViolations,
-  optimizationPlans.BALANCED.totalViolations,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION.totalViolations,
+  displayOptimizationPlans.MINIMIZE_TIME.totalViolations,
+  displayOptimizationPlans.BALANCED.totalViolations,
   ],
   lowerBetter: true,
   suffix: "",
@@ -808,12 +904,12 @@ export default function TransitAdminSPA() {
   {
   label: "Covered",
   values: [
-  optimizationPlans.MAXIMIZE_UTILIZATION.totalEmployeesCovered,
-  optimizationPlans.MINIMIZE_TIME.totalEmployeesCovered,
-  optimizationPlans.BALANCED.totalEmployeesCovered,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION.totalEmployeesCovered,
+  displayOptimizationPlans.MINIMIZE_TIME.totalEmployeesCovered,
+  displayOptimizationPlans.BALANCED.totalEmployeesCovered,
   ],
   lowerBetter: false,
-  suffix: ` / ${optimizationPlans.totalEmployees}`,
+  suffix: ` / ${displayOptimizationPlans.totalEmployees}`,
   },
   ].map((row) => {
   const best = row.lowerBetter
@@ -897,16 +993,16 @@ export default function TransitAdminSPA() {
  </span>
  </div>
  </div>
- ) : (optimizationPlans && optimizationPlans.capacityShortfall > 0) ? (
+ ) : (unassignedEmployees.length > 0) ? (
  <div className="p-4 bg-[#f7f7f7] border border-[#e8e8e8] rounded-none flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-[#1c1b1f] animate-fadeIn">
  <div className="flex items-start gap-2.5">
  <AlertTriangle className="w-5 h-5 text-[#6b6b6b] flex-shrink-0 mt-0.5 animate-pulse" />
  <div className="flex flex-col text-left">
  <span className="font-bold text-[#1c1b1f]">Fleet Capacity Exceeded — Overflow Alert</span>
  <span className="mt-0.5 text-[#1c1b1f] font-medium">
- {optimizationPlans.capacityShortfall} employee(s) could not be accommodated on this shift due to insufficient available cab capacity.</span>
+ {unassignedEmployees.length} employee(s) could not be accommodated due to routing constraints or insufficient available cab capacity.</span>
  <span className="mt-1.5 text-[10px] text-[#1c1b1f] font-mono font-bold">
- Waitlisted: {unassignedEmployees.map((emp) => `${emp.name} (${emp.address.split(",")[0]})`).join(", ")}
+ Waitlisted: {unassignedEmployees.map((emp) => `${emp.name} (${emp.address.split(",")[0]} — ${emp.shift?.name || "No Shift"})`).join(", ")}
  </span>
  </div>
  </div>
@@ -927,8 +1023,21 @@ export default function TransitAdminSPA() {
  <div className={`flex flex-col gap-4 transition-all duration-250
  ${showAttendanceChecklist ? "lg:col-span-5" : "lg:col-span-8"}
  `}>
+ <div className="flex justify-between items-center bg-white border border-[#e8e8e8] rounded-none px-3 py-2 shadow-xs">
+    <div className="text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">Map View</div>
+    <select
+      value={mapShiftFilter}
+      onChange={(e) => setMapShiftFilter(e.target.value)}
+      className="bg-[#f7f7f7] border border-[#e8e8e8] text-xs font-bold text-[#1c1b1f] outline-none cursor-pointer focus:ring-0 px-2 py-1 rounded-none uppercase"
+    >
+      <option value="ALL">All Shifts</option>
+      {shifts.map((shift) => (
+        <option key={shift.id} value={shift.id}>{shift.name}</option>
+      ))}
+    </select>
+  </div>
  <RouteVisualizer
- routes={activeRoutes}
+ routes={mapShiftFilter === "ALL" ? activeRoutes : activeRoutes.filter(r => (r as any).shiftId === mapShiftFilter)}
  selectedRouteId={selectedRouteId}
  onSelectRoute={setSelectedRouteId}
  />
@@ -990,7 +1099,7 @@ export default function TransitAdminSPA() {
  }}
  className={`px-2.5 py-1 rounded-none text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer
  ${isPresent 
- ? "bg-[#f7f7f7] border-emerald-250 text-[#1c1b1f]" 
+ ? "bg-[#f7f7f7] border-emerald-250 text-[#1c1b1f] " 
  : "bg-slate-150 border-[#e8e8e8] text-[#9a9a9a]"
  }
  `}
@@ -1263,483 +1372,495 @@ export default function TransitAdminSPA() {
  <div className="p-8 text-center text-[#9a9a9a] bg-[#f7f7f7]/20 border border-dashed border-slate-250 rounded-none">
  No manifest generated yet. Click Optimize Routing to generate route cards for the selected date.
  </div>
- ) : activeViewMode === "TABLE" ? (
- <div className="overflow-x-auto">
- <table className="w-full text-left text-xs border-collapse">
- <thead>
- <tr className="bg-[#f7f7f7] border-b border-[#e8e8e8] text-[#9a9a9a] font-mono text-[9px] uppercase tracking-wider">
- <th className="p-3">Shift Time</th>
- <th className="p-3">Driver Details</th>
- <th className="p-3">Vehicle Number</th>
- <th className="p-3">Load Info</th>
- <th className="p-3">Route Type</th>
- <th className="p-3">Itinerary Stop sequence list</th>
- <th className="p-3">Alert Status</th>
- </tr>
- </thead>
- <tbody className="divide-y divide-slate-100 font-semibold text-[#4a4a4a]">
-  {manifestRoutes.map((route, index) => {
- const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
- const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
- const isSelected = selectedRouteId === route.id;
-
- return (
- <tr
- key={route.id}
- onClick={() => setSelectedRouteId(isSelected ? null : route.id)}
- className={`cursor-pointer border-l-4 transition-all duration-150
- ${
- isSelected
- ? "bg-[#f7f7f7]/70 border-l-blue-600 hover:bg-[#f7f7f7]"
- : "border-l-transparent hover:bg-[#f7f7f7]/50"
- }
- `}
- >
- <td className="p-3">
- <div className="flex flex-col text-left">
- <span className="text-[#1c1b1f] font-bold">{getRouteShiftLabel(route)}</span>
- <span className="text-[9px] text-[#9a9a9a] font-mono">{route.shift?.startTime || "N/A"} - {route.shift?.endTime || "N/A"}</span>
- </div>
- </td>
- <td className="p-3">
- <div className="flex flex-col text-left">
- <span className="text-[#1c1b1f] font-bold">{route.cab.driverName || "N/A"}</span>
- <span className="text-[9px] text-[#9a9a9a] font-mono">{route.cab.driverPhone || "N/A"}</span>
- </div>
- </td>
-  <td className="p-3 font-mono text-[#1c1b1f]">
-    <span className="text-[10px] text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1 py-0.5 font-bold mr-1">r{route.routeNumber || index + 1}</span>
-    {route.cab.vehicleNumber}
-  </td>
- <td className="p-3 text-[#6b6b6b]">
- {route.stops.length} / {route.cab.capacity} seats
- </td>
- <td className="p-3">
- <span className="text-[10px] bg-[#f7f7f7] border border-[#e8e8e8] text-[#6b6b6b] px-2 py-0.5 rounded uppercase font-bold tracking-wider">
- {route.isPickup ? "Pickup (To MIHAN)" : "Drop (From MIHAN)"}
- </span>
- </td>
- <td className="p-3">
- <div className="flex flex-wrap items-center gap-1.5 font-sans font-bold text-[10px]">
- {route.isPickup ? (
- <>
- {sortedStops.map((s, idx) => {
- const isFem = s.employee.gender === "FEMALE";
- return (
- <React.Fragment key={s.id}>
- <span className={`border px-2 py-0.5 rounded flex items-center gap-1
- ${
- isFem
- ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
- : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
- }
- `}>
- <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
- {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
- </span>
- <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>
- </React.Fragment>
- );
- })}
- <span className="bg-[#1c1b1f] border border-slate-900 text-white px-2 py-0.5 rounded flex items-center gap-1 font-extrabold">
- 🏢 MIHAN Depot
- </span>
- </>
  ) : (
- <>
- <span className="bg-[#1c1b1f] border border-slate-900 text-white px-2 py-0.5 rounded flex items-center gap-1 font-extrabold">
- 🏢 MIHAN Depot
- </span>
- <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>
- {sortedStops.map((s, idx) => {
- const isFem = s.employee.gender === "FEMALE";
- return (
- <React.Fragment key={s.id}>
- <span className={`border px-2 py-0.5 rounded flex items-center gap-1
- ${
- isFem
- ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
- : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
- }
- `}>
- <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
- {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
- </span>
- {idx < sortedStops.length - 1 && <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>}
- </React.Fragment>
- );
- })}
- </>
- )}
- </div>
- </td>
- <td className="p-3">
- {activeViolationsCount > 0 ? (
- <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f] animate-pulse">
- {activeViolationsCount} Alert(s)
- </span>
- ) : (
- <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f]">
- Clear
- </span>
- )}
- </td>
- </tr>
- );
- })}
- </tbody>
- </table>
- </div>
- ) : (
- /* High-Visibility Route Cards View */
- <div className="flex flex-col gap-6">
- <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1">
-  {manifestRoutes.slice(0, visibleCabsCount).map((route, index) => {
- const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
- const activeViolationsCount = route.violations.filter((v: any) => !v.resolved).length;
- const isSelected = selectedRouteId === route.id;
- 
- const routeVariations = variations[route.id] || [];
- const isLoadingVars = loadingVariations[route.id] || false;
- const activeVarIdx = activeVarIndices[route.id] ?? -1;
+ <div className="flex flex-col gap-10">
+  {shiftGroups.map(group => {
+    
+    return (
+      <div key={group.shiftId} className="flex flex-col gap-4">
+        <div 
+          className="flex items-center gap-3 border-b border-slate-200 pb-2 cursor-pointer select-none"
+          onClick={() => setExpandedShifts(prev => ({ ...prev, [group.shiftId]: !prev[group.shiftId] }))}
+        >
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-6 bg-[#1c1b1f] block" />
+            <h3 className="text-sm font-black text-[#1c1b1f] uppercase tracking-wider">{group.shiftLabel}</h3>
+          </div>
+          {group.shiftTime && (
+            <span className="bg-[#f7f7f7] border border-[#e8e8e8] text-[#6b6b6b] px-2 py-0.5 text-[10px] font-bold font-mono">
+              {group.shiftTime}
+            </span>
+          )}
+          <span className="text-[#9a9a9a] text-[10px] font-bold uppercase ml-auto">
+            {group.routes.length} Route{group.routes.length !== 1 ? "s" : ""}
+          </span>
+          {expandedShifts[group.shiftId] ? <ChevronUp className="w-4 h-4 text-[#6b6b6b]" /> : <ChevronDown className="w-4 h-4 text-[#6b6b6b]" />}
+        </div>
 
- return (
- <div
- key={route.id}
- onClick={() => setSelectedRouteId(isSelected ? null : route.id)}
- className={`p-6 rounded-none bg-white border transition-all duration-200 flex flex-col gap-5 text-left cursor-pointer print:border-[#d0d0d0] print:shadow-none
- ${
- isSelected
- ? "border-[#1c1b1f] shadow-none ring-1 ring-slate-800/10"
- : "border-[#e8e8e8] hover:border-slate-350 shadow-xs"
- }
- `}
- >
- {/* Header */}
- <div className="flex justify-between items-start border-b border-slate-100 pb-3">
- <div className="flex flex-col gap-0.5 text-left">
- <div className="flex items-center gap-2">
- <span className="text-[9px] uppercase font-extrabold tracking-widest text-[#9a9a9a]">
- Vehicle Assignment Details
- </span>
- <span className="bg-black text-white font-mono text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
-  {getRouteShiftLabel(route)} Trip {route.tripSequence || 1}
-</span>
- </div>
-  <h3 className="text-base font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
-  <Truck className="w-4 h-4 text-[#9a9a9a]" />
-  {route.cab.vehicleNumber}
-  <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
-    r{route.routeNumber || index + 1}
-  </span>
-  </h3>
- <span className="text-[10px] text-[#6b6b6b] font-semibold uppercase tracking-wider">
- Vendor: {route.cab.vendor} · {route.stops.length} / {route.cab.capacity} passengers
- </span>
- </div>
- 
- <div className="flex flex-col items-end gap-0.5 group/score relative">
- <div className="flex items-center gap-1">
- <span className="text-[8px] uppercase font-bold tracking-widest text-[#9a9a9a]">Score</span>
- <Info className="w-3 h-3 text-[#9a9a9a] cursor-help" />
- </div>
- <span className="text-sm font-bold text-[#1c1b1f] font-mono">{route.optimizationScore}/100</span>
- 
- <div className="absolute right-0 top-full mt-2 w-48 p-2.5 bg-[#1c1b1f] text-white text-[10px] rounded-none shadow-xl opacity-0 invisible group-hover/score:opacity-100 group-hover/score:visible transition-all z-10 text-left">
- <div className="font-bold mb-1 border-b border-slate-700 pb-1">Score Calculation</div>
- <ul className="space-y-1 text-[#b0b0b0]">
- <li>Start: 100 points</li>
- <li>-10 per safety violation</li>
- <li>-2 per empty seat</li>
- <li>-1 per extra km traveled</li>
- </ul>
- </div>
- </div>
- </div>
+        {expandedShifts[group.shiftId] && (
+          <>
+        {activeViewMode === "TABLE" ? (
+          <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+          <thead>
+          <tr className="bg-[#f7f7f7] border-b border-[#e8e8e8] text-[#9a9a9a] font-mono text-[9px] uppercase tracking-wider">
+          <th className="p-3">Driver Details</th>
+          <th className="p-3">Vehicle Number</th>
+          <th className="p-3">Load Info</th>
+          <th className="p-3">Route Type</th>
+          <th className="p-3">Itinerary Stop sequence list</th>
+          <th className="p-3">Alert Status</th>
+          </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-semibold text-[#4a4a4a]">
+            {group.routes.map((route, index) => {
+          const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+          const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
+          const isSelected = selectedRouteId === route.id;
 
- {/* Driver Profile */}
- <div className="p-3.5 bg-[#f7f7f7] border border-slate-150 rounded-none flex items-center justify-between gap-4">
- <div className="flex flex-col text-left">
- <span className="text-[8px] uppercase font-extrabold tracking-wider text-[#9a9a9a]">Driver</span>
- <span className="text-xs font-bold text-slate-950">{route.cab.driverName || "N/A"}</span>
- <span className="text-[9px] text-[#6b6b6b] font-mono font-medium">{route.cab.driverPhone || "N/A"}</span>
- </div>
- <div className="flex gap-1.5 print:hidden">
- <button
- type="button"
- onClick={(e) => {
- e.stopPropagation();
- setEditingCab(route.cab);
- }}
- className="px-2.5 py-1.5 bg-white border border-[#e8e8e8] text-[#6b6b6b] rounded-none text-[10px] font-bold hover:bg-[#f7f7f7] transition cursor-pointer"
- >
- Edit Cab
- </button>
- <button
- type="button"
- onClick={(e) => {
- e.stopPropagation();
- setSwappingCabRouteId(route.id);
- }}
- className="px-2.5 py-1.5 bg-black text-white rounded-none text-[10px] font-bold hover:bg-black transition cursor-pointer"
- >
- Swap Driver
- </button>
- </div>
- </div>
+          return (
+          <tr
+          key={route.id}
+          onClick={() => setSelectedRouteId(isSelected ? null : route.id)}
+          className={`cursor-pointer border-l-4 transition-all duration-150
+          ${
+          isSelected
+          ? "bg-[#f7f7f7]/70 border-l-blue-600 hover:bg-[#f7f7f7]"
+          : "border-l-transparent hover:bg-[#f7f7f7]/50"
+          }
+          `}
+          >
+          <td className="p-3">
+          <div className="flex flex-col text-left">
+          <span className="text-[#1c1b1f] font-bold">{route.cab.driverName || "N/A"}</span>
+          <span className="text-[9px] text-[#9a9a9a] font-mono">{route.cab.driverPhone || "N/A"}</span>
+          </div>
+          </td>
+            <td className="p-3 font-mono text-[#1c1b1f]">
+              <span className="text-[10px] text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1 py-0.5 font-bold mr-1">r{route.routeNumber || index + 1}</span>
+              {route.cab.vehicleNumber}
+            </td>
+          <td className="p-3 text-[#6b6b6b]">
+          {route.stops.length} / {route.cab.capacity} seats
+          </td>
+          <td className="p-3">
+          <span className="text-[10px] bg-[#f7f7f7] border border-[#e8e8e8] text-[#6b6b6b] px-2 py-0.5 rounded uppercase font-bold tracking-wider">
+          {route.isPickup ? "Pickup (To MIHAN)" : "Drop (From MIHAN)"}
+          </span>
+          </td>
+          <td className="p-3">
+          <div className="flex flex-wrap items-center gap-1.5 font-sans font-bold text-[10px]">
+          {route.isPickup ? (
+          <>
+          {sortedStops.map((s, idx) => {
+          const isFem = s.employee.gender === "FEMALE";
+          return (
+          <React.Fragment key={s.id}>
+          <span className={`border px-2 py-0.5 rounded flex items-center gap-1
+          ${
+          isFem
+          ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
+          : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
+          }
+          `}>
+          <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
+          {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
+          </span>
+          <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>
+          </React.Fragment>
+          );
+          })}
+          <span className="bg-[#1c1b1f] border border-slate-900 text-white px-2 py-0.5 rounded flex items-center gap-1 font-extrabold">
+          🏢 MIHAN Depot
+          </span>
+          </>
+          ) : (
+          <>
+          <span className="bg-[#1c1b1f] border border-slate-900 text-white px-2 py-0.5 rounded flex items-center gap-1 font-extrabold">
+          🏢 MIHAN Depot
+          </span>
+          <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>
+          {sortedStops.map((s, idx) => {
+          const isFem = s.employee.gender === "FEMALE";
+          return (
+          <React.Fragment key={s.id}>
+          <span className={`border px-2 py-0.5 rounded flex items-center gap-1
+          ${
+          isFem
+          ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
+          : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
+          }
+          `}>
+          <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
+          {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
+          </span>
+          {idx < sortedStops.length - 1 && <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>}
+          </React.Fragment>
+          );
+          })}
+          </>
+          )}
+          </div>
+          </td>
+          <td className="p-3">
+          {activeViolationsCount > 0 ? (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f] animate-pulse">
+          {activeViolationsCount} Alert(s)
+          </span>
+          ) : (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f]">
+          Clear
+          </span>
+          )}
+          </td>
+          </tr>
+          );
+          })}
+          </tbody>
+          </table>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1">
+            {group.routes.map((route, index) => {
+          const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+          const activeViolationsCount = route.violations.filter((v: any) => !v.resolved).length;
+          const isSelected = selectedRouteId === route.id;
+          
+          const routeVariations = variations[route.id] || [];
+          const isLoadingVars = loadingVariations[route.id] || false;
+          const activeVarIdx = activeVarIndices[route.id] ?? -1;
 
- {/* Variations Selector */}
- <div className="flex flex-col gap-2.5 print:hidden">
- <div className="flex justify-between items-center">
- <span className="text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">
- Real-Road Commute Variations
- </span>
- <button
- type="button"
- onClick={(e) => {
- e.stopPropagation();
- fetchVariations(route.id);
- }}
- className="text-[9px] font-extrabold text-[#ff4f00] hover:text-[#1c1b1f] flex items-center gap-1 cursor-pointer"
- >
- <RefreshCw className={`w-3 h-3 ${isLoadingVars ? "animate-spin-fast" : ""}`} />
-  {routeVariations.length > 0 ? "Recalculate Variations" : "Load Variations"}
- </button>
- </div>
+          return (
+          <div
+          key={route.id}
+          onClick={() => setSelectedRouteId(isSelected ? null : route.id)}
+          className={`p-6 rounded-none bg-white border transition-all duration-200 flex flex-col gap-5 text-left cursor-pointer print:border-[#d0d0d0] print:shadow-none
+          ${
+          isSelected
+          ? "border-[#1c1b1f] shadow-none ring-1 ring-slate-800/10"
+          : "border-[#e8e8e8] hover:border-slate-350 shadow-xs"
+          }
+          `}
+          >
+          {/* Header */}
+          <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+          <div className="flex flex-col gap-0.5 text-left">
+          <div className="flex items-center gap-2">
+          <span className="text-[9px] uppercase font-extrabold tracking-widest text-[#9a9a9a]">
+          Vehicle Assignment Details
+          </span>
+          </div>
+            <h3 className="text-base font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
+            <Truck className="w-4 h-4 text-[#9a9a9a]" />
+            {route.cab.vehicleNumber}
+            <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
+              r{route.routeNumber || index + 1}
+            </span>
+            </h3>
+          <span className="text-[10px] text-[#6b6b6b] font-semibold uppercase tracking-wider">
+          Vendor: {route.cab.vendor} · {route.stops.length} / {route.cab.capacity} passengers
+          </span>
+          </div>
+          
+          <div className="flex flex-col items-end gap-0.5 group/score relative">
+          <div className="flex items-center gap-1">
+          <span className="text-[8px] uppercase font-bold tracking-widest text-[#9a9a9a]">Score</span>
+          <Info className="w-3 h-3 text-[#9a9a9a] cursor-help" />
+          </div>
+          <span className="text-sm font-bold text-[#1c1b1f] font-mono">{route.optimizationScore}/100</span>
+          
+          <div className="absolute right-0 top-full mt-2 w-48 p-2.5 bg-[#1c1b1f] text-white text-[10px] rounded-none shadow-xl opacity-0 invisible group-hover/score:opacity-100 group-hover/score:visible transition-all z-10 text-left">
+          <div className="font-bold mb-1 border-b border-slate-700 pb-1">Score Calculation</div>
+          <ul className="space-y-1 text-[#b0b0b0]">
+          <li>Start: 100 points</li>
+          <li>-10 per safety violation</li>
+          <li>-2 per empty seat</li>
+          <li>-1 per extra km traveled</li>
+          </ul>
+          </div>
+          </div>
+          </div>
 
- {isLoadingVars ? (
- <div className="text-center py-4 bg-[#f7f7f7]/50 rounded-none border border-dashed border-[#e8e8e8] text-[10px] font-semibold text-[#9a9a9a]">
- Computing route variations...
- </div>
- ) : routeVariations.length > 0 ? (
- <div className="flex flex-col gap-3">
- {/* Variations tabs layout */}
- <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 bg-[#f7f7f7] p-1 rounded-none">
- {routeVariations.filter(v => v.strategy !== "NORMAL").map((v) => {
- const originalIndex = routeVariations.findIndex(orig => orig.strategy === v.strategy);
- const isActive = activeVarIdx === originalIndex || (activeVarIdx === -1 && v.strategy === "BALANCED");
- return (
- <button
- key={v.strategy}
- type="button"
- onClick={(e) => {
- e.stopPropagation();
- setActiveVarIndices(prev => ({ ...prev, [route.id]: originalIndex }));
- }}
- className={`py-1.5 rounded-none text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer
- ${isActive ? "bg-white text-[#1c1b1f] shadow-none" : "text-[#6b6b6b] hover:text-[#1c1b1f]"}
- `}
- >
- {v.strategy}
- <div className="text-[8px] font-normal text-[#9a9a9a] normal-case font-mono mt-0.5">
- {v.totalDistance}km · {v.totalDuration}m
- </div>
- </button>
- );
- })}
- </div>
+          {/* Driver Profile */}
+          <div className="p-3.5 bg-[#f7f7f7] border border-slate-150 rounded-none flex items-center justify-between gap-4">
+          <div className="flex flex-col text-left">
+          <span className="text-[8px] uppercase font-extrabold tracking-wider text-[#9a9a9a]">Driver</span>
+          <span className="text-xs font-bold text-slate-950">{route.cab.driverName || "N/A"}</span>
+          <span className="text-[9px] text-[#6b6b6b] font-mono font-medium">{route.cab.driverPhone || "N/A"}</span>
+          </div>
+          <div className="flex gap-1.5 print:hidden">
+          <button
+          type="button"
+          onClick={(e) => {
+          e.stopPropagation();
+          setEditingCab(route.cab);
+          }}
+          className="px-2.5 py-1.5 bg-white border border-[#e8e8e8] text-[#6b6b6b] rounded-none text-[10px] font-bold hover:bg-[#f7f7f7] transition cursor-pointer"
+          >
+          Edit Cab
+          </button>
+          <button
+          type="button"
+          onClick={(e) => {
+          e.stopPropagation();
+          setSwappingCabRouteId(route.id);
+          }}
+          className="px-2.5 py-1.5 bg-black text-white rounded-none text-[10px] font-bold hover:bg-black transition cursor-pointer"
+          >
+          Swap Driver
+          </button>
+          </div>
+          </div>
 
- {activeVarIdx !== -1 && (
- <div className="flex gap-2">
- <button
- type="button"
- onClick={async (e) => {
- e.stopPropagation();
- const selectedVar = routeVariations[activeVarIdx];
- const dbStopIds = selectedVar.stops.map(s => {
- const matchingActiveStop = route.stops.find(as => as.employeeId === s.employeeId);
- return matchingActiveStop?.id || "";
- }).filter(Boolean);
+          {/* Variations Selector */}
+          <div className="flex flex-col gap-2.5 print:hidden">
+          <div className="flex justify-between items-center">
+          <span className="text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">
+          Real-Road Commute Variations
+          </span>
+          <button
+          type="button"
+          onClick={(e) => {
+          e.stopPropagation();
+          fetchVariations(route.id);
+          }}
+          className="text-[9px] font-extrabold text-[#ff4f00] hover:text-[#1c1b1f] flex items-center gap-1 cursor-pointer"
+          >
+          <RefreshCw className={`w-3 h-3 ${isLoadingVars ? "animate-spin-fast" : ""}`} />
+          {routeVariations.length > 0 ? "Recalculate Variations" : "Load Variations"}
+          </button>
+          </div>
 
- await applyRouteSequence(route.id, dbStopIds, selectedVar.totalDistance, selectedVar.totalDuration);
- setActiveVarIndices(prev => {
- const next = { ...prev };
- delete next[route.id];
- return next;
- });
- }}
- className="w-full py-1.5 bg-[#1c1b1f] text-white rounded-none text-[10px] font-extrabold hover:bg-black transition cursor-pointer"
- >
- Apply selected sequence
- </button>
- <button
- type="button"
- onClick={(e) => {
- e.stopPropagation();
- setActiveVarIndices(prev => {
- const next = { ...prev };
- delete next[route.id];
- return next;
- });
- }}
- className="py-1.5 px-3 border border-[#e8e8e8] text-[#6b6b6b] rounded-none text-[10px] font-bold hover:bg-[#f7f7f7] transition cursor-pointer"
- >
- Cancel
- </button>
- </div>
- )}
- </div>
- ) : (
- <div className="text-center py-2 bg-[#f7f7f7] rounded-none border border-slate-150 text-[10px] font-semibold text-[#6b6b6b]">
- Dist: {route.totalDistance} km · Dur: {route.totalDuration} mins (road metrics)
- </div>
- )}
- </div>
+          {isLoadingVars ? (
+          <div className="text-center py-4 bg-[#f7f7f7]/50 rounded-none border border-dashed border-[#e8e8e8] text-[10px] font-semibold text-[#9a9a9a]">
+          Computing route variations...
+          </div>
+          ) : routeVariations.length > 0 ? (
+          <div className="flex flex-col gap-3">
+          {/* Variations tabs layout */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 bg-[#f7f7f7] p-1 rounded-none">
+          {routeVariations.filter(v => v.strategy !== "NORMAL").map((v) => {
+          const originalIndex = routeVariations.findIndex(orig => orig.strategy === v.strategy);
+          const isActive = activeVarIdx === originalIndex || (activeVarIdx === -1 && v.strategy === "BALANCED");
+          return (
+          <button
+          key={v.strategy}
+          type="button"
+          onClick={(e) => {
+          e.stopPropagation();
+          setActiveVarIndices(prev => ({ ...prev, [route.id]: originalIndex }));
+          }}
+          className={`py-1.5 rounded-none text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer
+          ${isActive ? "bg-white text-[#1c1b1f] shadow-none" : "text-[#6b6b6b] hover:text-[#1c1b1f]"}
+          `}
+          >
+          {v.strategy}
+          <div className="text-[8px] font-normal text-[#9a9a9a] normal-case font-mono mt-0.5">
+          {v.totalDistance}km · {v.totalDuration}m
+          </div>
+          </button>
+          );
+          })}
+          </div>
 
- {/* Itinerary timeline stops list */}
- <div className="flex flex-col gap-3">
- <span className="text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">
- Stops Timeline
- </span>
+          {activeVarIdx !== -1 && (
+          <div className="flex gap-2">
+          <button
+          type="button"
+          onClick={async (e) => {
+          e.stopPropagation();
+          const selectedVar = routeVariations[activeVarIdx];
+          const dbStopIds = selectedVar.stops.map(s => {
+          const matchingActiveStop = route.stops.find(as => as.employeeId === s.employeeId);
+          return matchingActiveStop?.id || "";
+          }).filter(Boolean);
 
- <div className="relative pl-6 flex flex-col gap-3.5">
- <div className="absolute left-[9px] top-2 bottom-2 w-0.5 border-l border-dashed border-[#e8e8e8]"></div>
+          await applyRouteSequence(route.id, dbStopIds, selectedVar.totalDistance, selectedVar.totalDuration);
+          setActiveVarIndices(prev => {
+          const next = { ...prev };
+          delete next[route.id];
+          return next;
+          });
+          }}
+          className="w-full py-1.5 bg-[#1c1b1f] text-white rounded-none text-[10px] font-extrabold hover:bg-black transition cursor-pointer"
+          >
+          Apply selected sequence
+          </button>
+          <button
+          type="button"
+          onClick={(e) => {
+          e.stopPropagation();
+          setActiveVarIndices(prev => {
+          const next = { ...prev };
+          delete next[route.id];
+          return next;
+          });
+          }}
+          className="py-1.5 px-3 border border-[#e8e8e8] text-[#6b6b6b] rounded-none text-[10px] font-bold hover:bg-[#f7f7f7] transition cursor-pointer"
+          >
+          Cancel
+          </button>
+          </div>
+          )}
+          </div>
+          ) : (
+          <div className="text-center py-2 bg-[#f7f7f7] rounded-none border border-slate-150 text-[10px] font-semibold text-[#6b6b6b]">
+          Dist: {route.totalDistance} km · Dur: {route.totalDuration} mins (road metrics)
+          </div>
+          )}
+          </div>
 
- {!route.isPickup && (
- <div className="relative flex items-center gap-3">
- <span className="absolute -left-[23px] w-4.5 h-4.5 rounded-none bg-black border border-slate-850 text-white flex items-center justify-center font-bold text-[8px] z-10">
- 🏢
- </span>
- <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-none text-left text-[11px] font-bold text-[#1c1b1f] flex justify-between items-center">
- <div>
- <span className="text-[#1c1b1f]">MIHAN Depot</span>
- <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">HQ</p>
- </div>
- <span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.5 rounded font-black uppercase font-mono">
- Depart
- </span>
- </div>
- </div>
- )}
+          {/* Itinerary timeline stops list */}
+          <div className="flex flex-col gap-3">
+          <span className="text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">
+          Stops Timeline
+          </span>
 
- {(activeVarIdx !== -1 ? routeVariations[activeVarIdx].stops : sortedStops).map((stop, idx) => {
- const isFemale = stop.employee ? stop.employee.gender === "FEMALE" : (stop as any).gender === "FEMALE";
- const empId = stop.employee ? stop.employee.id : (stop as any).employeeId;
- const empName = stop.employee ? stop.employee.name : (stop as any).employeeName;
- const empAddress = stop.employee ? stop.employee.address : (stop as any).address;
- const isMissed = stop.status === "SKIPPED" || (stop as any).status === "SKIPPED";
+          <div className="relative pl-6 flex flex-col gap-3.5">
+          <div className="absolute left-[9px] top-2 bottom-2 w-0.5 border-l border-dashed border-[#e8e8e8]"></div>
 
- return (
- <div key={stop.id || empId} className="relative flex items-center gap-3">
- <span className={`absolute -left-[23px] w-4.5 h-4.5 rounded-none flex items-center justify-center font-mono font-black text-[9px] border z-10
- ${
- isFemale
- ? "bg-[#1c1b1f] border-[#1c1b1f] text-white"
- : "bg-white border-slate-350 text-[#6b6b6b]"
- }
- `}>
- {idx + 1}
- </span>
+          {!route.isPickup && (
+          <div className="relative flex items-center gap-3">
+          <span className="absolute -left-[23px] w-4.5 h-4.5 rounded-none bg-black border border-slate-850 text-white flex items-center justify-center font-bold text-[8px] z-10">
+          🏢
+          </span>
+          <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-none text-left text-[11px] font-bold text-[#1c1b1f] flex justify-between items-center">
+          <div>
+          <span className="text-[#1c1b1f]">MIHAN Depot</span>
+          <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">HQ</p>
+          </div>
+          <span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.5 rounded font-black uppercase font-mono">
+          Depart
+          </span>
+          </div>
+          </div>
+          )}
 
- <div className={`flex-grow p-3 border rounded-none flex items-center justify-between gap-3 transition-all
- ${
- isMissed
- ? "bg-[#f7f7f7]/40 border-red-150 text-[#9a9a9a]"
- : "bg-white border-[#e8e8e8] hover:bg-[#f7f7f7]/50"
- }
- `}>
- <div className="flex flex-col text-left gap-0.5">
- <div className="font-extrabold text-xs text-[#1c1b1f] flex items-center gap-1.5">
- {isMissed ? <del>{empName}</del> : empName}
- {isFemale && <span className="text-[8px] bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f] px-1 rounded font-black uppercase">F</span>}
- </div>
- <div className="text-[10px] text-[#6b6b6b] font-semibold truncate max-w-[160px]" title={empAddress}>
- {empAddress.split(" | ")[0]}
- </div>
- <div className="flex items-center gap-2 mt-1">
- <span className="text-[9px] text-[#9a9a9a] font-mono">
- ETA: +{stop.etaMinutes} mins
- </span>
- {stop.employee && (
- <button
- type="button"
- onClick={(e) => {
- e.stopPropagation();
- setEditingEmployee(stop.employee);
- }}
- className="text-[9px] text-[#ff4f00] hover:underline font-bold print:hidden"
- >
- Edit info
- </button>
- )}
- </div>
- </div>
+          {(activeVarIdx !== -1 ? routeVariations[activeVarIdx].stops : sortedStops).map((stop, idx) => {
+          const isFemale = stop.employee ? stop.employee.gender === "FEMALE" : (stop as any).gender === "FEMALE";
+          const empId = stop.employee ? stop.employee.id : (stop as any).employeeId;
+          const empName = stop.employee ? stop.employee.name : (stop as any).employeeName;
+          const empAddress = stop.employee ? stop.employee.address : (stop as any).address;
+          const isMissed = stop.status === "SKIPPED" || (stop as any).status === "SKIPPED";
 
- {/* Attendance Toggle */}
- {stop.employee && (
- <button
- type="button"
- onClick={async (e) => {
- e.stopPropagation();
- await handleToggleStopStatus(stop as any);
- }}
- className={`px-2.5 py-1 rounded-none text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer print:hidden
- ${
- stop.status === "PENDING" ? "bg-[#f7f7f7] border-[#d0d0d0] text-slate-650 hover:bg-slate-200" :
- stop.status === "REACHED" ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f] hover:bg-[#f7f7f7]" :
- stop.status === "BOARDED" ? "bg-[#f7f7f7] border-emerald-250 text-[#1c1b1f] hover:bg-[#f7f7f7]" :
- "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f] hover:bg-[#f7f7f7]"
- }
- `}
- >
- {stop.status === "PENDING" ? "PENDING" :
- stop.status === "REACHED" ? "REACHED" :
- stop.status === "BOARDED" ? "BOARDED" : "SKIPPED"}
- </button>
- )}
- </div>
- </div>
- );
- })}
+          return (
+          <div key={stop.id || empId} className="relative flex items-center gap-3">
+          <span className={`absolute -left-[23px] w-4.5 h-4.5 rounded-none flex items-center justify-center font-mono font-black text-[9px] border z-10
+          ${
+          isFemale
+          ? "bg-[#1c1b1f] border-[#1c1b1f] text-white"
+          : "bg-white border-slate-350 text-[#6b6b6b]"
+          }
+          `}>
+          {idx + 1}
+          </span>
 
- {route.isPickup && (
- <div className="relative flex items-center gap-3">
- <span className="absolute -left-[23px] w-4.5 h-4.5 rounded-none bg-black border border-slate-850 text-white flex items-center justify-center font-bold text-[8px] z-10">
- 🏢
- </span>
- <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-none text-left text-[11px] font-bold text-[#1c1b1f] flex justify-between items-center">
- <div>
- <span className="text-[#1c1b1f]">MIHAN Depot</span>
- <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">HQ</p>
- </div>
- <span className="text-[8px] bg-slate-200 text-slate-650 px-1.5 py-0.5 rounded font-black uppercase font-mono">
- Arrive (+{(activeVarIdx !== -1 ? routeVariations[activeVarIdx].totalDuration : route.totalDuration)}m)
- </span>
- </div>
- </div>
- )}
- </div>
- </div>
+          <div className={`flex-grow p-3 border rounded-none flex items-center justify-between gap-3 transition-all
+          ${
+          isMissed
+          ? "bg-[#f7f7f7]/40 border-red-150 text-[#9a9a9a]"
+          : "bg-white border-[#e8e8e8] hover:bg-[#f7f7f7]/50"
+          }
+          `}>
+          <div className="flex flex-col text-left gap-0.5">
+          <div className="font-extrabold text-xs text-[#1c1b1f] flex items-center gap-1.5">
+          {isMissed ? <del>{empName}</del> : empName}
+          {isFemale && <span className="text-[8px] bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f] px-1 rounded font-black uppercase">F</span>}
+          </div>
+          <div className="text-[10px] text-[#6b6b6b] font-semibold truncate max-w-[160px]" title={empAddress}>
+          {empAddress.split(" | ")[0]}
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+          <span className="text-[9px] text-[#9a9a9a] font-mono">
+          ETA: +{stop.etaMinutes} mins
+          </span>
+          {stop.employee && (
+          <button
+          type="button"
+          onClick={(e) => {
+          e.stopPropagation();
+          setEditingEmployee(stop.employee);
+          }}
+          className="text-[9px] text-[#ff4f00] hover:underline font-bold print:hidden"
+          >
+          Edit info
+          </button>
+          )}
+          </div>
+          </div>
 
- {/* Violations alerts inside card */}
- {activeViolationsCount > 0 && (
- <div className="p-3 bg-[#f7f7f7] border border-red-150 rounded-none flex flex-col gap-1 text-left text-[10px] text-[#1c1b1f] font-semibold animate-pulse">
- <div className="flex items-center gap-1 font-bold text-red-950">
- <ShieldAlert className="w-4 h-4 text-[#6b6b6b]" />
- <span>{activeViolationsCount} Safety Compliance Warnings</span>
- </div>
- {route.violations.filter(v => !v.resolved).map((v, idx) => (
- <div key={getViolationKey(v, idx, route.id)} className="pl-5 leading-normal text-red-750">
- • {v.notes}
- </div>
- ))}
- </div>
- )}
- </div>
- );
- })}
- </div>
- 
- {visibleCabsCount < manifestRoutes.length && (
- <div className="flex justify-center mt-2 print:hidden">
- <button
- onClick={() => setVisibleCabsCount(manifestRoutes.length)}
- className="px-6 py-2.5 bg-[#1c1b1f] text-white rounded-none text-xs font-bold hover:bg-black transition shadow-none"
- >
- Load More Cabs ({manifestRoutes.length - visibleCabsCount} remaining) &raquo;
- </button>
- </div>
- )}
+          {/* Attendance Toggle */}
+          {stop.employee && (
+          <button
+          type="button"
+          onClick={async (e) => {
+          e.stopPropagation();
+          await handleToggleStopStatus(stop as any);
+          }}
+          className={`px-2.5 py-1 rounded-none text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer print:hidden
+          ${
+          stop.status === "PENDING" ? "bg-[#f7f7f7] border-[#d0d0d0] text-slate-650 hover:bg-slate-200" :
+          stop.status === "REACHED" ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f] hover:bg-[#f7f7f7]" :
+          stop.status === "BOARDED" ? "bg-[#f7f7f7] border-emerald-250 text-[#1c1b1f] hover:bg-[#f7f7f7]" :
+          "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f] hover:bg-[#f7f7f7]"
+          }
+          `}
+          >
+          {stop.status === "PENDING" ? "PENDING" :
+          stop.status === "REACHED" ? "REACHED" :
+          stop.status === "BOARDED" ? "BOARDED" : "SKIPPED"}
+          </button>
+          )}
+          </div>
+          </div>
+          );
+          })}
+
+          {route.isPickup && (
+          <div className="relative flex items-center gap-3">
+          <span className="absolute -left-[23px] w-4.5 h-4.5 rounded-none bg-black border border-slate-850 text-white flex items-center justify-center font-bold text-[8px] z-10">
+          🏢
+          </span>
+          <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-none text-left text-[11px] font-bold text-[#1c1b1f] flex justify-between items-center">
+          <div>
+          <span className="text-[#1c1b1f]">MIHAN Depot</span>
+          <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">HQ</p>
+          </div>
+          <span className="text-[8px] bg-slate-200 text-slate-650 px-1.5 py-0.5 rounded font-black uppercase font-mono">
+          Arrive (+{(activeVarIdx !== -1 ? routeVariations[activeVarIdx].totalDuration : route.totalDuration)}m)
+          </span>
+          </div>
+          </div>
+          )}
+          </div>
+          </div>
+
+          {/* Violations alerts inside card */}
+          {activeViolationsCount > 0 && (
+          <div className="p-3 bg-[#f7f7f7] border border-red-150 rounded-none flex flex-col gap-1 text-left text-[10px] text-[#1c1b1f] font-semibold animate-pulse">
+          <div className="flex items-center gap-1 font-bold text-red-950">
+          <ShieldAlert className="w-4 h-4 text-[#6b6b6b]" />
+          <span>{activeViolationsCount} Safety Compliance Warnings</span>
+          </div>
+          {route.violations.filter(v => !v.resolved).map((v, idx) => (
+          <div key={getViolationKey(v, idx, route.id)} className="pl-5 leading-normal text-red-750">
+          • {v.notes}
+          </div>
+          ))}
+          </div>
+          )}
+          </div>
+          );
+          })}
+          </div>
+          </div>
+        )}
+        </>
+        )}
+      </div>
+    );
+  })}
  </div>
  )}
  </div>

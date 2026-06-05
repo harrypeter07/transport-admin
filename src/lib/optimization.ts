@@ -990,9 +990,17 @@ export async function optimizeRoutes(
       const lrPerm = lrSafe.map(e => candidateEmps.indexOf(e));
       const lrReordered = reorderMatrixForRoute(lrDist, lrDur, lrPerm, 0, lrN - 1);
 
+      // Last resort: use fully relaxed constraints (no cluster radius, 2x distance/duration)
+      const lrRelaxedConstraints: RouteConstraints = {
+        maxRouteDistanceKm: constraints.maxRouteDistanceKm * 2.5,
+        maxRouteDurationMin: constraints.maxRouteDurationMin * 2.5,
+        maxClusterRadiusKm: 9999,
+        maxEmployeeDetourKm: 9999,
+      };
+
       const lrV = verifyRouteConstraints(
         lrSafe, isPickup, cabWithSpace.startPoint || depot, depot,
-        lrReordered.distanceMatrix, lrReordered.durationMatrix, constraints
+        lrReordered.distanceMatrix, lrReordered.durationMatrix, lrRelaxedConstraints
       );
 
       if (lrV.ok) {
@@ -1020,6 +1028,63 @@ export async function optimizeRoutes(
           employeeIds: [emp.id],
         });
       }
+    }
+  }
+
+  // --- GUARANTEED SEAT ASSIGNMENT PASS ---
+  // Any employee still unassigned where a cab has empty seats gets force-assigned,
+  // ignoring all radius/distance/duration constraints. Seats exist → no one gets left out.
+  if (remainingEmployees.length > 0) {
+    for (let empIdx = remainingEmployees.length - 1; empIdx >= 0; empIdx--) {
+      const emp = remainingEmployees[empIdx];
+      // Find any route with a free seat
+      const routeWithSpace = optimizedRoutes.find(r => r.stops.length < r.capacity);
+      if (!routeWithSpace) break; // truly no seats left
+
+      const existingEmps = routeWithSpace.stops
+        .map(s => employees.find(e => e.id === s.employeeId))
+        .filter((e): e is OptimizeEmployee => e !== undefined);
+
+      const allEmps = [...existingEmps, emp];
+      const gsCabIdx = sortedCabs.findIndex(c => c.id === routeWithSpace.cabId);
+      const gsIndices = [
+        gsCabIdx >= 0 ? gsCabIdx : depotGlobalIdx,
+        ...allEmps.map(e => empToGlobalIdx.get(e.id)).filter((idx): idx is number => idx !== undefined),
+        depotGlobalIdx,
+      ];
+      const gsN = gsIndices.length;
+      const gsDist = Array.from({ length: gsN }, (_, row) =>
+        gsIndices.map(col => globalDist[gsIndices[row]][col])
+      );
+      const gsDur = Array.from({ length: gsN }, (_, row) =>
+        gsIndices.map(col => globalDur[gsIndices[row]][col])
+      );
+
+      const gsOrdered = getOptimalPermutation(allEmps, isPickup, gsDist, routeWithSpace.startPoint || depot);
+      const { route: gsSafe } = enforceSafetyRules(gsOrdered, isPickup, false);
+      const gsPerm = gsSafe.map(e => allEmps.indexOf(e));
+      const gsReordered = reorderMatrixForRoute(gsDist, gsDur, gsPerm, 0, gsN - 1);
+
+      const { stops: gsStops } = buildRouteStopsFromMetrics(
+        gsSafe, isPickup, routeWithSpace.startPoint || depot, depot,
+        gsReordered.distanceMatrix, gsReordered.durationMatrix
+      );
+
+      const gsMetrics = computeRouteMetrics(
+        gsSafe, isPickup, routeWithSpace.startPoint || depot, depot,
+        gsReordered.distanceMatrix, gsReordered.durationMatrix
+      );
+
+      routeWithSpace.stops = gsStops;
+      routeWithSpace.totalDistance = gsMetrics.totalDistance;
+      routeWithSpace.totalDuration = gsMetrics.totalDuration + (isPickup ? 10 : 0);
+      remainingEmployees.splice(empIdx, 1);
+
+      warnings.push({
+        type: "CONSTRAINT_RELAXED",
+        message: `Employee ${emp.name} force-assigned to ${routeWithSpace.vehicleNumber} (guaranteed seat — constraints bypassed)`,
+        employeeIds: [emp.id],
+      });
     }
   }
 
@@ -1844,8 +1909,10 @@ function clusterMaxUtilization(
 /**
  * Strategy 2 — MINIMIZE_TIME
  * Keeps clusters tight (20 min road-duration radius from seed).
- * Outliers seed their own separate cab — shorter rides for everyone.
- * May leave some cab seats empty.
+ * Scans ALL remaining employees against the seed and takes those within the
+ * time/radius limits — sorted by road duration ascending. This prevents the
+ * old bug where breaking on the single nearest (by km) caused employees that
+ * are close in time (but not the absolute nearest by km) to be skipped.
  */
 function clusterMinTime(
   employees: OptimizeEmployee[],
@@ -1864,13 +1931,31 @@ function clusterMinTime(
     const seedIdx = idxFurthestFromDepot(remaining, depot, roadData);
     const seed = remaining.splice(seedIdx, 1)[0];
     const cluster: OptimizeEmployee[] = [seed];
+    const seedGlobalIdx = roadData?.empToGlobalIdx.get(seed.id);
 
     while (cluster.length < cab.capacity && remaining.length > 0) {
-      const { idx, dist, roadDur } = idxNearestTo(remaining, seed, roadData);
-      if (dist > maxClusterRadiusKm) break;
-      const breakDur = roadDur ?? dist;
-      if (breakDur > radiusMin) break;
-      cluster.push(remaining.splice(idx, 1)[0]);
+      // Score every remaining employee from the seed — pick by road duration
+      type Cand = { remIdx: number; dist: number; dur: number };
+      const eligible: Cand[] = [];
+      for (let j = 0; j < remaining.length; j++) {
+        const emp = remaining[j];
+        let dist: number, dur: number;
+        if (seedGlobalIdx !== undefined && roadData) {
+          const gIdx = roadData.empToGlobalIdx.get(emp.id);
+          if (gIdx === undefined) continue;
+          dist = roadData.dist[seedGlobalIdx][gIdx];
+          dur  = roadData.dur[seedGlobalIdx][gIdx];
+        } else {
+          dist = getDistance({ x: emp.x, y: emp.y }, { x: seed.x, y: seed.y });
+          dur  = dist / AVG_SPEED;
+        }
+        if (dist <= maxClusterRadiusKm && dur <= radiusMin) {
+          eligible.push({ remIdx: j, dist, dur });
+        }
+      }
+      if (eligible.length === 0) break;
+      eligible.sort((a, b) => a.dur - b.dur);
+      cluster.push(remaining.splice(eligible[0].remIdx, 1)[0]);
     }
     assignments.push({ cab, cluster });
   }
@@ -1881,6 +1966,8 @@ function clusterMinTime(
  * Strategy 3 — BALANCED
  * 30 min road-duration radius, targets ~80% fill before stopping.
  * Balances commute time vs cab utilization.
+ * Scans all remaining employees within the km radius and stops early only
+ * when targetFill is reached AND the best remaining candidate exceeds 30 min.
  */
 function clusterBalanced(
   employees: OptimizeEmployee[],
@@ -1901,13 +1988,32 @@ function clusterBalanced(
     const seedIdx = idxFurthestFromDepot(remaining, depot, roadData);
     const seed = remaining.splice(seedIdx, 1)[0];
     const cluster: OptimizeEmployee[] = [seed];
+    const seedGlobalIdx = roadData?.empToGlobalIdx.get(seed.id);
 
     while (cluster.length < cab.capacity && remaining.length > 0) {
-      const { idx, dist, roadDur } = idxNearestTo(remaining, seed, roadData);
-      if (dist > maxClusterRadiusKm) break;
-      const breakDur = roadDur ?? (idxNearestTo(remaining, seed).dist);
-      if (breakDur > RADIUS_MIN && cluster.length >= targetFill) break;
-      cluster.push(remaining.splice(idx, 1)[0]);
+      type Cand = { remIdx: number; dist: number; dur: number };
+      const eligible: Cand[] = [];
+      for (let j = 0; j < remaining.length; j++) {
+        const emp = remaining[j];
+        let dist: number, dur: number;
+        if (seedGlobalIdx !== undefined && roadData) {
+          const gIdx = roadData.empToGlobalIdx.get(emp.id);
+          if (gIdx === undefined) continue;
+          dist = roadData.dist[seedGlobalIdx][gIdx];
+          dur  = roadData.dur[seedGlobalIdx][gIdx];
+        } else {
+          dist = getDistance({ x: emp.x, y: emp.y }, { x: seed.x, y: seed.y });
+          dur  = dist / AVG_SPEED;
+        }
+        if (dist <= maxClusterRadiusKm) {
+          eligible.push({ remIdx: j, dist, dur });
+        }
+      }
+      if (eligible.length === 0) break;
+      eligible.sort((a, b) => a.dist - b.dist);
+      // Stop early only when targetFill reached AND best remaining exceeds RADIUS_MIN
+      if (cluster.length >= targetFill && eligible[0].dur > RADIUS_MIN) break;
+      cluster.push(remaining.splice(eligible[0].remIdx, 1)[0]);
     }
     assignments.push({ cab, cluster });
   }
@@ -1926,6 +2032,13 @@ async function buildRoutesFromAssignments(
   constraints: RouteConstraints = defaultConstraints()
 ): Promise<OptimizedRoute[]> {
   const routes: OptimizedRoute[] = [];
+
+  // Seed uncovered with employees that the cluster function never placed into any cab.
+  // Cluster functions (clusterMinTime, clusterBalanced) use a local `remaining` array
+  // and drop employees that fall outside duration/radius thresholds — they never get
+  // into assignments at all, so they'd be silently lost without this seeding step.
+  const allClusteredIds = new Set(assignments.flatMap(a => a.cluster.map(e => e.id)));
+  const uncovered: OptimizeEmployee[] = employees.filter(e => !allClusteredIds.has(e.id));
 
   for (const { cab, cluster } of assignments) {
     const startPoint = cab.startPoint || depot;
@@ -1993,7 +2106,9 @@ async function buildRoutesFromAssignments(
         );
         routeAccepted = true;
       } else {
-        attemptCluster.pop();
+        // Push shed employee into uncovered pool — never silently discard
+        const shed = attemptCluster.pop();
+        if (shed) uncovered.push(shed);
       }
     }
 
@@ -2011,6 +2126,194 @@ async function buildRoutesFromAssignments(
       violations: finalViolations,
       hasEscort: false,
     });
+  }
+
+  // --- REDISTRIBUTION PASS ---
+  // Employees shed from failing clusters (uncovered[]) get a second chance.
+  // Each is tried against every existing route with spare capacity.
+  // Radius is relaxed 1.5× for redistribution. Strategy identity is preserved
+  // because routes were already built with strategy-specific cluster composition.
+  if (uncovered.length > 0) {
+    for (let empIdx = uncovered.length - 1; empIdx >= 0; empIdx--) {
+      const emp = uncovered[empIdx];
+      let placed = false;
+
+      for (const route of routes) {
+        if (route.stops.length >= route.capacity) continue;
+
+        const routeEmps = route.stops
+          .map(s => employees.find(e => e.id === s.employeeId))
+          .filter((e): e is OptimizeEmployee => e !== undefined);
+        if (routeEmps.length === 0) continue;
+
+        const centroid = {
+          x: routeEmps.reduce((s, e) => s + e.x, 0) / routeEmps.length,
+          y: routeEmps.reduce((s, e) => s + e.y, 0) / routeEmps.length,
+        };
+        if (getDistance(emp, centroid) > constraints.maxClusterRadiusKm * 1.5) continue;
+
+        const trialCluster = [...routeEmps, emp];
+        const routeStartPoint = route.startPoint || depot;
+
+        let subDist: number[][], subDur: number[][], subSize: number;
+        if (roadData) {
+          const cabGIdx = roadData.cabToGlobalIdx.get(route.cabId) ?? roadData.depotGlobalIdx;
+          const idxs = [
+            cabGIdx,
+            ...trialCluster.map(e => roadData.empToGlobalIdx.get(e.id)).filter((i): i is number => i !== undefined),
+            roadData.depotGlobalIdx,
+          ];
+          subSize = idxs.length;
+          subDist = Array.from({ length: subSize }, (_, r) => idxs.map(c => roadData.dist[idxs[r]][c]));
+          subDur  = Array.from({ length: subSize }, (_, r) => idxs.map(c => roadData.dur[idxs[r]][c]));
+        } else {
+          const pts: Point[] = [routeStartPoint, ...trialCluster.map(e => ({ x: e.x, y: e.y })), depot];
+          subSize = pts.length;
+          const mx = await fetchGoogleMapsMatrix(pts, apiKey);
+          subDist = mx.distanceMatrix;
+          subDur  = mx.durationMatrix;
+        }
+
+        const ordered = getOptimalPermutation(trialCluster, isPickup, subDist, routeStartPoint);
+        const { route: safeOrdered } = enforceSafetyRules(ordered, isPickup, false);
+        const perm = safeOrdered.map(e => trialCluster.indexOf(e));
+        const reordered = reorderMatrixForRoute(subDist, subDur, perm, 0, subSize - 1);
+
+        const v = verifyRouteConstraints(
+          safeOrdered, isPickup, routeStartPoint, depot,
+          reordered.distanceMatrix, reordered.durationMatrix, constraints
+        );
+        if (v.ok) {
+          const { stops } = buildRouteStopsFromMetrics(
+            safeOrdered, isPickup, routeStartPoint, depot,
+            reordered.distanceMatrix, reordered.durationMatrix
+          );
+          route.stops = stops;
+          route.totalDistance = v.totalDistance;
+          route.totalDuration = v.totalDuration + (isPickup ? 10 : 0);
+          uncovered.splice(empIdx, 1);
+          placed = true;
+          break;
+        }
+      }
+
+      // Last resort: force into the route with most spare capacity (relax constraints 1.3×)
+      if (!placed) {
+        const candidate = routes
+          .filter(r => r.stops.length < r.capacity)
+          .sort((a, b) => (b.capacity - b.stops.length) - (a.capacity - a.stops.length))[0];
+        if (!candidate) continue; // genuine capacity shortfall — no seats available at all
+
+        const routeEmps = candidate.stops
+          .map(s => employees.find(e => e.id === s.employeeId))
+          .filter((e): e is OptimizeEmployee => e !== undefined);
+        const trialCluster = [...routeEmps, emp];
+        const routeStartPoint = candidate.startPoint || depot;
+
+        let subDist: number[][], subDur: number[][], subSize: number;
+        if (roadData) {
+          const cabGIdx = roadData.cabToGlobalIdx.get(candidate.cabId) ?? roadData.depotGlobalIdx;
+          const idxs = [
+            cabGIdx,
+            ...trialCluster.map(e => roadData.empToGlobalIdx.get(e.id)).filter((i): i is number => i !== undefined),
+            roadData.depotGlobalIdx,
+          ];
+          subSize = idxs.length;
+          subDist = Array.from({ length: subSize }, (_, r) => idxs.map(c => roadData.dist[idxs[r]][c]));
+          subDur  = Array.from({ length: subSize }, (_, r) => idxs.map(c => roadData.dur[idxs[r]][c]));
+        } else {
+          const pts: Point[] = [routeStartPoint, ...trialCluster.map(e => ({ x: e.x, y: e.y })), depot];
+          subSize = pts.length;
+          const mx = await fetchGoogleMapsMatrix(pts, apiKey);
+          subDist = mx.distanceMatrix;
+          subDur  = mx.durationMatrix;
+        }
+
+        const ordered = getOptimalPermutation(trialCluster, isPickup, subDist, routeStartPoint);
+        const { route: safeOrdered } = enforceSafetyRules(ordered, isPickup, false);
+        const perm = safeOrdered.map(e => trialCluster.indexOf(e));
+        const reordered = reorderMatrixForRoute(subDist, subDur, perm, 0, subSize - 1);
+
+        const relaxed: RouteConstraints = {
+          ...constraints,
+          maxRouteDistanceKm: Infinity,
+          maxRouteDurationMin: Infinity,
+          maxClusterRadiusKm: Infinity,
+          maxEmployeeDetourKm: Infinity,
+        };
+        const v = verifyRouteConstraints(
+          safeOrdered, isPickup, routeStartPoint, depot,
+          reordered.distanceMatrix, reordered.durationMatrix, relaxed
+        );
+        if (v.ok) {
+          const { stops } = buildRouteStopsFromMetrics(
+            safeOrdered, isPickup, routeStartPoint, depot,
+            reordered.distanceMatrix, reordered.durationMatrix
+          );
+          candidate.stops = stops;
+          candidate.totalDistance = v.totalDistance;
+          candidate.totalDuration = v.totalDuration + (isPickup ? 10 : 0);
+          uncovered.splice(empIdx, 1);
+        }
+        // If still not placeable — genuine capacity shortfall, leave in uncovered
+      }
+    }
+
+    // --- GUARANTEED SEAT PASS ---
+    // After all redistribution attempts, if seats still exist and employees are still uncovered,
+    // force-assign them unconditionally. Physical capacity > routing aesthetics.
+    for (let empIdx = uncovered.length - 1; empIdx >= 0; empIdx--) {
+      const emp = uncovered[empIdx];
+      const routeWithSpace = routes
+        .filter(r => r.stops.length < r.capacity)
+        .sort((a, b) => (a.stops.length / a.capacity) - (b.stops.length / b.capacity))[0]; // pick least-full route
+      if (!routeWithSpace) break; // genuine capacity shortfall
+
+      const existingEmps = routeWithSpace.stops
+        .map(s => employees.find(e => e.id === s.employeeId))
+        .filter((e): e is OptimizeEmployee => e !== undefined);
+
+      const allEmps = [...existingEmps, emp];
+      const gsStartPoint = routeWithSpace.startPoint || depot;
+
+      let gsDist: number[][], gsDur: number[][], gsSize: number;
+      if (roadData) {
+        const cabGIdx = roadData.cabToGlobalIdx.get(routeWithSpace.cabId) ?? roadData.depotGlobalIdx;
+        const idxs = [
+          cabGIdx,
+          ...allEmps.map(e => roadData.empToGlobalIdx.get(e.id)).filter((i): i is number => i !== undefined),
+          roadData.depotGlobalIdx,
+        ];
+        gsSize = idxs.length;
+        gsDist = Array.from({ length: gsSize }, (_, r) => idxs.map(c => roadData.dist[idxs[r]][c]));
+        gsDur  = Array.from({ length: gsSize }, (_, r) => idxs.map(c => roadData.dur[idxs[r]][c]));
+      } else {
+        const pts: Point[] = [gsStartPoint, ...allEmps.map(e => ({ x: e.x, y: e.y })), depot];
+        gsSize = pts.length;
+        const mx = await fetchGoogleMapsMatrix(pts, apiKey);
+        gsDist = mx.distanceMatrix;
+        gsDur  = mx.durationMatrix;
+      }
+
+      const gsOrdered = getOptimalPermutation(allEmps, isPickup, gsDist, gsStartPoint);
+      const { route: gsSafe } = enforceSafetyRules(gsOrdered, isPickup, false);
+      const gsPerm = gsSafe.map(e => allEmps.indexOf(e));
+      const gsReordered = reorderMatrixForRoute(gsDist, gsDur, gsPerm, 0, gsSize - 1);
+
+      const { stops: gsStops } = buildRouteStopsFromMetrics(
+        gsSafe, isPickup, gsStartPoint, depot,
+        gsReordered.distanceMatrix, gsReordered.durationMatrix
+      );
+      const gsMetrics = computeRouteMetrics(
+        gsSafe, isPickup, gsStartPoint, depot,
+        gsReordered.distanceMatrix, gsReordered.durationMatrix
+      );
+
+      routeWithSpace.stops = gsStops;
+      routeWithSpace.totalDistance = gsMetrics.totalDistance;
+      routeWithSpace.totalDuration = gsMetrics.totalDuration + (isPickup ? 10 : 0);
+      uncovered.splice(empIdx, 1);
+    }
   }
 
   return routes;

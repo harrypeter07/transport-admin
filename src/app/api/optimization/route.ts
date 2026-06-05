@@ -31,8 +31,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
 
-    const whereClause: any = {};
-    whereClause.date = date || new Date().toISOString().split("T")[0];
+    const whereClause: any = {
+      date: date || new Date().toISOString().split("T")[0],
+      cab: { status: { not: "INACTIVE" } }
+    };
 
     const routes = await prisma.route.findMany({
       where: whereClause,
