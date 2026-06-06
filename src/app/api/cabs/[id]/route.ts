@@ -124,9 +124,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       if (cab) {
         await prisma.cab.update({
           where: { id },
-          data: { 
-            status: "INACTIVE", 
-            vehicleNumber: `${cab.vehicleNumber}_deleted_${Date.now()}` 
+          data: {
+            status: "INACTIVE",
+            vehicleNumber: `${cab.vehicleNumber}_deleted_${Date.now()}`,
+            shifts: { set: [] },
           }
         });
       }

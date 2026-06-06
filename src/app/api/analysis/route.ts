@@ -29,7 +29,7 @@ export async function GET(req: Request) {
  },
  });
 
- const totalCabsInSystem = await prisma.cab.count();
+  const totalCabsInSystem = await prisma.cab.count({ where: { status: { not: "INACTIVE" } } });
  const totalDriversInSystem = totalCabsInSystem;
 
  // Load settings for dynamic depot, fuel price, and currency

@@ -42,7 +42,7 @@ export async function GET(req: Request) {
       }
 
       const subordinates = await prisma.employee.findMany({
-        where: { managerId: managerEmployee.id }
+        where: { managerId: managerEmployee.id, status: "ACTIVE" }
       });
       const subordinateIds = subordinates.map(s => s.id);
       const subordinateUserIds = subordinates.filter(s => s.userId).map(s => s.userId as string);

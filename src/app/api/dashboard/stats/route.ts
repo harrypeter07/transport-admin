@@ -9,27 +9,29 @@ export async function GET() {
  }
 
  try {
- const [
- totalEmployees,
- totalCabs,
- totalRoutes,
- employeesByDesignation,
- employeesByShift,
- activeCabs
- ] = await Promise.all([
- prisma.employee.count(),
- prisma.cab.count(),
- prisma.route.count(),
- prisma.employee.groupBy({
- by: ['designation'],
- _count: { id: true }
- }),
- prisma.employee.groupBy({
- by: ['shiftId'],
- _count: { id: true }
- }),
- prisma.cab.count({ where: { status: 'ACTIVE' } }),
- ]);
+  const [
+  totalEmployees,
+  totalCabs,
+  totalRoutes,
+  employeesByDesignation,
+  employeesByShift,
+  activeCabs
+  ] = await Promise.all([
+  prisma.employee.count({ where: { status: "ACTIVE" } }),
+  prisma.cab.count({ where: { status: { not: "INACTIVE" } } }),
+  prisma.route.count(),
+  prisma.employee.groupBy({
+  by: ['designation'],
+  where: { status: "ACTIVE" },
+  _count: { id: true }
+  }),
+  prisma.employee.groupBy({
+  by: ['shiftId'],
+  where: { status: "ACTIVE" },
+  _count: { id: true }
+  }),
+  prisma.cab.count({ where: { status: 'ACTIVE' } }),
+  ]);
 
  // Fetch shift names for the employeesByShift mapping
  const shifts = await prisma.shift.findMany();

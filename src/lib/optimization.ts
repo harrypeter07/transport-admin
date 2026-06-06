@@ -59,6 +59,7 @@ export interface OptimizedRoute {
     notes: string;
   }[];
   hasEscort: boolean;
+  tripSequence?: number;
 }
 
 export interface RouteConstraints {
@@ -730,9 +731,8 @@ export async function optimizeRoutes(
     const seed = remainingEmployees[seedIdx];
     remainingEmployees.splice(seedIdx, 1);
 
-    // Find the closest employees to the seed by road distance to fill the capacity
+    // Build cluster around the seed by proximity to the growing cluster
     const cluster: OptimizeEmployee[] = [seed];
-    const seedGIdx = empToGlobalIdx.get(seed.id) ?? depotGlobalIdx;
 
     while (cluster.length < capacity && remainingEmployees.length > 0) {
       let closestIdx = 0;
@@ -741,11 +741,23 @@ export async function optimizeRoutes(
       for (let j = 0; j < remainingEmployees.length; j++) {
         const gIdx = empToGlobalIdx.get(remainingEmployees[j].id);
         if (gIdx === undefined) continue;
-        const dur = globalDur[seedGIdx][gIdx];
-        const dist = globalDist[seedGIdx][gIdx];
-        if (dist < minDist) {
-          minDist = dist;
-          minDuration = dur;
+        // Find the shortest road distance from any current cluster member
+        // to this candidate — grows the cluster around its full shape,
+        // not just the original seed point.
+        let bestDist = Infinity;
+        let bestDur = Infinity;
+        for (const member of cluster) {
+          const mIdx = empToGlobalIdx.get(member.id);
+          if (mIdx === undefined) continue;
+          const d = globalDist[mIdx][gIdx];
+          if (d < bestDist) {
+            bestDist = d;
+            bestDur = globalDur[mIdx][gIdx];
+          }
+        }
+        if (bestDist < minDist) {
+          minDist = bestDist;
+          minDuration = bestDur;
           closestIdx = j;
         }
       }
@@ -863,6 +875,96 @@ export async function optimizeRoutes(
 
         const shedEmployee = attemptCluster.splice(shedIdx, 1)[0];
         remainingEmployees.push(shedEmployee);
+      }
+    }
+  }
+
+  // --- ROUTE CONSOLIDATION PASS ---
+  // Move passengers from underfilled routes into fuller routes with spare capacity.
+  // Prevents the Ashish+Sejal scenario: 1 passenger on one route while another has
+  // empty seats. Frees up vehicles when a route can be emptied entirely.
+  if (optimizedRoutes.length > 1) {
+    // Sort source routes by fill ratio ascending — emptiest first
+    const srcIndices = [...optimizedRoutes]
+      .map((r, i) => ({ idx: i, fill: r.stops.length / Math.max(r.capacity, 1) }))
+      .filter(c => c.fill < 0.5)
+      .sort((a, b) => a.fill - b.fill)
+      .map(c => c.idx);
+
+    for (const srcIdx of srcIndices) {
+      const srcRoute = optimizedRoutes[srcIdx];
+      if (!srcRoute || srcRoute.stops.length === 0) continue;
+
+      let allMoved = true;
+
+      for (const stop of [...srcRoute.stops]) {
+        const emp = employees.find(e => e.id === stop.employeeId);
+        if (!emp) { allMoved = false; break; }
+
+        let moved = false;
+        for (let dstIdx = 0; dstIdx < optimizedRoutes.length; dstIdx++) {
+          if (dstIdx === srcIdx) continue;
+          const dstRoute = optimizedRoutes[dstIdx];
+          if (dstRoute.stops.length >= dstRoute.capacity) continue;
+
+          const dstEmployees = dstRoute.stops
+            .map(s => employees.find(e => e.id === s.employeeId))
+            .filter((e): e is OptimizeEmployee => e !== undefined);
+          if (dstEmployees.length === 0) continue;
+
+          const centroid = {
+            x: dstEmployees.reduce((s, e) => s + e.x, 0) / dstEmployees.length,
+            y: dstEmployees.reduce((s, e) => s + e.y, 0) / dstEmployees.length,
+          };
+          if (getDistance(emp, centroid) > constraints.maxClusterRadiusKm) continue;
+
+          const trialCluster = [...dstEmployees, emp];
+          const cabIdx = sortedCabs.findIndex(c => c.id === dstRoute.cabId);
+          const trialIndices = [
+            cabIdx >= 0 ? cabIdx : depotGlobalIdx,
+            ...trialCluster.map(e => empToGlobalIdx.get(e.id)).filter((idx): idx is number => idx !== undefined),
+            depotGlobalIdx,
+          ];
+          const trialN = trialIndices.length;
+          const trialDist = Array.from({ length: trialN }, (_, row) =>
+            trialIndices.map(col => globalDist[trialIndices[row]][col])
+          );
+          const trialDur = Array.from({ length: trialN }, (_, row) =>
+            trialIndices.map(col => globalDur[trialIndices[row]][col])
+          );
+
+          const ordered = getOptimalPermutation(trialCluster, isPickup, trialDist, dstRoute.startPoint || depot);
+          const { route: safeOrdered } = enforceSafetyRules(ordered, isPickup, false);
+          const perm = safeOrdered.map(e => trialCluster.indexOf(e));
+          const reordered = reorderMatrixForRoute(trialDist, trialDur, perm, 0, trialN - 1);
+
+          const v = verifyRouteConstraints(
+            safeOrdered, isPickup, dstRoute.startPoint || depot, depot,
+            reordered.distanceMatrix, reordered.durationMatrix, constraints
+          );
+
+          if (v.ok) {
+            const { stops } = buildRouteStopsFromMetrics(
+              safeOrdered, isPickup, dstRoute.startPoint || depot, depot,
+              reordered.distanceMatrix, reordered.durationMatrix
+            );
+            dstRoute.stops = stops;
+            dstRoute.totalDistance = v.totalDistance;
+            dstRoute.totalDuration = v.totalDuration + (isPickup ? 10 : 0);
+            moved = true;
+            break;
+          }
+        }
+
+        if (!moved) { allMoved = false; break; }
+      }
+
+      if (allMoved) {
+        optimizedRoutes.splice(srcIdx, 1);
+        // Adjust remaining srcIndices that point past the removed element
+        for (let ci = 0; ci < srcIndices.length; ci++) {
+          if (srcIndices[ci] > srcIdx) srcIndices[ci]--;
+        }
       }
     }
   }
@@ -1836,6 +1938,7 @@ export interface StrategyPlan {
   totalDistance: number;          // km (sum across all routes)
   avgCommuteMins: number;         // average commute time per employee
   totalViolations: number;
+  strategyScore: number;          // 0-100 composite: penalises distance, violations, and vehicle count
 }
 
 export interface AllStrategyPlans {
@@ -2200,6 +2303,7 @@ async function buildRoutesFromAssignments(
       optimizationScore: Math.max(30, Math.round(100 - finalDistance * 0.8 - finalViolations.length * 30)),
       violations: finalViolations,
       hasEscort: false,
+      tripSequence: cab.tripSequence,
     });
   }
 
@@ -2406,6 +2510,10 @@ function summarisePlan(routes: OptimizedRoute[]): StrategyPlan {
     0
   );
 
+  const strategyScore = Math.max(0, Math.round(
+    100 - (totalDist * 0.5) - (routes.length * 5) - (violations * 20)
+  ));
+
   return {
     routes,
     totalCabsUsed: routes.length,
@@ -2413,6 +2521,7 @@ function summarisePlan(routes: OptimizedRoute[]): StrategyPlan {
     totalDistance: Math.round(totalDist * 10) / 10,
     avgCommuteMins: avgMins,
     totalViolations: violations,
+    strategyScore,
   };
 }
 

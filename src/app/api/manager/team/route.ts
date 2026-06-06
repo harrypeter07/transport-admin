@@ -19,20 +19,20 @@ export async function GET(req: Request) {
  return NextResponse.json({ team: [] });
  }
 
- const team = await prisma.employee.findMany({
- where: { managerId: managerEmployee.id },
- include: {
- shift: true,
- user: {
- include: {
- leaves: {
- orderBy: { startDate: "desc" }
- }
- }
- }
- },
- orderBy: { name: "asc" }
- });
+  const team = await prisma.employee.findMany({
+  where: { managerId: managerEmployee.id, status: "ACTIVE" },
+  include: {
+  shift: true,
+  user: {
+  include: {
+  leaves: {
+  orderBy: { startDate: "desc" }
+  }
+  }
+  }
+  },
+  orderBy: { name: "asc" }
+  });
 
  return NextResponse.json({ team });
   } catch (error: any) {

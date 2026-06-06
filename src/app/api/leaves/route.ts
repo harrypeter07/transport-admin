@@ -31,10 +31,10 @@ export async function GET(req: NextRequest) {
  // Manager sees only subordinates' leaves
  const managerEmp = await prisma.employee.findFirst({ where: { userId: session.userId } });
  if (managerEmp) {
- const subordinates = await prisma.employee.findMany({
- where: { managerId: managerEmp.id },
- select: { userId: true },
- });
+  const subordinates = await prisma.employee.findMany({
+  where: { managerId: managerEmp.id, status: "ACTIVE" },
+  select: { userId: true },
+  });
  const subUserIds = subordinates.map(s => s.userId).filter(Boolean);
  whereClause.applicantId = { in: subUserIds };
  } else {

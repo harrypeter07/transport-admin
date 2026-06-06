@@ -1141,13 +1141,16 @@ export default function TransitAdminSPA() {
  <span className="text-[9px] uppercase font-bold tracking-widest text-[#9a9a9a]">
  Allocated Vehicle
  </span>
-  <span className="text-sm font-bold text-[#1c1b1f] flex items-center gap-1.5 mt-0.5">
-  <Truck className="w-4 h-4 text-[#9a9a9a]" />
-  {selectedRoute.cab.vehicleNumber}
-  <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
-    r{selectedRoute.routeNumber || activeRoutes.indexOf(selectedRoute) + 1}
-  </span>
-  </span>
+   <span className="text-sm font-bold text-[#1c1b1f] flex items-center gap-1.5 mt-0.5">
+   <Truck className="w-4 h-4 text-[#9a9a9a]" />
+   {selectedRoute.cab.vehicleNumber}
+   <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
+     r{selectedRoute.routeNumber || activeRoutes.filter((r: any) => r.shiftId === selectedRoute.shiftId).indexOf(selectedRoute) + 1}
+   </span>
+   <span className="text-[9px] text-[#6b6b6b] bg-[#f0f0f0] px-1.5 py-0.5">
+     {getRouteShiftLabel(selectedRoute)}
+   </span>
+   </span>
  </div>
   <div className="flex flex-col items-end">
   <button
@@ -1616,16 +1619,18 @@ export default function TransitAdminSPA() {
           >
           Edit Cab
           </button>
-          <button
-          type="button"
-          onClick={(e) => {
-          e.stopPropagation();
-          setSwappingCabRouteId(route.id);
-          }}
-          className="px-2.5 py-1.5 bg-black text-white rounded-none text-[10px] font-bold hover:bg-black transition cursor-pointer"
-          >
-          Swap Driver
-          </button>
+          {!optimizationPlans && (
+            <button
+            type="button"
+            onClick={(e) => {
+            e.stopPropagation();
+            setSwappingCabRouteId(route.id);
+            }}
+            className="px-2.5 py-1.5 bg-black text-white rounded-none text-[10px] font-bold hover:bg-black transition cursor-pointer"
+            >
+            Reassign Driver
+            </button>
+          )}
           </div>
           </div>
 
@@ -3107,7 +3112,7 @@ export default function TransitAdminSPA() {
  <div className="bg-white border border-[#e8e8e8] rounded-none p-6 max-w-md w-full shadow-sm text-left animate-fadeIn flex flex-col gap-4">
  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
  <h3 className="text-sm font-bold text-[#1c1b1f] uppercase tracking-wider">
- Reassign Vehicle & Driver
+ Reassign Driver
  </h3>
  <button
  onClick={() => setSwappingCabRouteId(null)}
@@ -3118,7 +3123,7 @@ export default function TransitAdminSPA() {
  </div>
  
  <p className="text-[11px] text-[#6b6b6b] leading-normal">
- Select an available cab to swap with the current route's vehicle. This preserves the passenger list but changes the dispatch plate and driver contact details.
+ Select an available driver to take over this route. They can use any vehicle they have access to. The passenger list remains unchanged.
  </p>
 
  <div className="flex flex-col gap-2 max-h-[250px] overflow-y-auto">
@@ -3130,15 +3135,19 @@ export default function TransitAdminSPA() {
  <div
  key={cab.id}
  onClick={async () => {
+ try {
  await swapRouteCab(swappingCabRouteId, cab.id);
  setSwappingCabRouteId(null);
- alert(`Cab swapped! Route successfully assigned to vehicle ${cab.vehicleNumber}`);
+ alert(`Driver swapped! Route successfully assigned to ${cab.driverName || 'Driver'}`);
+ } catch (error: any) {
+ alert(error.message || "Failed to reassign driver.");
+ }
  }}
  className="p-3.5 border border-[#e8e8e8] hover:border-slate-350 hover:bg-[#f7f7f7] rounded-none cursor-pointer flex justify-between items-center transition"
  >
  <div className="flex flex-col text-left">
- <span className="text-xs font-bold text-[#1c1b1f]">{cab.vehicleNumber} ({cab.capacity} seats)</span>
- <span className="text-[10px] text-[#6b6b6b]">Driver: {cab.driverName || "N/A"} · {cab.vendor}</span>
+ <span className="text-xs font-bold text-[#1c1b1f]">{cab.driverName || "Unknown Driver"}</span>
+ <span className="text-[10px] text-[#6b6b6b]">Vehicle: {cab.vehicleNumber} ({cab.capacity} seats) · {cab.vendor}</span>
  </div>
  {isAssigned ? (
  <span className="text-[8px] font-bold px-1.5 py-0.5 bg-[#f7f7f7] text-[#1c1b1f] rounded border border-[#e8e8e8] uppercase">

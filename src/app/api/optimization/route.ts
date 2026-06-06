@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
 }
 
 // Fetch employees + cabs and calculate dynamic start locations based on previous trips
-async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, depot: { x: number; y: number }) {
+async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, depot: { x: number; y: number }, forceTripSequence?: number) {
   const dbEmployees = await prisma.employee.findMany({
     where: {
       status: "ACTIVE",
@@ -115,13 +115,17 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, 
     let startPoint = undefined;
     let tripSequence = 1;
 
-    // We look at routes on this day that are NOT for the current shift (to determine previous trips)
-    const prevRoutes = cab.routes
-      .filter(r => r.shiftId !== fallbackShiftId)
-      .sort((a, b) => a.tripSequence - b.tripSequence);
+    if (forceTripSequence !== undefined) {
+      tripSequence = forceTripSequence;
+    } else {
+      // We look at routes on this day that are NOT for the current shift (to determine previous trips)
+      const prevRoutes = cab.routes
+        .filter(r => r.shiftId !== fallbackShiftId)
+        .sort((a, b) => a.tripSequence - b.tripSequence);
 
-    if (prevRoutes.length > 0) {
-      tripSequence = prevRoutes.length + 1;
+      if (prevRoutes.length > 0) {
+        tripSequence = prevRoutes.length + 1;
+      }
     }
 
     if (tripSequence === 1) {
@@ -346,7 +350,7 @@ export async function POST(req: NextRequest) {
     if (auth.response) return auth.response;
 
     const body = await req.json();
-    const { shiftId, isPickup, date, mode = "FASTEST_TRAVEL", selectedStrategy, previewRoutes } = body;
+    const { shiftId, isPickup, date, mode = "FASTEST_TRAVEL", selectedStrategy, previewRoutes, tripSequence: bodyTripSequence } = body;
     const currentDateStr = date || new Date().toISOString().split("T")[0];
 
     const holiday = await prisma.holiday.findUnique({
@@ -372,7 +376,7 @@ export async function POST(req: NextRequest) {
     const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
 
     if (mode === "ALL") {
-      const { optEmployees, optCabs } = await fetchOptimizationInputs(shiftId, currentDateStr, depot);
+      const { optEmployees, optCabs } = await fetchOptimizationInputs(shiftId, currentDateStr, depot, bodyTripSequence);
 
       if (optEmployees.length === 0) {
         return NextResponse.json({ error: "No active employees found for this shift" }, { status: 400 });

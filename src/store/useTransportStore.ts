@@ -293,7 +293,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       const previews: OptimizationPlans[] = [];
       const hardErrors: string[] = [];
 
-      for (const shift of shiftsToOptimize) {
+      for (const [shiftIdx, shift] of shiftsToOptimize.entries()) {
         const res = await fetch("/api/optimization", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -302,6 +302,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
             isPickup,
             date: state.selectedDate,
             mode: "ALL",
+            tripSequence: shiftIdx + 1,
           }),
         });
 
@@ -698,11 +699,18 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         storeLog("swapRouteCab — OK", { routeId, cabId });
       } else {
         set({ loading: false });
-        console.error("[store] ❌ swapRouteCab — API error", { routeId, cabId, status: res.status });
+        let errorDetails = "Unknown error";
+        try {
+          const errBody = await res.json();
+          errorDetails = errBody.details || errBody.error || JSON.stringify(errBody);
+        } catch (e) {}
+        console.error("[store] ❌ swapRouteCab — API error", { routeId, cabId, status: res.status, details: errorDetails });
+        throw new Error(`Failed to swap driver: ${errorDetails}`);
       }
     } catch (e) {
       console.error("[store] ❌ swapRouteCab", { routeId, cabId }, e);
       set({ loading: false });
+      throw e;
     }
   },
 

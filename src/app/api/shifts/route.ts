@@ -9,15 +9,20 @@ export async function GET() {
  }
 
  try {
- const shifts = await prisma.shift.findMany({
- include: {
- _count: {
- select: { employees: true, cabs: true },
- },
- cabs: true,
- },
- orderBy: { startTime: "asc" },
- });
+  const shifts = await prisma.shift.findMany({
+  include: {
+  _count: {
+  select: {
+  employees: { where: { status: "ACTIVE" } },
+  cabs: { where: { status: { not: "INACTIVE" } } },
+  },
+  },
+  cabs: {
+  where: { status: { not: "INACTIVE" } },
+  },
+  },
+  orderBy: { startTime: "asc" },
+  });
  return NextResponse.json(shifts);
  } catch (error: any) {
  return NextResponse.json({ error: error.message }, { status: 500 });

@@ -31,6 +31,8 @@ export async function PATCH(
  },
  });
 
+ require("fs").writeFileSync("debug_route.log", `Received routeId: ${routeId}. Found: ${!!route}`);
+
 	if (!route) {
 	return NextResponse.json({ error: "Route not found" }, { status: 404 });
 	}
@@ -306,7 +308,7 @@ export async function PATCH(
  const stopPoints = route.stops.map(s => ({ x: s.employee.x, y: s.employee.y }));
  const metricsPoints = route.isPickup
    ? [newStartPoint, ...stopPoints]
-   : [newStartPoint, ...stopPoints];
+   : [...stopPoints, newStartPoint];
 
  const { distance: newDistance, duration: newDuration } = await fetchGoogleRouteMetrics(
    metricsPoints,
@@ -330,8 +332,8 @@ export async function PATCH(
 	}
 
 	return NextResponse.json({ error: "Invalid action" }, { status: 400 });
- } catch (e) {
+ } catch (e: any) {
 	console.error("[api] ❌ PATCH /api/routes/[id]", { action, routeId, ip }, e);
- return NextResponse.json({ error: "Failed to update route" }, { status: 500 });
+ return NextResponse.json({ error: "Failed to update route", details: String(e.stack || e) }, { status: 500 });
  }
 }
