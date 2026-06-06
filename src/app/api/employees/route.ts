@@ -138,16 +138,34 @@ export async function DELETE(req: NextRequest) {
       }
     });
 
+    // Remove only this employee's stops from pending/planned routes.
+    // Only delete the route if it would become empty — never cascade-delete other employees.
     const pendingStops = await prisma.routeStop.findMany({
       where: { employeeId: id, route: { status: { in: ["PENDING", "PLANNED"] } } },
-      select: { routeId: true }
+      select: { id: true, routeId: true }
     });
     if (pendingStops.length > 0) {
-      const routeIds = pendingStops.map(s => s.routeId);
-      await prisma.routeStop.deleteMany({ where: { routeId: { in: routeIds } } });
-      await prisma.violation.deleteMany({ where: { routeId: { in: routeIds } } });
-      await prisma.route.deleteMany({ where: { id: { in: routeIds } } });
-      console.info(`[api] Deleted ${routeIds.length} pending routes involving deleted employee ${id} to ensure fresh data.`);
+      const affectedRouteIds = [...new Set(pendingStops.map(s => s.routeId))];
+      // Remove only this employee's stops
+      await prisma.routeStop.deleteMany({ where: { employeeId: id, routeId: { in: affectedRouteIds } } });
+      // For each affected route, re-number remaining stops and delete route if empty
+      for (const routeId of affectedRouteIds) {
+        const remaining = await prisma.routeStop.findMany({
+          where: { routeId },
+          orderBy: { stopOrder: "asc" }
+        });
+        if (remaining.length === 0) {
+          await prisma.violation.deleteMany({ where: { routeId } });
+          await prisma.route.delete({ where: { id: routeId } });
+          console.info(`[api] Deleted empty route ${routeId} after employee removal.`);
+        } else {
+          // Re-sequence stopOrder to be contiguous
+          for (let i = 0; i < remaining.length; i++) {
+            await prisma.routeStop.update({ where: { id: remaining[i].id }, data: { stopOrder: i + 1 } });
+          }
+          console.info(`[api] Removed stop from route ${routeId}, ${remaining.length} stops remain.`);
+        }
+      }
     }
 
     await audit({ userId: auth.session.userId, role: auth.session.role, action: "DELETE", entity: "Employee", entityId: id, before, after: { status: "INACTIVE" }, ip });
@@ -358,16 +376,30 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
+    // Remove only this employee's stops from pending/planned routes.
+    // Only delete the route if it would become empty.
     const pendingStops = await prisma.routeStop.findMany({
       where: { employeeId: id, route: { status: { in: ["PENDING", "PLANNED"] } } },
-      select: { routeId: true }
+      select: { id: true, routeId: true }
     });
     if (pendingStops.length > 0) {
-      const routeIds = pendingStops.map(s => s.routeId);
-      await prisma.routeStop.deleteMany({ where: { routeId: { in: routeIds } } });
-      await prisma.violation.deleteMany({ where: { routeId: { in: routeIds } } });
-      await prisma.route.deleteMany({ where: { id: { in: routeIds } } });
-      console.info(`[api] Deleted ${routeIds.length} pending routes involving updated employee ${id} to ensure fresh data.`);
+      const affectedRouteIds = [...new Set(pendingStops.map(s => s.routeId))];
+      await prisma.routeStop.deleteMany({ where: { employeeId: id, routeId: { in: affectedRouteIds } } });
+      for (const routeId of affectedRouteIds) {
+        const remaining = await prisma.routeStop.findMany({
+          where: { routeId },
+          orderBy: { stopOrder: "asc" }
+        });
+        if (remaining.length === 0) {
+          await prisma.violation.deleteMany({ where: { routeId } });
+          await prisma.route.delete({ where: { id: routeId } });
+        } else {
+          for (let i = 0; i < remaining.length; i++) {
+            await prisma.routeStop.update({ where: { id: remaining[i].id }, data: { stopOrder: i + 1 } });
+          }
+        }
+      }
+      console.info(`[api] Removed stops for updated employee ${id} from ${affectedRouteIds.length} routes.`);
     }
 
     await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Employee", entityId: id, before: beforeSnapshot, after: employee, ip });

@@ -705,12 +705,14 @@ export async function optimizeRoutes(
   const optimizedRoutes: OptimizedRoute[] = [];
   const warnings: OptimizationWarning[] = [];
 
+  // ── Phase 1: Build clusters (employee-employee proximity) ──────────────────
+  const rawClusterAssignments: ClusterAssignment[] = [];
+
   for (let i = 0; i < sortedCabs.length; i++) {
     if (remainingEmployees.length === 0) break;
 
-    const cab = sortedCabs[i];
-    const capacity = cab.capacity;
-    const startPoint = cab.startPoint || depot;
+    const cabForClustering = sortedCabs[i];
+    const capacity = cabForClustering.capacity;
 
     // Pick a seed employee (furthest from depot by road distance)
     let seedIdx = 0;
@@ -728,7 +730,7 @@ export async function optimizeRoutes(
     const seed = remainingEmployees[seedIdx];
     remainingEmployees.splice(seedIdx, 1);
 
-    // Find the closest employees to the seed by road distance to fill the cab capacity
+    // Find the closest employees to the seed by road distance to fill the capacity
     const cluster: OptimizeEmployee[] = [seed];
     const seedGIdx = empToGlobalIdx.get(seed.id) ?? depotGlobalIdx;
 
@@ -771,14 +773,26 @@ export async function optimizeRoutes(
       remainingEmployees.splice(closestIdx, 1);
     }
 
-    // Try building a valid route: if constraints are violated, shed employees and retry
+    rawClusterAssignments.push({ cab: cabForClustering, cluster });
+  }
+
+  // ── Phase 2: Match closest driver to each cluster ──────────────────────────
+  // Re-assigns cabs so the driver whose startPoint is nearest to each cluster's
+  // centroid services that cluster. Cluster composition is unchanged.
+  const matchedAssignments = matchCabsToClusters(rawClusterAssignments);
+
+  // ── Phase 3: Build routes from matched assignments ─────────────────────────
+  for (const { cab, cluster } of matchedAssignments) {
+    if (cluster.length === 0) continue;
+    const cabGlobalIdx = roadData.cabToGlobalIdx.get(cab.id) ?? 0;
+    const startPoint = cab.startPoint || depot;
+
     let attemptCluster = [...cluster];
     let routeAccepted = false;
 
     while (attemptCluster.length > 0 && !routeAccepted) {
-      // Build sub-matrix from global road data for [cabIdx, ...attemptCluster, depot]
       const attemptIndices = [
-        i,
+        cabGlobalIdx,
         ...attemptCluster.map(e => empToGlobalIdx.get(e.id)).filter((idx): idx is number => idx !== undefined),
         depotGlobalIdx,
       ];
@@ -802,7 +816,6 @@ export async function optimizeRoutes(
       const perm = safetyCorrectedRoute.map(e => attemptCluster.indexOf(e));
       const reordered = reorderMatrixForRoute(subDistMatrix, subDurMatrix, perm, 0, subN - 1);
 
-      // Verify route against hard constraints
       const verification = verifyRouteConstraints(
         safetyCorrectedRoute,
         isPickup,
@@ -844,7 +857,6 @@ export async function optimizeRoutes(
         });
         routeAccepted = true;
       } else {
-        // Shed the employee farthest from depot in this cluster and retry
         const shedIdx = attemptCluster
           .map((e, idx) => ({ idx, dist: globalDist[empToGlobalIdx.get(e.id) ?? depotGlobalIdx]?.[depotGlobalIdx] ?? 0 }))
           .sort((a, b) => b.dist - a.dist)[0]?.idx ?? attemptCluster.length - 1;
@@ -1903,9 +1915,8 @@ function clusterMaxUtilization(
     }
     assignments.push({ cab, cluster });
   }
-  return assignments;
+  return matchCabsToClusters(assignments, roadData);
 }
-
 /**
  * Strategy 2 — MINIMIZE_TIME
  * Keeps clusters tight (20 min road-duration radius from seed).
@@ -1959,9 +1970,8 @@ function clusterMinTime(
     }
     assignments.push({ cab, cluster });
   }
-  return assignments;
+  return matchCabsToClusters(assignments, roadData);
 }
-
 /**
  * Strategy 3 — BALANCED
  * 30 min road-duration radius, targets ~80% fill before stopping.
@@ -2017,10 +2027,75 @@ function clusterBalanced(
     }
     assignments.push({ cab, cluster });
   }
-  return assignments;
+  return matchCabsToClusters(assignments, roadData);
 }
 
-// ── Route builder from a set of cluster assignments ───────────────────────────
+/**
+ * Re-matches cabs to clusters based on driver startPoint proximity to cluster centroid.
+ * Runs AFTER clustering so cluster composition is unchanged — only swaps which cab
+ * services which cluster, minimising driver deadhead to the first pickup.
+ */
+function matchCabsToClusters(
+  assignments: ClusterAssignment[],
+  roadData?: GlobalRoadData
+): ClusterAssignment[] {
+  if (assignments.length <= 1) return assignments;
+
+  const n = assignments.length;
+  const cabsInOrder = assignments.map(a => a.cab);
+  const clusters = assignments.map(a => a.cluster);
+
+  // Compute geographic centroid for each cluster
+  const centroids = clusters.map(cluster => ({
+    x: cluster.reduce((s, e) => s + e.x, 0) / Math.max(cluster.length, 1),
+    y: cluster.reduce((s, e) => s + e.y, 0) / Math.max(cluster.length, 1),
+  }));
+
+  // Build cost matrix: cost[cabIdx][clusterIdx] = dist(cab.startPoint, cluster centroid)
+  const cost: number[][] = cabsInOrder.map(cab => {
+    const sp = cab.startPoint;
+    return centroids.map(centroid =>
+      sp ? getDistance(sp, centroid) : Infinity
+    );
+  });
+
+  // Greedy matching: process clusters largest-first; each picks the closest unmatched cab
+  const usedCabIndices = new Set<number>();
+  const cabForCluster: number[] = new Array(n).fill(-1);
+  const clustersBySize = [...Array(n).keys()].sort(
+    (a, b) => clusters[b].length - clusters[a].length
+  );
+
+  for (const clIdx of clustersBySize) {
+    let bestCabIdx = -1;
+    let bestDist = Infinity;
+    for (let ci = 0; ci < n; ci++) {
+      if (usedCabIndices.has(ci)) continue;
+      // Capacity must accommodate this cluster
+      if (cabsInOrder[ci].capacity < clusters[clIdx].length) continue;
+      if (cost[ci][clIdx] < bestDist) {
+        bestDist = cost[ci][clIdx];
+        bestCabIdx = ci;
+      }
+    }
+    // Fallback: any unmatched cab (capacity already ensured by clustering)
+    if (bestCabIdx === -1) {
+      for (let ci = 0; ci < n; ci++) {
+        if (!usedCabIndices.has(ci)) { bestCabIdx = ci; break; }
+      }
+    }
+    if (bestCabIdx !== -1) {
+      cabForCluster[clIdx] = bestCabIdx;
+      usedCabIndices.add(bestCabIdx);
+    }
+  }
+
+  // Rebuild assignments with the matched cabs
+  return assignments.map((a, clIdx) => ({
+    cab: cabForCluster[clIdx] >= 0 ? cabsInOrder[cabForCluster[clIdx]] : a.cab,
+    cluster: a.cluster,
+  }));
+}
 
 async function buildRoutesFromAssignments(
   assignments: ClusterAssignment[],

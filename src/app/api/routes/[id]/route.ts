@@ -271,24 +271,62 @@ export async function PATCH(
  return NextResponse.json({ error: "cabId is required" }, { status: 400 });
  }
 
- // Check if cab exists
  const targetCab = await prisma.cab.findUnique({
  where: { id: cabId },
+ include: {
+   routes: {
+     where: { date: route.date },
+     orderBy: { tripSequence: "asc" },
+   }
+ }
  });
 
  if (!targetCab) {
  return NextResponse.json({ error: "Cab not found" }, { status: 404 });
  }
 
-	// Update Route with new cabId
-	await prisma.route.update({
-	where: { id: routeId },
-	data: { cabId },
-	});
+ // Determine the new cab's trip sequence for today
+ const existingRoutesForCab = targetCab.routes.filter(r => r.id !== routeId);
+ const newTripSequence = existingRoutesForCab.length + 1;
 
-	await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Route", entityId: routeId, before: beforeRoute, after: { action }, ip });
-	console.info("[api] ✅ PATCH /api/routes/[id]", { action, routeId, userId: auth.session.userId, ip });
-	return NextResponse.json({ success: true });
+ // Resolve the correct start point for the new cab
+ const settings = await prisma.systemSettings.findUnique({ where: { id: "default" } });
+ const depot = settings
+   ? { x: settings.defaultDepotLng, y: settings.defaultDepotLat }
+   : { x: 79.0526, y: 21.0625 };
+
+ let newStartPoint: { x: number; y: number };
+ if (newTripSequence === 1 && typeof targetCab.driverX === "number" && typeof targetCab.driverY === "number") {
+   newStartPoint = { x: targetCab.driverX, y: targetCab.driverY };
+ } else {
+   newStartPoint = depot;
+ }
+
+ // Recompute route distance/duration from the new start point
+ const stopPoints = route.stops.map(s => ({ x: s.employee.x, y: s.employee.y }));
+ const metricsPoints = route.isPickup
+   ? [newStartPoint, ...stopPoints]
+   : [newStartPoint, ...stopPoints];
+
+ const { distance: newDistance, duration: newDuration } = await fetchGoogleRouteMetrics(
+   metricsPoints,
+   route.isPickup,
+   depot
+ );
+
+ await prisma.route.update({
+ where: { id: routeId },
+ data: {
+   cabId,
+   tripSequence: newTripSequence,
+   totalDistance: newDistance,
+   totalDuration: newDuration,
+ },
+ });
+
+	await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Route", entityId: routeId, before: beforeRoute, after: { action, cabId, newTripSequence }, ip });
+	console.info("[api] ✅ PATCH /api/routes/[id] SWAP_CAB", { routeId, newCabId: cabId, newTripSequence, userId: auth.session.userId, ip });
+	return NextResponse.json({ success: true, newTripSequence, newDistance, newDuration });
 	}
 
 	return NextResponse.json({ error: "Invalid action" }, { status: 400 });
