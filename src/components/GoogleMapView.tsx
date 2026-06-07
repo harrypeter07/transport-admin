@@ -87,11 +87,11 @@ function employeeSvg(size: number, label: string, color: string, gender: string,
   `);
 }
 
-function driverStartSvg(size: number, color: string): string {
+function driverStartSvg(size: number, _color: string): string {
   return svgToUri(`
     <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="#ffffff" stroke="${color}" stroke-width="3"/>
-      <text x="${size / 2}" y="${size / 2 + 1}" text-anchor="middle" dominant-baseline="central" fill="${color}" font-size="${size * 0.4}" font-weight="900" font-family="sans-serif">⌂</text>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="#1c1b1f" stroke="#ffffff" stroke-width="2"/>
+      <text x="${size / 2}" y="${size / 2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="${size * 0.4}" font-weight="900" font-family="sans-serif">⌂</text>
     </svg>
   `);
 }
@@ -106,6 +106,7 @@ interface GoogleMapViewProps {
   depotLng?: number;
   depotName?: string;
   apiKey: string;
+  routeViewModes?: Record<string, "pickup" | "drop">;
 }
 
 export default function GoogleMapView({
@@ -118,6 +119,7 @@ export default function GoogleMapView({
   depotLng = 79.0526,
   depotName = "Depot",
   apiKey,
+  routeViewModes,
 }: GoogleMapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -125,12 +127,6 @@ export default function GoogleMapView({
 
   const [mapReady, setMapReady] = useState(false);
   const [variationsData, setVariationsData] = useState<any[]>([]);
-  const [variationGeometries, setVariationGeometries] = useState<Record<string, [number, number][]>>({});
-  const [routeGeometries, setRouteGeometries] = useState<Record<string, [number, number][]>>({});
-  const [loadingGeometries, setLoadingGeometries] = useState(false);
-  const [analyticsOptimizedGeom, setAnalyticsOptimizedGeom] = useState<[number, number][]>([]);
-  const [analyticsNormalGeom, setAnalyticsNormalGeom] = useState<[number, number][]>([]);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const isWithinBounds = (lat: number, lng: number) =>
     lat >= depotLat - 1.0 && lat <= depotLat + 1.0 && lng >= depotLng - 1.0 && lng <= depotLng + 1.0;
@@ -172,150 +168,42 @@ export default function GoogleMapView({
     return { lat: depotLat, lng: depotLng };
   };
 
-  const buildRouteLatLngs = (
-    route: Route,
-    stopCoords: google.maps.LatLngLiteral[]
-  ): google.maps.LatLngLiteral[] => {
-    const start = getRouteStartLatLng(route);
-    const depot = { lat: depotLat, lng: depotLng };
-    if (route.isPickup) {
-      return [start, ...stopCoords, depot];
-    }
-    return isDepotLatLng(start.lat, start.lng)
-      ? [depot, ...stopCoords]
-      : [start, depot, ...stopCoords];
-  };
-
-  const fetchRouteGeometry = async (coords: google.maps.LatLngLiteral[]): Promise<[number, number][]> => {
-    if (coords.length <= 1) return coords.map((c) => [c.lat, c.lng]);
-
-    const coordsArr: [number, number][] = coords.map((c) => [c.lat, c.lng]);
-    try {
-      const res = await fetch("/api/routing/geometry", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coords: coordsArr }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        console.log("[geometry] source:", data?.source, "| sent:", coords.length, "pts | recv:", data?.coordinates?.length, "pts");
-        if (Array.isArray(data?.coordinates) && data.coordinates.length > coords.length) {
-          return data.coordinates;
-        }
-      }
-    } catch (e) {
-      console.error("Route geometry fetch failed:", e);
-    }
-    return coordsArr;
-  };
-
-  useEffect(() => {
-    if (routes.length === 0) {
-      setRouteGeometries({});
-      return;
-    }
-    let active = true;
-    const selectedRoute = selectedRouteId
-      ? routes.find((route) => route.id === selectedRouteId)
-      : null;
-    const orderedRoutes = selectedRoute
-      ? [selectedRoute, ...routes.filter((route) => route.id !== selectedRoute.id)]
-      : routes;
-
-    for (const route of orderedRoutes) {
-      const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
-      if (sortedStops.length === 0) continue;
-      const coords = buildRouteLatLngs(
-        route,
-        sortedStops.map((s) => ({ lat: s.employee.y, lng: s.employee.x }))
-      );
-      fetchRouteGeometry(coords).then((geometry) => {
-        if (!active) return;
-        setRouteGeometries((prev) => ({ ...prev, [route.id]: geometry }));
-      });
-    }
-
-    return () => { active = false; };
-  }, [routes, selectedRouteId, depotLat, depotLng, mapReady]);
-
-  useEffect(() => {
-    if (mode !== "ANALYTICS" || !selectedRouteId) {
-      setAnalyticsOptimizedGeom([]);
-      setAnalyticsNormalGeom([]);
-      return;
-    }
-    const fetchAnalyticsGeometries = async () => {
-      setAnalyticsLoading(true);
-      try {
-        const route = routes.find((r) => r.id === selectedRouteId);
-        if (!route) return;
-        const stopsList = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
-        const optCoords = buildRouteLatLngs(
-          route,
-          stopsList.map((s) => ({ lat: s.employee.y, lng: s.employee.x }))
-        );
-        const normalStopsList = [...route.stops].sort((a, b) => a.employee.name.localeCompare(b.employee.name));
-        const normCoords = buildRouteLatLngs(
-          route,
-          normalStopsList.map((s) => ({ lat: s.employee.y, lng: s.employee.x }))
-        );
-        const [optGeom, normGeom] = await Promise.all([
-          fetchRouteGeometry(optCoords),
-          fetchRouteGeometry(normCoords),
-        ]);
-        setAnalyticsOptimizedGeom(optGeom);
-        setAnalyticsNormalGeom(normGeom);
-      } catch (err) {
-        console.error("Error fetching analytics geometries:", err);
-      } finally {
-        setAnalyticsLoading(false);
-      }
-    };
-    fetchAnalyticsGeometries();
-  }, [selectedRouteId, routes, mode, mapReady]);
+  const getDisplayOrderedStops = (route: Route, isPickup: boolean): any[] =>
+    [...route.stops].sort((a: any, b: any) => {
+      const aLat = a.employee?.y ?? a.y;
+      const aLng = a.employee?.x ?? a.x;
+      const bLat = b.employee?.y ?? b.y;
+      const bLng = b.employee?.x ?? b.x;
+      const distA = (aLat - depotLat) ** 2 + (aLng - depotLng) ** 2;
+      const distB = (bLat - depotLat) ** 2 + (bLng - depotLng) ** 2;
+      return isPickup ? distB - distA : distA - distB;
+    });
 
   useEffect(() => {
     if (mode !== "OPTIMIZER" || !selectedRouteId) {
       setVariationsData([]);
-      setVariationGeometries({});
       return;
     }
-    const fetchVariationsAndGeometries = async () => {
-      setLoadingGeometries(true);
+    const fetchVariations = async () => {
       try {
         const route = routes.find((r) => r.id === selectedRouteId);
         if (!route || selectedRouteId.startsWith("preview-")) {
           setVariationsData([]);
-          setVariationGeometries({});
           return;
         }
         const res = await fetch(`/api/routes/${selectedRouteId}/variations`);
         if (!res.ok) {
           setVariationsData([]);
-          setVariationGeometries({});
           return;
         }
         const vars = await res.json();
         setVariationsData(vars);
-        const geometries: Record<string, [number, number][]> = {};
-        for (const v of vars) {
-          const stopsList = [...v.stops].sort((a, b) => a.stopOrder - b.stopOrder);
-          const coords = buildRouteLatLngs(
-            route,
-            stopsList.map((s) => ({ lat: s.y, lng: s.x }))
-          );
-          geometries[v.strategy] = await fetchRouteGeometry(coords);
-        }
-        setVariationGeometries(geometries);
       } catch (err) {
         setVariationsData([]);
-        setVariationGeometries({});
-      } finally {
-        setLoadingGeometries(false);
       }
     };
-    fetchVariationsAndGeometries();
-  }, [selectedRouteId, routes, mode, mapReady]);
+    fetchVariations();
+  }, [selectedRouteId, routes, mode]);
 
   useEffect(() => {
     if (!containerRef.current || !apiKey) return;
@@ -367,7 +255,7 @@ export default function GoogleMapView({
     const google = window.google;
     if (!google) return;
 
-    const overlays: (google.maps.Marker | google.maps.Polyline | null)[] = [];
+    const overlays: (google.maps.Marker | null)[] = [];
     const infoWindows: google.maps.InfoWindow[] = [];
 
     const fitCoords: google.maps.LatLngLiteral[] = [{ lat: depotLat, lng: depotLng }];
@@ -399,36 +287,13 @@ export default function GoogleMapView({
     routes.forEach((route, idx) => {
       if (selectedRouteId && route.id !== selectedRouteId) return;
 
-      const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+      const sortedStops = getDisplayOrderedStops(route, route.isPickup);
       if (sortedStops.length === 0) return;
 
       // Color by shift — all routes in the same shift share the same color
       const routeColor = shiftColorMap.get(route.shiftId) ?? SHIFT_PALETTE[idx % SHIFT_PALETTE.length];
       const isSelectedOverviewRoute = selectedRouteId === route.id;
-
-      const lineCoords = buildRouteLatLngs(
-        route,
-        sortedStops.map((s) => ({ lat: s.employee.y, lng: s.employee.x }))
-      );
-      const roadCoords = routeGeometries[route.id] || lineCoords.map((c) => [c.lat, c.lng]);
       const routeStart = getRouteStartLatLng(route);
-
-      // Selected route has dedicated polyline below — skip here to avoid double lines
-      if (!isSelectedOverviewRoute) {
-        const path = new google.maps.Polyline({
-          path: roadCoords.map(([lat, lng]) => ({ lat, lng })),
-          map,
-          strokeColor: routeColor,
-          strokeWeight: 3,
-          strokeOpacity: 0.65,
-          zIndex: 5,
-        });
-        overlays.push(path);
-
-        path.addListener("click", () => {
-          onSelectRoute(route.id);
-        });
-      }
 
       sortedStops.forEach((stop) => {
         if (isWithinBounds(stop.employee.y, stop.employee.x)) {
@@ -471,8 +336,8 @@ export default function GoogleMapView({
           position: routeStart,
           map,
           icon: {
-            url: driverStartSvg(32, routeColor),
-            anchor: new google.maps.Point(16, 16),
+            url: driverStartSvg(48, routeColor),
+            anchor: new google.maps.Point(24, 24),
           },
           zIndex: 20,
         });
@@ -489,12 +354,15 @@ export default function GoogleMapView({
         const selectedRouteIdx = routes.findIndex((r) => r.id === selectedRouteId);
         const selectedRouteColor = shiftColorMap.get(selectedRoute.shiftId) ?? SHIFT_PALETTE[selectedRouteIdx % SHIFT_PALETTE.length];
         const stopsList = [...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+        const effectiveIsPickup = routeViewModes?.[selectedRoute.id]
+          ? routeViewModes[selectedRoute.id] === "pickup"
+          : selectedRoute.isPickup;
+        stopsList.sort((a, b) => {
+          const distA = (a.employee.y - depotLat) ** 2 + (a.employee.x - depotLng) ** 2;
+          const distB = (b.employee.y - depotLat) ** 2 + (b.employee.x - depotLng) ** 2;
+          return effectiveIsPickup ? distB - distA : distA - distB;
+        });
         const routeStart = getRouteStartLatLng(selectedRoute);
-        const selectedRouteCoords = buildRouteLatLngs(
-          selectedRoute,
-          stopsList.map((s) => ({ lat: s.employee.y, lng: s.employee.x }))
-        );
-        const selectedRoadCoords = routeGeometries[selectedRoute.id] || selectedRouteCoords.map((c) => [c.lat, c.lng]);
         const seenCoords: Record<string, number> = {};
 
         if (!isDepotLatLng(routeStart.lat, routeStart.lng) && isWithinBounds(routeStart.lat, routeStart.lng)) {
@@ -503,8 +371,8 @@ export default function GoogleMapView({
             position: routeStart,
             map,
             icon: {
-              url: driverStartSvg(32, selectedRouteColor),
-              anchor: new google.maps.Point(16, 16),
+              url: driverStartSvg(48, selectedRouteColor),
+              anchor: new google.maps.Point(24, 24),
             },
             zIndex: 30,
           });
@@ -519,7 +387,7 @@ export default function GoogleMapView({
           });
         }
 
-        stopsList.forEach((stop) => {
+        stopsList.forEach((stop, displayIdx) => {
           const isViolation = selectedRoute.violations.some(
             (v) =>
               !v.resolved &&
@@ -559,7 +427,7 @@ export default function GoogleMapView({
             position: { lat: markerY, lng: markerX },
             map,
             icon: {
-              url: employeeSvg(28, String(stop.stopOrder), selectedRouteColor, stop.employee.gender, true),
+              url: employeeSvg(28, String(displayIdx + 1), selectedRouteColor, stop.employee.gender, true),
               anchor: new google.maps.Point(14, 14),
             },
             zIndex: 30,
@@ -567,7 +435,7 @@ export default function GoogleMapView({
           overlays.push(empMarker);
 
           const empInfo = new google.maps.InfoWindow({
-            content: `<div style="padding:6px 10px;border-left:4px solid ${selectedRouteColor};"><strong style="font-size:14px;">${stop.employee.name}</strong><div style="margin:4px 0;font-size:11px;color:#666;">Stop #${stop.stopOrder} (${stop.etaMinutes} min)</div><div style="font-size:12px;">Pickup: ${pickupLabel}<br/>Home: ${homeLabel}<br/>Phone: ${phoneDisplay}</div></div>`,
+            content: `<div style="padding:6px 10px;border-left:4px solid ${selectedRouteColor};"><strong style="font-size:14px;">${stop.employee.name}</strong><div style="margin:4px 0;font-size:11px;color:#666;">Stop #${displayIdx + 1} (${stop.etaMinutes} min)</div><div style="font-size:12px;">Pickup: ${pickupLabel}<br/>Home: ${homeLabel}<br/>Phone: ${phoneDisplay}</div></div>`,
           });
           infoWindows.push(empInfo);
           empMarker.addListener("click", () => {
@@ -576,58 +444,8 @@ export default function GoogleMapView({
           });
         });
 
-        if (mode === "ANALYTICS") {
-          if (analyticsOptimizedGeom.length > 0) {
-            const optPoly = new google.maps.Polyline({
-              path: analyticsOptimizedGeom.map(([lat, lng]) => ({ lat, lng })),
-              map,
-              strokeColor: "#10b981",
-              strokeWeight: 5,
-              strokeOpacity: 0.9,
-              zIndex: 40,
-            });
-            overlays.push(optPoly);
-          }
-          if (analyticsNormalGeom.length > 0) {
-            const normPoly = new google.maps.Polyline({
-              path: analyticsNormalGeom.map(([lat, lng]) => ({ lat, lng })),
-              map,
-              strokeColor: "#64748b",
-              strokeWeight: 4,
-              strokeOpacity: 0.75,
-              icons: [{
-                icon: { path: "" },
-                offset: "0",
-                repeat: "15px",
-              }],
-              zIndex: 39,
-            });
-            overlays.push(normPoly);
-          }
-        } else {
-          const selectedPoly = new google.maps.Polyline({
-            path: selectedRoadCoords.map(([lat, lng]) => ({ lat, lng })),
-            map,
-            strokeColor: "#111827",
-            strokeWeight: 6,
-            strokeOpacity: 0.9,
-            zIndex: 50,
-          });
-          overlays.push(selectedPoly);
-
-          Object.entries(variationGeometries).forEach(([strategy, pathCoords]) => {
-            const color = STRATEGY_COLORS[strategy] || "#94a3b8";
-            const varPoly = new google.maps.Polyline({
-              path: pathCoords.map(([lat, lng]) => ({ lat, lng })),
-              map,
-              strokeColor: color,
-              strokeWeight: 4,
-              strokeOpacity: 0.85,
-              zIndex: 45,
-            });
-            overlays.push(varPoly);
-          });
-        }
+        /* Polylines removed — the platform is a transport allocation system,
+           not a navigation system. Drivers know the roads. */
       }
     }
 
@@ -651,7 +469,7 @@ export default function GoogleMapView({
       overlays.forEach((o) => o?.setMap?.(null));
       infoWindows.forEach((iw) => iw.close());
     };
-  }, [routes, selectedRouteId, routeGeometries, variationGeometries, analyticsOptimizedGeom, analyticsNormalGeom, mode]);
+  }, [routes, selectedRouteId, mode, routeViewModes]);
 
   const shiftLegend = buildShiftColorMap(routes);
 
@@ -705,12 +523,6 @@ export default function GoogleMapView({
                 </span>
               </div>
             </div>
-            {analyticsLoading && (
-              <div className="text-[9px] text-[#9a9a9a] italic mt-1 flex items-center gap-1">
-                <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-none animate-spin-fast"></span>
-                Fetching Nagpur road curves...
-              </div>
-            )}
           </div>
         ) : (
           variationsData.length > 0 && (
@@ -732,12 +544,6 @@ export default function GoogleMapView({
                   );
                 })}
               </div>
-              {loadingGeometries && (
-                <div className="text-[9px] text-[#9a9a9a] italic mt-1 flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-none animate-spin-fast"></span>
-                  Fetching Nagpur road curves...
-                </div>
-              )}
             </div>
           )
         )

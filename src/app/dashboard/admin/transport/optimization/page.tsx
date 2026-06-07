@@ -133,8 +133,9 @@ export default function TransitAdminSPA() {
  const [optimizeError, setOptimizeError] = useState<string | null>(null);
  const [optimizing, setOptimizing] = useState(false);
  const [hasOptimized, setHasOptimized] = useState(false);
- const [previewedStrategy, setPreviewedStrategy] = useState<"MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED" | null>(null);
- const [applyingStrategy, setApplyingStrategy] = useState<string | null>(null);
+  const [previewedStrategy, setPreviewedStrategy] = useState<"MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED" | null>(null);
+  const [applyingStrategy, setApplyingStrategy] = useState<string | null>(null);
+  const [routeViewModes, setRouteViewModes] = useState<Record<string, "pickup" | "drop">>({});
   const [searchQuery, setSearchQuery] = useState("");
 
  // Settings/Diagnostics states
@@ -429,7 +430,7 @@ export default function TransitAdminSPA() {
  vehicleNumber: r.vehicleNumber,
  driverName: r.driverName,
  driverPhone: r.driverPhone,
- driverAddress: r.startPoint ? "Configured cab start" : undefined,
+    driverAddress: r.startPoint ? (cabs.find((c: any) => c.id === r.cabId)?.driverAddress ?? "Configured cab start") : undefined,
  driverX: r.startPoint?.x,
  driverY: r.startPoint?.y,
  },
@@ -461,10 +462,56 @@ export default function TransitAdminSPA() {
  : [];
  const activeRoutes = activeRoutesRaw as Route[];
   const manifestRoutes = activeRoutes.filter(r => (r.stops || []).length > 0);
- const getRouteShiftLabel = (route: any) =>
- route.shift?.name || route.shiftName || shifts.find((shift) => shift.id === route.shiftId)?.name || "Shift";
+  const getRouteShiftLabel = (route: any) =>
+  route.shift?.name || route.shiftName || shifts.find((shift) => shift.id === route.shiftId)?.name || "Shift";
 
- // Group manifest routes by shiftId, sorted by shift startTime ascending
+  const getEffectiveMode = (route: Route): "pickup" | "drop" =>
+    routeViewModes[route.id] || "pickup";
+
+  const getRouteStartAddress = (route: Route): string => {
+    const cab = route.cab;
+    if ((route.tripSequence || 1) > 1) return "MIHAN Depot";
+    if (cab?.driverAddress?.trim()) return cab.driverAddress;
+    if (typeof cab?.driverX === "number" && typeof cab?.driverY === "number") return "Driver Location";
+    return "MIHAN Depot";
+  };
+
+  const cabMaxTripSequence: Record<string, number> = {};
+  for (const r of activeRoutes) {
+    const ts = r.tripSequence || 1;
+    if (r.cabId && ts > (cabMaxTripSequence[r.cabId] || 0)) {
+      cabMaxTripSequence[r.cabId] = ts;
+    }
+  }
+
+  const isLastTripForCab = (route: Route): boolean => {
+    const maxTs = cabMaxTripSequence[route.cabId] || 1;
+    return (route.tripSequence || 1) >= maxTs;
+  };
+
+  const getRouteEndAddress = (route: Route): string => {
+    if (isLastTripForCab(route)) return getRouteStartAddress(route);
+    return "MIHAN Depot";
+  };
+
+  const DIST_DEPOT_LAT = 21.0625;
+  const DIST_DEPOT_LNG = 79.0526;
+
+  const distSqFromDepot = (lat: number, lng: number): number =>
+    (lat - DIST_DEPOT_LAT) ** 2 + (lng - DIST_DEPOT_LNG) ** 2;
+
+  const reorderStopsForDisplay = (stops: any[], effectiveIsPickup: boolean): any[] =>
+    [...stops].sort((a, b) => {
+      const aLat = a.employee?.y ?? a.y;
+      const aLng = a.employee?.x ?? a.x;
+      const bLat = b.employee?.y ?? b.y;
+      const bLng = b.employee?.x ?? b.x;
+      const distA = distSqFromDepot(aLat, aLng);
+      const distB = distSqFromDepot(bLat, bLng);
+      return effectiveIsPickup ? distB - distA : distA - distB;
+    });
+
+  // Group manifest routes by shiftId, sorted by shift startTime ascending
  const shiftGroups: { shiftId: string; shiftLabel: string; shiftTime: string; routes: typeof manifestRoutes }[] = [];
  const seenShiftIds = new Set<string>();
  const sortedManifest = [...manifestRoutes].sort((a, b) => {
@@ -1045,11 +1092,12 @@ export default function TransitAdminSPA() {
       ))}
     </select>
   </div>
- <RouteVisualizer
- routes={mapShiftFilter === "ALL" ? activeRoutes : activeRoutes.filter(r => (r as any).shiftId === mapShiftFilter)}
- selectedRouteId={selectedRouteId}
- onSelectRoute={setSelectedRouteId}
- />
+  <RouteVisualizer
+  routes={mapShiftFilter === "ALL" ? activeRoutes : activeRoutes.filter(r => (r as any).shiftId === mapShiftFilter)}
+  selectedRouteId={selectedRouteId}
+  onSelectRoute={setSelectedRouteId}
+  routeViewModes={routeViewModes}
+  />
  </div>
 
  {/* Attendance Checklist Sidebar */}
@@ -1199,38 +1247,72 @@ export default function TransitAdminSPA() {
  </p>
  </div>
 
- <div className="flex flex-col gap-3">
- <div className="text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a] text-left">
- Commute Manifest Itinerary Timeline
- </div>
- 
- <div className="relative pl-6 flex flex-col gap-4 text-left max-h-[220px] overflow-y-auto pr-1 select-none scrollbar-thin">
+  <div className="flex flex-col gap-3">
+  <div className="flex items-center justify-between">
+  <div className="text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a] text-left">
+  Commute Manifest Itinerary Timeline
+  </div>
+  {/* Pickup/Drop Toggle */}
+  <div className="flex items-center gap-1 bg-[#f7f7f7] p-0.5 rounded-none border border-[#e8e8e8] print:hidden">
+  <button
+  type="button"
+  onClick={(e) => {
+  e.stopPropagation();
+  setRouteViewModes(prev => ({ ...prev, [selectedRoute.id]: "pickup" }));
+  }}
+  className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+  getEffectiveMode(selectedRoute) === "pickup"
+  ? "bg-white text-[#1c1b1f] shadow-xs"
+  : "text-[#9a9a9a] hover:text-[#6b6b6b]"
+  }`}
+  >
+  Pickup
+  </button>
+  <button
+  type="button"
+  onClick={(e) => {
+  e.stopPropagation();
+  setRouteViewModes(prev => ({ ...prev, [selectedRoute.id]: "drop" }));
+  }}
+  className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+  getEffectiveMode(selectedRoute) === "drop"
+  ? "bg-white text-[#1c1b1f] shadow-xs"
+  : "text-[#9a9a9a] hover:text-[#6b6b6b]"
+  }`}
+  >
+  Drop
+  </button>
+  </div>
+  </div>
+  
+  <div className="relative pl-6 flex flex-col gap-4 text-left max-h-[220px] overflow-y-auto pr-1 select-none scrollbar-thin">
  {/* Connecting Line */}
  <div className="absolute left-[10px] top-2 bottom-2 w-px border-l-2 border-dashed border-[#e8e8e8]"></div>
 
- {/* Origin Node for Drop (From MIHAN) */}
- {!selectedRoute.isPickup && (
- <div className="relative flex items-start gap-3">
- {/* Depot Marker */}
- <span className="absolute -left-6 w-5 h-5 rounded-none bg-[#1c1b1f] border border-slate-700 text-white flex items-center justify-center z-10">
- <Truck className="w-3 h-3" />
- </span>
- <div className="flex-1 p-2 bg-[#f7f7f7]/80 border border-[#e8e8e8] rounded-none text-[11px] font-semibold text-[#1c1b1f]">
- <div className="flex justify-between items-center">
- <span>MIHAN Depot</span>
- <span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
- Depart
- </span>
- </div>
- <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">Central Corporate Hub</p>
- </div>
- </div>
- )}
+  {/* Origin Node — always shown */}
+  <div className="relative flex items-start gap-3">
+  <span className="absolute -left-6 w-5 h-5 rounded-none bg-[#1c1b1f] border border-slate-700 text-white flex items-center justify-center z-10">
+  <Truck className="w-3 h-3" />
+  </span>
+  <div className="flex-1 p-2 bg-[#f7f7f7]/80 border border-[#e8e8e8] rounded-none text-[11px] font-semibold text-[#1c1b1f]">
+  <div className="flex justify-between items-center">
+  <span>
+    {getEffectiveMode(selectedRoute) === "pickup" ? getRouteStartAddress(selectedRoute) : "MIHAN Depot"}
+  </span>
+  <span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
+  Depart From
+  </span>
+  </div>
+  <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">
+    {getEffectiveMode(selectedRoute) === "pickup" ? "Route Origin" : "Central Corporate Hub"}
+  </p>
+  </div>
+  </div>
 
  {/* Stops */}
- {selectedRoute.stops.map((stop, idx) => {
- const isFirst = idx === 0;
- const isLast = idx === selectedRoute.stops.length - 1;
+ {reorderStopsForDisplay(selectedRoute.stops, getEffectiveMode(selectedRoute) === "pickup").map((stop, idx) => {
+  const isFirst = idx === 0;
+  const isLast = idx === selectedRoute.stops.length - 1;
  const isFemale = stop.employee.gender === "FEMALE";
 
  return (
@@ -1243,7 +1325,7 @@ export default function TransitAdminSPA() {
  : "bg-white border-[#d0d0d0] text-[#6b6b6b]"
  }
  `}>
- {stop.stopOrder}
+  {idx + 1}
  </span>
 
  <div className={`flex-1 p-2 border rounded-none flex items-center justify-between text-[11px] transition-all hover:bg-[#f7f7f7]/50
@@ -1306,29 +1388,28 @@ export default function TransitAdminSPA() {
  </div>
  </div>
  </div>
- );
- })}
+    );
+    })}
 
- {/* Destination Node for Pickup (To MIHAN) */}
- {selectedRoute.isPickup && (
- <div className="relative flex items-start gap-3">
- {/* Depot Marker */}
- <span className="absolute -left-6 w-5 h-5 rounded-none bg-[#1c1b1f] border border-slate-700 text-white flex items-center justify-center z-10">
- <Truck className="w-3 h-3" />
- </span>
- <div className="flex-1 p-2 bg-[#f7f7f7]/80 border border-[#e8e8e8] rounded-none text-[11px] font-semibold text-[#1c1b1f]">
- <div className="flex justify-between items-center">
- <span>MIHAN Depot</span>
- <span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
- Arrive
- </span>
- </div>
- <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">
- ETA: +{selectedRoute.totalDuration} mins
- </p>
- </div>
- </div>
- )}
+  {/* Destination Node — always shown */}
+  <div className="relative flex items-start gap-3">
+  <span className="absolute -left-6 w-5 h-5 rounded-none bg-[#1c1b1f] border border-slate-700 text-white flex items-center justify-center z-10">
+  <Truck className="w-3 h-3" />
+  </span>
+  <div className="flex-1 p-2 bg-[#f7f7f7]/80 border border-[#e8e8e8] rounded-none text-[11px] font-semibold text-[#1c1b1f]">
+  <div className="flex justify-between items-center">
+  <span>
+    {getRouteEndAddress(selectedRoute)}
+  </span>
+  <span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
+  Arrive At
+  </span>
+  </div>
+  <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">
+   {isLastTripForCab(selectedRoute) ? "Driver End Location" : "Central Corporate Hub"}
+  </p>
+  </div>
+  </div>
  </div>
  </div>
 
@@ -1436,6 +1517,7 @@ export default function TransitAdminSPA() {
           const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
           const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
           const isSelected = selectedRouteId === route.id;
+          const tableOrderedStops = reorderStopsForDisplay(sortedStops, getEffectiveMode(route) === "pickup");
 
           return (
           <tr
@@ -1464,14 +1546,14 @@ export default function TransitAdminSPA() {
           </td>
           <td className="p-3">
           <span className="text-[10px] bg-[#f7f7f7] border border-[#e8e8e8] text-[#6b6b6b] px-2 py-0.5 rounded uppercase font-bold tracking-wider">
-          {route.isPickup ? "Pickup (To MIHAN)" : "Drop (From MIHAN)"}
+          {getEffectiveMode(route) === "pickup" ? "Pickup (To MIHAN)" : "Drop (From MIHAN)"}
           </span>
           </td>
           <td className="p-3">
           <div className="flex flex-wrap items-center gap-1.5 font-sans font-bold text-[10px]">
-          {route.isPickup ? (
-          <>
-          {sortedStops.map((s, idx) => {
+           {getEffectiveMode(route) === "pickup" ? (
+           <>
+           {tableOrderedStops.map((s, idx) => {
           const isFem = s.employee.gender === "FEMALE";
           return (
           <React.Fragment key={s.id}>
@@ -1499,24 +1581,24 @@ export default function TransitAdminSPA() {
           🏢 MIHAN Depot
           </span>
           <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>
-          {sortedStops.map((s, idx) => {
-          const isFem = s.employee.gender === "FEMALE";
-          return (
-          <React.Fragment key={s.id}>
-          <span className={`border px-2 py-0.5 rounded flex items-center gap-1
-          ${
-          isFem
-          ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
-          : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
-          }
-          `}>
-          <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
-          {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
-          </span>
-          {idx < sortedStops.length - 1 && <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>}
-          </React.Fragment>
-          );
-          })}
+           {tableOrderedStops.map((s, idx) => {
+           const isFem = s.employee.gender === "FEMALE";
+           return (
+           <React.Fragment key={s.id}>
+           <span className={`border px-2 py-0.5 rounded flex items-center gap-1
+           ${
+           isFem
+           ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
+           : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
+           }
+           `}>
+           <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
+           {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
+           </span>
+           {idx < tableOrderedStops.length - 1 && <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>}
+           </React.Fragment>
+           );
+           })}
           </>
           )}
           </div>
@@ -1549,6 +1631,8 @@ export default function TransitAdminSPA() {
           const routeVariations = variations[route.id] || [];
           const isLoadingVars = loadingVariations[route.id] || false;
           const activeVarIdx = activeVarIndices[route.id] ?? -1;
+          const displayStops = (activeVarIdx !== -1 ? routeVariations[activeVarIdx].stops : sortedStops);
+          const orderedStops = reorderStopsForDisplay(displayStops, getEffectiveMode(route) === "pickup");
 
           return (
           <div
@@ -1599,6 +1683,38 @@ export default function TransitAdminSPA() {
           </ul>
           </div>
           </div>
+          </div>
+
+          {/* Pickup/Drop Toggle */}
+          <div className="flex items-center gap-1 bg-[#f7f7f7] p-0.5 rounded-none border border-[#e8e8e8] self-start print:hidden">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRouteViewModes(prev => ({ ...prev, [route.id]: "pickup" }));
+              }}
+              className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                getEffectiveMode(route) === "pickup"
+                  ? "bg-white text-[#1c1b1f] shadow-xs"
+                  : "text-[#9a9a9a] hover:text-[#6b6b6b]"
+              }`}
+            >
+            Pickup
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRouteViewModes(prev => ({ ...prev, [route.id]: "drop" }));
+              }}
+              className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                getEffectiveMode(route) === "drop"
+                  ? "bg-white text-[#1c1b1f] shadow-xs"
+                  : "text-[#9a9a9a] hover:text-[#6b6b6b]"
+              }`}
+            >
+            Drop
+            </button>
           </div>
 
           {/* Driver Profile */}
@@ -1741,24 +1857,25 @@ export default function TransitAdminSPA() {
           <div className="relative pl-6 flex flex-col gap-3.5">
           <div className="absolute left-[9px] top-2 bottom-2 w-0.5 border-l border-dashed border-[#e8e8e8]"></div>
 
-          {!route.isPickup && (
+          {/* Depart From — always shown */}
           <div className="relative flex items-center gap-3">
           <span className="absolute -left-[23px] w-4.5 h-4.5 rounded-none bg-black border border-slate-850 text-white flex items-center justify-center font-bold text-[8px] z-10">
           🏢
           </span>
           <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-none text-left text-[11px] font-bold text-[#1c1b1f] flex justify-between items-center">
           <div>
-          <span className="text-[#1c1b1f]">MIHAN Depot</span>
-          <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">HQ</p>
+          <span className="text-[#1c1b1f]">
+            {getEffectiveMode(route) === "pickup" ? getRouteStartAddress(route) : "MIHAN Depot"}
+          </span>
+          <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">Depart From</p>
           </div>
           <span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.5 rounded font-black uppercase font-mono">
           Depart
           </span>
           </div>
           </div>
-          )}
 
-          {(activeVarIdx !== -1 ? routeVariations[activeVarIdx].stops : sortedStops).map((stop, idx) => {
+          {orderedStops.map((stop, idx) => {
           const isFemale = stop.employee ? stop.employee.gender === "FEMALE" : (stop as any).gender === "FEMALE";
           const empId = stop.employee ? stop.employee.id : (stop as any).employeeId;
           const empName = stop.employee ? stop.employee.name : (stop as any).employeeName;
@@ -1838,22 +1955,23 @@ export default function TransitAdminSPA() {
           );
           })}
 
-          {route.isPickup && (
+          {/* Arrive At — always shown */}
           <div className="relative flex items-center gap-3">
           <span className="absolute -left-[23px] w-4.5 h-4.5 rounded-none bg-black border border-slate-850 text-white flex items-center justify-center font-bold text-[8px] z-10">
           🏢
           </span>
           <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-none text-left text-[11px] font-bold text-[#1c1b1f] flex justify-between items-center">
           <div>
-          <span className="text-[#1c1b1f]">MIHAN Depot</span>
-          <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">HQ</p>
+          <span className="text-[#1c1b1f]">
+            {getRouteEndAddress(route)}
+          </span>
+          <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">Arrive At</p>
           </div>
           <span className="text-[8px] bg-slate-200 text-slate-650 px-1.5 py-0.5 rounded font-black uppercase font-mono">
           Arrive (+{(activeVarIdx !== -1 ? routeVariations[activeVarIdx].totalDuration : route.totalDuration)}m)
           </span>
           </div>
           </div>
-          )}
           </div>
           </div>
 

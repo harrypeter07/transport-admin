@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
 }
 
 // Fetch employees + cabs and calculate dynamic start locations based on previous trips
-async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, depot: { x: number; y: number }, forceTripSequence?: number) {
+async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, depot: { x: number; y: number }, forceTripSequence?: number, cabSequenceCounts?: Record<string, number>) {
   const dbEmployees = await prisma.employee.findMany({
     where: {
       status: "ACTIVE",
@@ -117,6 +117,8 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, 
 
     if (forceTripSequence !== undefined) {
       tripSequence = forceTripSequence;
+    } else if (cabSequenceCounts && cabSequenceCounts[cab.id] !== undefined) {
+      tripSequence = cabSequenceCounts[cab.id] + 1;
     } else {
       // We look at routes on this day that are NOT for the current shift (to determine previous trips)
       const prevRoutes = cab.routes
@@ -291,7 +293,7 @@ async function persistPreviewRoutes(
     for (const [index, optRoute] of sortedRoutes.entries()) {
       const routeId = randomUUID();
       const shiftId = optRoute.shiftId || fallbackShiftId;
-      const tripSequence = optRoute.tripSequence || ((cabSequenceMap[optRoute.cabId] || 0) + 1);
+      const tripSequence = (cabSequenceMap[optRoute.cabId] || 0) + 1;
       cabSequenceMap[optRoute.cabId] = Math.max(cabSequenceMap[optRoute.cabId] || 0, tripSequence);
 
       routeRows.push({
@@ -350,7 +352,7 @@ export async function POST(req: NextRequest) {
     if (auth.response) return auth.response;
 
     const body = await req.json();
-    const { shiftId, isPickup, date, mode = "FASTEST_TRAVEL", selectedStrategy, previewRoutes, tripSequence: bodyTripSequence } = body;
+    const { shiftId, isPickup, date, mode = "FASTEST_TRAVEL", selectedStrategy, previewRoutes, tripSequence: bodyTripSequence, cabSequenceCounts } = body;
     const currentDateStr = date || new Date().toISOString().split("T")[0];
 
     const holiday = await prisma.holiday.findUnique({
@@ -376,7 +378,7 @@ export async function POST(req: NextRequest) {
     const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
 
     if (mode === "ALL") {
-      const { optEmployees, optCabs } = await fetchOptimizationInputs(shiftId, currentDateStr, depot, bodyTripSequence);
+      const { optEmployees, optCabs } = await fetchOptimizationInputs(shiftId, currentDateStr, depot, bodyTripSequence, cabSequenceCounts);
 
       if (optEmployees.length === 0) {
         return NextResponse.json({ error: "No active employees found for this shift" }, { status: 400 });

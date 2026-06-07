@@ -5,14 +5,15 @@ import { Route } from "@/store/useTransportStore";
 import dynamic from "next/dynamic";
 
 interface RouteVisualizerProps {
- routes: Route[];
- selectedRouteId: string | null;
- onSelectRoute: (id: string | null) => void;
- mode?: "OPTIMIZER" | "ANALYTICS";
- analysisData?: any;
- depotLat?: number;
- depotLng?: number;
- depotName?: string;
+  routes: Route[];
+  selectedRouteId: string | null;
+  onSelectRoute: (id: string | null) => void;
+  mode?: "OPTIMIZER" | "ANALYTICS";
+  analysisData?: any;
+  depotLat?: number;
+  depotLng?: number;
+  depotName?: string;
+  routeViewModes?: Record<string, "pickup" | "drop">;
 }
 
 const GoogleMapView = dynamic(() => import("./GoogleMapView"), {
@@ -25,14 +26,15 @@ const GoogleMapView = dynamic(() => import("./GoogleMapView"), {
 });
 
 export default function RouteVisualizer({
- routes,
- selectedRouteId,
- onSelectRoute,
- mode = "OPTIMIZER",
- analysisData,
- depotLat,
- depotLng,
- depotName,
+  routes,
+  selectedRouteId,
+  onSelectRoute,
+  mode = "OPTIMIZER",
+  analysisData,
+  depotLat,
+  depotLng,
+  depotName,
+  routeViewModes,
 }: RouteVisualizerProps) {
  const [settings, setSettings] = useState<any>(null);
  const [apiKey, setApiKey] = useState<string>("");
@@ -63,17 +65,18 @@ export default function RouteVisualizer({
  return (
   <div className="relative w-full h-[280px] sm:h-[380px] lg:h-[520px] bg-white border border-[#e8e8e8] rounded-none overflow-hidden shadow-xs flex flex-col">
   <div className="w-full h-full flex-grow relative z-0">
-  <GoogleMapView
-  routes={routes}
-  selectedRouteId={selectedRouteId}
-  onSelectRoute={onSelectRoute}
-  mode={mode}
-  analysisData={analysisData}
-  depotLat={finalLat}
-  depotLng={finalLng}
-  depotName={finalName}
-  apiKey={apiKey}
-  />
+   <GoogleMapView
+   routes={routes}
+   selectedRouteId={selectedRouteId}
+   onSelectRoute={onSelectRoute}
+   mode={mode}
+   analysisData={analysisData}
+   depotLat={finalLat}
+   depotLng={finalLng}
+   depotName={finalName}
+   apiKey={apiKey}
+   routeViewModes={routeViewModes}
+   />
   </div>
   </div>
  );

@@ -292,8 +292,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       const shiftsToOptimize = state.shifts.length > 0 ? state.shifts : [];
       const previews: OptimizationPlans[] = [];
       const hardErrors: string[] = [];
+      const cabSequenceCounts: Record<string, number> = {};
 
-      for (const [shiftIdx, shift] of shiftsToOptimize.entries()) {
+      for (const shift of shiftsToOptimize) {
         const res = await fetch("/api/optimization", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -302,7 +303,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
             isPickup,
             date: state.selectedDate,
             mode: "ALL",
-            tripSequence: shiftIdx + 1,
+            cabSequenceCounts,
           }),
         });
 
@@ -317,6 +318,15 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 
         const data = await res.json();
         if (data.preview) {
+          const assignedCabs = new Set<string>();
+          for (const key of ["MAXIMIZE_UTILIZATION", "MINIMIZE_TIME", "BALANCED"]) {
+            for (const route of data.preview[key]?.routes || []) {
+              assignedCabs.add(route.cabId);
+            }
+          }
+          for (const cabId of assignedCabs) {
+            cabSequenceCounts[cabId] = (cabSequenceCounts[cabId] || 0) + 1;
+          }
           previews.push(tagPreviewRoutes(data.preview, shift));
         }
       }
