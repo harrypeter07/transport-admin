@@ -486,13 +486,42 @@ export function getOptimalPermutation(
   }
 
   permute(employees);
-  return bestSafeRoute.length > 0 ? bestSafeRoute : bestUnsafeRoute;
+
+  // Geographic smoothing: if the optimal route zig-zags between sectors,
+  // prefer a route grouped by angle from depot (azimuthal sweep) when
+  // the distance increase is within 15% of optimal.
+  const candidate = bestSafeRoute.length > 0 ? bestSafeRoute : bestUnsafeRoute;
+  if (candidate.length >= 3) {
+    const optimalDist = calculateRouteDistance(candidate, isPickup, DEPOT, startPoint, distanceFn);
+    const withAngles = candidate.map(e => ({
+      emp: e,
+      angle: Math.atan2(e.y - DEPOT.y, e.x - DEPOT.x),
+    }));
+    withAngles.sort((a, b) => a.angle - b.angle);
+    const grouped = withAngles.map(x => x.emp);
+    const groupedDist = calculateRouteDistance(grouped, isPickup, DEPOT, startPoint, distanceFn);
+    if (groupedDist <= optimalDist * 1.25 && isPermutationSafe(grouped, isPickup)) {
+      return grouped;
+    }
+  }
+
+  return candidate;
 }
 
 // Calculate the total route distance
 function calculateRouteDistance(route: OptimizeEmployee[], isPickup: boolean, depot: Point = DEPOT, startPoint?: Point, distanceFn?: (a: Point, b: Point) => number): number {
   if (route.length === 0) return 0;
   const fn = distanceFn ?? getDistance;
+  const SECTOR_CROSSING_PENALTY = 15;
+
+  function sectorCrossingPenalty(a: Point, b: Point): number {
+    const angle1 = Math.atan2(a.y - depot.y, a.x - depot.x);
+    const angle2 = Math.atan2(b.y - depot.y, b.x - depot.x);
+    const diff = Math.abs(angle1 - angle2);
+    const normalizedDiff = diff > Math.PI ? 2 * Math.PI - diff : diff;
+    return normalizedDiff > Math.PI / 2 ? SECTOR_CROSSING_PENALTY : 0;
+  }
+
   let dist = 0;
 
   if (isPickup) {
@@ -501,12 +530,14 @@ function calculateRouteDistance(route: OptimizeEmployee[], isPickup: boolean, de
     }
     for (let i = 0; i < route.length - 1; i++) {
       dist += fn(route[i], route[i + 1]);
+      dist += sectorCrossingPenalty(route[i], route[i + 1]);
     }
     dist += fn(route[route.length - 1], depot);
   } else {
     dist += fn(depot, route[0]);
     for (let i = 0; i < route.length - 1; i++) {
       dist += fn(route[i], route[i + 1]);
+      dist += sectorCrossingPenalty(route[i], route[i + 1]);
     }
   }
 
@@ -787,6 +818,9 @@ export async function optimizeRoutes(
 
     rawClusterAssignments.push({ cab: cabForClustering, cluster });
   }
+
+  // ── Phase 1.5: Remove geographic outliers before cab matching ──────────
+  reassignOutliers(rawClusterAssignments);
 
   // ── Phase 2: Match closest driver to each cluster ──────────────────────────
   // Re-assigns cabs so the driver whose startPoint is nearest to each cluster's
@@ -2018,7 +2052,8 @@ function clusterMaxUtilization(
     }
     assignments.push({ cab, cluster });
   }
-  return matchCabsToClusters(assignments, roadData);
+  reassignOutliers(assignments);
+  return matchCabsToClusters(assignments);
 }
 /**
  * Strategy 2 — MINIMIZE_TIME
@@ -2073,7 +2108,8 @@ function clusterMinTime(
     }
     assignments.push({ cab, cluster });
   }
-  return matchCabsToClusters(assignments, roadData);
+  reassignOutliers(assignments);
+  return matchCabsToClusters(assignments);
 }
 /**
  * Strategy 3 — BALANCED
@@ -2130,17 +2166,230 @@ function clusterBalanced(
     }
     assignments.push({ cab, cluster });
   }
-  return matchCabsToClusters(assignments, roadData);
+  reassignOutliers(assignments);
+  return matchCabsToClusters(assignments);
+}
+
+// ── Reassign Outliers: Post-clustering employee chain-swap ─────────────────
+// Detects employees that are geographic outliers within their assigned cluster
+// and chain-swaps them to the closest valid cluster. Runs BEFORE cab matching
+// so cluster composition is geographically coherent first.
+const OUTLIER_DIST_RATIO = 2.0;  // distance-to-centroid > 2× cluster mean
+const OUTLIER_CLOSER_RATIO = 0.7; // other centroid < 70% of own-centroid distance
+const MAX_CHAIN_DEPTH = 5;
+
+function clusterCentroid(cluster: OptimizeEmployee[]): Point {
+  return {
+    x: cluster.reduce((s, e) => s + e.x, 0) / Math.max(cluster.length, 1),
+    y: cluster.reduce((s, e) => s + e.y, 0) / Math.max(cluster.length, 1),
+  };
+}
+
+function detectOutliers(
+  assignments: ClusterAssignment[],
+  centroids: Point[]
+): { srcIdx: number; empId: string; severity: number }[] {
+  const results: { srcIdx: number; empId: string; severity: number }[] = [];
+  for (let ci = 0; ci < assignments.length; ci++) {
+    const cluster = assignments[ci].cluster;
+    if (cluster.length <= 1) continue;
+    const cent = centroids[ci];
+    const meanDist = cluster.reduce((s, e) => s + getDistance(e, cent), 0) / cluster.length;
+    if (meanDist < 0.001) continue;
+    for (const emp of cluster) {
+      const dOwn = getDistance(emp, cent);
+      // Criterion 1: distance from own centroid far exceeds cluster mean
+      if (dOwn > meanDist * OUTLIER_DIST_RATIO) {
+        results.push({ srcIdx: ci, empId: emp.id, severity: dOwn / meanDist });
+        continue;
+      }
+      // Criterion 2: closer to another cluster's centroid that has room
+      for (let cj = 0; cj < assignments.length; cj++) {
+        if (cj === ci) continue;
+        if (assignments[cj].cluster.length >= assignments[cj].cab.capacity) continue;
+        if (getDistance(emp, centroids[cj]) < dOwn * OUTLIER_CLOSER_RATIO) {
+          results.push({ srcIdx: ci, empId: emp.id, severity: dOwn / meanDist });
+          break;
+        }
+      }
+    }
+  }
+  results.sort((a, b) => b.severity - a.severity);
+  return results;
+}
+
+function isOutlierInCluster(
+  emp: OptimizeEmployee,
+  cluster: OptimizeEmployee[],
+  centroid: Point
+): boolean {
+  if (cluster.length <= 1) return false;
+  const meanDist = cluster.reduce((s, e) => s + getDistance(e, centroid), 0) / cluster.length;
+  return meanDist >= 0.001 && getDistance(emp, centroid) > meanDist * OUTLIER_DIST_RATIO;
+}
+
+function findWorstFit(
+  employees: OptimizeEmployee[],
+  destCentroid: Point,
+  srcCentroid: Point
+): number {
+  let worstIdx = -1;
+  let worstScore = -Infinity;
+  for (let i = 0; i < employees.length; i++) {
+    const dDest = getDistance(employees[i], destCentroid);
+    const dSrc = getDistance(employees[i], srcCentroid);
+    const score = dDest * 1.5 - dSrc;
+    if (score > worstScore) { worstScore = score; worstIdx = i; }
+  }
+  return worstIdx;
+}
+
+function reassignOutliers(assignments: ClusterAssignment[]): void {
+  if (assignments.length <= 1) return;
+
+  let centroids = assignments.map(a => clusterCentroid(a.cluster));
+  let outliers = detectOutliers(assignments, centroids);
+  if (outliers.length === 0) return;
+
+  const visited = new Set<string>();
+
+  function chainReassign(srcIdx: number, empId: string, depth: number): void {
+    if (depth > MAX_CHAIN_DEPTH) return;
+    const key = `${empId}:${srcIdx}`;
+    if (visited.has(key)) return;
+    visited.add(key);
+
+    // Refresh centroids (may have shifted)
+    centroids = assignments.map(a => clusterCentroid(a.cluster));
+
+    const srcCluster = assignments[srcIdx].cluster;
+    const empIdx = srcCluster.findIndex(e => e.id === empId);
+    if (empIdx < 0) return;
+    const emp = srcCluster[empIdx];
+
+    // Find closest destination cluster with room (prefer) or any
+    let bestDestIdx = -1;
+    let bestDist = Infinity;
+    let hasRoom = false;
+
+    for (let cj = 0; cj < assignments.length; cj++) {
+      if (cj === srcIdx) continue;
+      const cap = assignments[cj].cab.capacity;
+      const d = getDistance(emp, centroids[cj]);
+      const room = assignments[cj].cluster.length < cap;
+      // Prefer destinations with room; fall back to full ones
+      const priority = room ? 0 : 1;
+      const score = priority * 1e6 + d;
+      if (score < bestDist) {
+        bestDist = score;
+        bestDestIdx = cj;
+        hasRoom = room;
+      }
+    }
+
+    if (bestDestIdx < 0) return;
+
+    const destCluster = assignments[bestDestIdx].cluster;
+    const destCap = assignments[bestDestIdx].cab.capacity;
+
+    if (hasRoom) {
+      // Simple move
+      srcCluster.splice(empIdx, 1);
+      destCluster.push(emp);
+    } else if (destCluster.length > 0) {
+      // Full cluster — swap with worst-fit employee
+      const worstIdx = findWorstFit(destCluster, centroids[bestDestIdx], centroids[srcIdx]);
+      if (worstIdx < 0) return;
+      const displaced = destCluster[worstIdx];
+      destCluster[worstIdx] = emp;
+      srcCluster[empIdx] = displaced;
+
+      // Recursively check if displaced is now an outlier in source
+      centroids = assignments.map(a => clusterCentroid(a.cluster));
+      if (isOutlierInCluster(displaced, srcCluster, centroids[srcIdx])) {
+        chainReassign(srcIdx, displaced.id, depth + 1);
+      }
+    }
+  }
+
+  for (const o of outliers) {
+    chainReassign(o.srcIdx, o.empId, 0);
+  }
+}
+
+// ── Hungarian algorithm for minimum-cost perfect matching ─────────────────
+// Replaces the previous greedy matching in matchCabsToClusters to find the
+// globally optimal cab-to-cluster assignment, minimising total driver deadhead.
+function hungarian(cost: number[][]): number[] {
+  const n = cost.length;
+  if (n === 0) return [];
+
+  const INF = 1e15;
+  const u = new Array(n + 1).fill(0);
+  const v = new Array(n + 1).fill(0);
+  const p = new Array(n + 1).fill(0);
+  const way = new Array(n + 1).fill(0);
+
+  for (let i = 1; i <= n; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array(n + 1).fill(INF);
+    const used = new Array(n + 1).fill(false);
+
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = INF;
+      let j1 = 0;
+
+      for (let j = 1; j <= n; j++) {
+        if (!used[j]) {
+          const cur = Math.max(cost[i0 - 1][j - 1] - u[i0] - v[j], 0);
+          if (cur < minv[j]) {
+            minv[j] = cur;
+            way[j] = j0;
+          }
+          if (minv[j] < delta) {
+            delta = minv[j];
+            j1 = j;
+          }
+        }
+      }
+
+      for (let j = 0; j <= n; j++) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else {
+          minv[j] -= delta;
+        }
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0 !== 0);
+  }
+
+  const result = new Array(n).fill(-1);
+  for (let j = 1; j <= n; j++) {
+    if (p[j] > 0) {
+      result[p[j] - 1] = j - 1;
+    }
+  }
+  return result;
 }
 
 /**
  * Re-matches cabs to clusters based on driver startPoint proximity to cluster centroid.
- * Runs AFTER clustering so cluster composition is unchanged — only swaps which cab
- * services which cluster, minimising driver deadhead to the first pickup.
+ * Uses Hungarian algorithm for globally optimal assignment. Runs AFTER clustering
+ * so cluster composition is unchanged — only swaps which cab services which cluster.
  */
 function matchCabsToClusters(
-  assignments: ClusterAssignment[],
-  roadData?: GlobalRoadData
+  assignments: ClusterAssignment[]
 ): ClusterAssignment[] {
   if (assignments.length <= 1) return assignments;
 
@@ -2155,49 +2404,27 @@ function matchCabsToClusters(
   }));
 
   // Build cost matrix: cost[cabIdx][clusterIdx] = dist(cab.startPoint, cluster centroid)
-  const cost: number[][] = cabsInOrder.map(cab => {
-    const sp = cab.startPoint;
-    return centroids.map(centroid =>
-      sp ? getDistance(sp, centroid) : Infinity
-    );
-  });
-
-  // Greedy matching: process clusters largest-first; each picks the closest unmatched cab
-  const usedCabIndices = new Set<number>();
-  const cabForCluster: number[] = new Array(n).fill(-1);
-  const clustersBySize = [...Array(n).keys()].sort(
-    (a, b) => clusters[b].length - clusters[a].length
+  // Invalid assignments (capacity < cluster size) get a prohibitive cost to discourage assignment
+  const INFEASIBLE = 1e12;
+  const cost: number[][] = cabsInOrder.map(cab =>
+    centroids.map((centroid, clIdx) => {
+      if (cab.capacity < clusters[clIdx].length) return INFEASIBLE;
+      if (!cab.startPoint) return INFEASIBLE;
+      return getDistance(cab.startPoint, centroid);
+    })
   );
 
-  for (const clIdx of clustersBySize) {
-    let bestCabIdx = -1;
-    let bestDist = Infinity;
-    for (let ci = 0; ci < n; ci++) {
-      if (usedCabIndices.has(ci)) continue;
-      // Capacity must accommodate this cluster
-      if (cabsInOrder[ci].capacity < clusters[clIdx].length) continue;
-      if (cost[ci][clIdx] < bestDist) {
-        bestDist = cost[ci][clIdx];
-        bestCabIdx = ci;
-      }
-    }
-    // Fallback: any unmatched cab (capacity already ensured by clustering)
-    if (bestCabIdx === -1) {
-      for (let ci = 0; ci < n; ci++) {
-        if (!usedCabIndices.has(ci)) { bestCabIdx = ci; break; }
-      }
-    }
-    if (bestCabIdx !== -1) {
-      cabForCluster[clIdx] = bestCabIdx;
-      usedCabIndices.add(bestCabIdx);
-    }
-  }
+  // Hungarian: globally optimal minimum-cost assignment
+  const assignment = hungarian(cost);
 
   // Rebuild assignments with the matched cabs
-  return assignments.map((a, clIdx) => ({
-    cab: cabForCluster[clIdx] >= 0 ? cabsInOrder[cabForCluster[clIdx]] : a.cab,
-    cluster: a.cluster,
-  }));
+  return assignments.map((a, clIdx) => {
+    const cabIdx = assignment[clIdx];
+    return {
+      cab: cabIdx >= 0 && cabIdx < n ? cabsInOrder[cabIdx] : a.cab,
+      cluster: a.cluster,
+    };
+  });
 }
 
 async function buildRoutesFromAssignments(

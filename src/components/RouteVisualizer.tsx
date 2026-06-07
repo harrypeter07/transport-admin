@@ -14,6 +14,9 @@ interface RouteVisualizerProps {
   depotLng?: number;
   depotName?: string;
   routeViewModes?: Record<string, "pickup" | "drop">;
+  selectedEmployeeId?: string | null;
+  onSelectEmployee?: (id: string | null) => void;
+  canonicalSequences?: Record<string, string[]>;
 }
 
 const GoogleMapView = dynamic(() => import("./GoogleMapView"), {
@@ -35,6 +38,9 @@ export default function RouteVisualizer({
   depotLng,
   depotName,
   routeViewModes,
+  selectedEmployeeId,
+  onSelectEmployee,
+  canonicalSequences,
 }: RouteVisualizerProps) {
  const [settings, setSettings] = useState<any>(null);
  const [apiKey, setApiKey] = useState<string>("");
@@ -65,18 +71,21 @@ export default function RouteVisualizer({
  return (
   <div className="relative w-full h-[280px] sm:h-[380px] lg:h-[520px] bg-white border border-[#e8e8e8] rounded-none overflow-hidden shadow-xs flex flex-col">
   <div className="w-full h-full flex-grow relative z-0">
-   <GoogleMapView
-   routes={routes}
-   selectedRouteId={selectedRouteId}
-   onSelectRoute={onSelectRoute}
-   mode={mode}
-   analysisData={analysisData}
-   depotLat={finalLat}
-   depotLng={finalLng}
-   depotName={finalName}
-   apiKey={apiKey}
-   routeViewModes={routeViewModes}
-   />
+    <GoogleMapView
+    routes={routes}
+    selectedRouteId={selectedRouteId}
+    onSelectRoute={onSelectRoute}
+    mode={mode}
+    analysisData={analysisData}
+    depotLat={finalLat}
+    depotLng={finalLng}
+    depotName={finalName}
+    apiKey={apiKey}
+    routeViewModes={routeViewModes}
+    selectedEmployeeId={selectedEmployeeId}
+    onSelectEmployee={onSelectEmployee}
+    canonicalSequences={canonicalSequences}
+    />
   </div>
   </div>
  );

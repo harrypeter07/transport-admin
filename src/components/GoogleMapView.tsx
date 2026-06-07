@@ -49,13 +49,24 @@ function buildShiftColorMap(routes: Route[]): Map<string, string> {
 const MAP_STYLES: google.maps.MapTypeStyle[] = [
   { featureType: "poi.business", stylers: [{ visibility: "off" }] },
   { featureType: "poi.attraction", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.medical", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.school", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "landscape", stylers: [{ color: "#f0f0f0" }] },
-  { featureType: "water", stylers: [{ color: "#aad3df" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-  { featureType: "road", elementType: "labels.text", stylers: [{ visibility: "on" }] },
+  { featureType: "landscape", stylers: [{ color: "#f2eee9" }] },
+  { featureType: "landscape.natural.landcover", stylers: [{ color: "#e8e0d5" }] },
+  { featureType: "landscape.natural.terrain", stylers: [{ color: "#e8e0d5" }] },
+  { featureType: "poi.park", stylers: [{ color: "#d4e5c8", visibility: "on" }] },
+  { featureType: "water", stylers: [{ color: "#c8e0f0" }] },
+  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#f7d9c4" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#e8c8b0" }] },
+  { featureType: "road.highway", elementType: "labels.text", stylers: [{ visibility: "on" }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.arterial", elementType: "labels.text", stylers: [{ visibility: "on" }] },
+  { featureType: "road.local", elementType: "geometry", stylers: [{ color: "#f5f3f0" }] },
+  { featureType: "road.local", elementType: "labels.text", stylers: [{ visibility: "on" }] },
   { featureType: "administrative.locality", stylers: [{ visibility: "on" }] },
   { featureType: "administrative.neighborhood", stylers: [{ visibility: "on" }] },
+  { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
 ];
 
 function svgToUri(svg: string): string {
@@ -66,31 +77,37 @@ function depotSvg(size: number): string {
   const s = size;
   return svgToUri(`
     <svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
-      <rect width="${s}" height="${s}" fill="#1c1b1f" stroke="#ffffff" stroke-width="2"/>
-      <text x="${s / 2}" y="${s / 2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffd700" font-size="${s * 0.5}">★</text>
+      <rect width="${s}" height="${s}" rx="${s * 0.15}" fill="#1c1b1f" stroke="#ffffff" stroke-width="2.5"/>
+      <text x="${s / 2}" y="${s / 2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="${s * 0.45}">⚑</text>
     </svg>
   `);
 }
 
-function employeeSvg(size: number, label: string, color: string, gender: string, isSelected: boolean): string {
+function employeeSvg(size: number, label: string, color: string, gender: string, isSelected: boolean, opacity = 1, isHighlighted = false): string {
   const stroke = isSelected ? "#ffffff" : "transparent";
   const strokeW = isSelected ? "2" : "0";
   const isFemale = gender === "F";
+  const innerR = size / 2 - (isHighlighted ? 3 : 1);
   const shape = isFemale
-    ? `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="${color}" stroke="${stroke}" stroke-width="${strokeW}"/>`
-    : `<rect width="${size}" height="${size}" rx="${size * 0.2}" fill="${color}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
+    ? `<circle cx="${size / 2}" cy="${size / 2}" r="${innerR}" fill="${color}" stroke="${stroke}" stroke-width="${strokeW}"/>`
+    : `<rect x="${isHighlighted ? 3 : 0}" y="${isHighlighted ? 3 : 0}" width="${size - (isHighlighted ? 6 : 0)}" height="${size - (isHighlighted ? 6 : 0)}" rx="${(size - (isHighlighted ? 6 : 0)) * 0.2}" fill="${color}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
+  const ring = isHighlighted
+    ? `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 0.5}" fill="none" stroke="#ff4f00" stroke-width="2.5" opacity="0.9"/>`
+    : '';
   return svgToUri(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" opacity="${opacity}">
+      ${ring}
       ${shape}
-      <text x="${size / 2}" y="${size / 2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="${size * 0.45}" font-weight="900" font-family="sans-serif">${label}</text>
+      <text x="${size / 2}" y="${size / 2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="${Math.max(size * 0.38, 8)}" font-weight="900" font-family="sans-serif">${label}</text>
     </svg>
   `);
 }
 
-function driverStartSvg(size: number, _color: string): string {
+function driverStartSvg(size: number, color: string): string {
   return svgToUri(`
     <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="#1c1b1f" stroke="#ffffff" stroke-width="2"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="${color}" stroke="#ffffff" stroke-width="1.5"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 5}" fill="#1c1b1f"/>
       <text x="${size / 2}" y="${size / 2 + 1}" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="${size * 0.4}" font-weight="900" font-family="sans-serif">⌂</text>
     </svg>
   `);
@@ -107,6 +124,9 @@ interface GoogleMapViewProps {
   depotName?: string;
   apiKey: string;
   routeViewModes?: Record<string, "pickup" | "drop">;
+  selectedEmployeeId?: string | null;
+  onSelectEmployee?: (id: string | null) => void;
+  canonicalSequences?: Record<string, string[]>;
 }
 
 export default function GoogleMapView({
@@ -120,6 +140,9 @@ export default function GoogleMapView({
   depotName = "Depot",
   apiKey,
   routeViewModes,
+  selectedEmployeeId,
+  onSelectEmployee,
+  canonicalSequences,
 }: GoogleMapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -168,16 +191,16 @@ export default function GoogleMapView({
     return { lat: depotLat, lng: depotLng };
   };
 
-  const getDisplayOrderedStops = (route: Route, isPickup: boolean): any[] =>
-    [...route.stops].sort((a: any, b: any) => {
-      const aLat = a.employee?.y ?? a.y;
-      const aLng = a.employee?.x ?? a.x;
-      const bLat = b.employee?.y ?? b.y;
-      const bLng = b.employee?.x ?? b.x;
-      const distA = (aLat - depotLat) ** 2 + (aLng - depotLng) ** 2;
-      const distB = (bLat - depotLat) ** 2 + (bLng - depotLng) ** 2;
-      return isPickup ? distB - distA : distA - distB;
-    });
+  const getDisplayOrderedStops = (route: Route, isPickup: boolean): any[] => {
+    const sorted = [...route.stops].sort((a: any, b: any) => a.stopOrder - b.stopOrder);
+    const canonical = canonicalSequences?.[route.id];
+    if (canonical) {
+      const stopMap = new Map(sorted.map(s => [s.employee.id, s]));
+      const ordered = canonical.map(id => stopMap.get(id)).filter(Boolean);
+      return isPickup ? ordered : [...ordered].reverse();
+    }
+    return isPickup ? sorted : [...sorted].reverse();
+  };
 
   useEffect(() => {
     if (mode !== "OPTIMIZER" || !selectedRouteId) {
@@ -264,8 +287,8 @@ export default function GoogleMapView({
       position: { lat: depotLat, lng: depotLng },
       map,
       icon: {
-        url: depotSvg(40),
-        anchor: new google.maps.Point(20, 20),
+        url: depotSvg(44),
+        anchor: new google.maps.Point(22, 22),
       },
       title: `${depotName} (Hub)`,
       zIndex: 1000,
@@ -287,7 +310,10 @@ export default function GoogleMapView({
     routes.forEach((route, idx) => {
       if (selectedRouteId && route.id !== selectedRouteId) return;
 
-      const sortedStops = getDisplayOrderedStops(route, route.isPickup);
+      const overviewMode = routeViewModes?.[route.id]
+        ? routeViewModes[route.id] === "pickup"
+        : route.isPickup;
+      const sortedStops = getDisplayOrderedStops(route, overviewMode);
       if (sortedStops.length === 0) return;
 
       // Color by shift — all routes in the same shift share the same color
@@ -318,10 +344,10 @@ export default function GoogleMapView({
           position: { lat: markerY, lng: markerX },
           map,
           icon: {
-            url: employeeSvg(28, "", routeColor, stop.employee.gender, false),
-            anchor: new google.maps.Point(14, 14),
+            url: employeeSvg(20, "", routeColor, stop.employee.gender, false, 0.4),
+            anchor: new google.maps.Point(10, 10),
           },
-          zIndex: 20,
+          zIndex: 10,
         });
         overlays.push(empMarker);
 
@@ -339,7 +365,7 @@ export default function GoogleMapView({
             url: driverStartSvg(48, routeColor),
             anchor: new google.maps.Point(24, 24),
           },
-          zIndex: 20,
+          zIndex: 15,
         });
         overlays.push(startMarker);
         startMarker.addListener("click", () => {
@@ -356,12 +382,16 @@ export default function GoogleMapView({
         const stopsList = [...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder);
         const effectiveIsPickup = routeViewModes?.[selectedRoute.id]
           ? routeViewModes[selectedRoute.id] === "pickup"
-          : selectedRoute.isPickup;
-        stopsList.sort((a, b) => {
-          const distA = (a.employee.y - depotLat) ** 2 + (a.employee.x - depotLng) ** 2;
-          const distB = (b.employee.y - depotLat) ** 2 + (b.employee.x - depotLng) ** 2;
-          return effectiveIsPickup ? distB - distA : distA - distB;
-        });
+          : true;
+        const canonical = canonicalSequences?.[selectedRoute.id];
+        let orderedStops: any[];
+        if (canonical) {
+          const stopMap = new Map(stopsList.map(s => [s.employee.id, s]));
+          const ordered = canonical.map(id => stopMap.get(id)).filter(Boolean);
+          orderedStops = effectiveIsPickup ? ordered : [...ordered].reverse();
+        } else {
+          orderedStops = effectiveIsPickup ? stopsList : [...stopsList].reverse();
+        }
         const routeStart = getRouteStartLatLng(selectedRoute);
         const seenCoords: Record<string, number> = {};
 
@@ -374,7 +404,7 @@ export default function GoogleMapView({
               url: driverStartSvg(48, selectedRouteColor),
               anchor: new google.maps.Point(24, 24),
             },
-            zIndex: 30,
+            zIndex: 35,
           });
           overlays.push(startMarker);
 
@@ -387,7 +417,7 @@ export default function GoogleMapView({
           });
         }
 
-        stopsList.forEach((stop, displayIdx) => {
+        orderedStops.forEach((stop, displayIdx) => {
           const isViolation = selectedRoute.violations.some(
             (v) =>
               !v.resolved &&
@@ -423,25 +453,31 @@ export default function GoogleMapView({
             markerX += Math.cos(angle) * offsetDist;
           }
 
+          const isHighlighted = stop.employee.id === selectedEmployeeId;
+
           const empMarker = new google.maps.Marker({
             position: { lat: markerY, lng: markerX },
             map,
             icon: {
-              url: employeeSvg(28, String(displayIdx + 1), selectedRouteColor, stop.employee.gender, true),
-              anchor: new google.maps.Point(14, 14),
+              url: employeeSvg(isHighlighted ? 32 : 26, String(displayIdx + 1), selectedRouteColor, stop.employee.gender, true, 1, isHighlighted),
+              anchor: new google.maps.Point(isHighlighted ? 16 : 13, isHighlighted ? 16 : 13),
             },
-            zIndex: 30,
+            zIndex: isHighlighted ? 40 : 30,
           });
           overlays.push(empMarker);
 
           const empInfo = new google.maps.InfoWindow({
-            content: `<div style="padding:6px 10px;border-left:4px solid ${selectedRouteColor};"><strong style="font-size:14px;">${stop.employee.name}</strong><div style="margin:4px 0;font-size:11px;color:#666;">Stop #${displayIdx + 1} (${stop.etaMinutes} min)</div><div style="font-size:12px;">Pickup: ${pickupLabel}<br/>Home: ${homeLabel}<br/>Phone: ${phoneDisplay}</div></div>`,
+            content: `<div style="padding:6px 10px;border-left:4px solid ${selectedRouteColor};"><span style="display:inline-block;background:${selectedRouteColor};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-right:6px;">r${selectedRouteIdx + 1}</span><strong style="font-size:14px;">${stop.employee.name}</strong><div style="margin:4px 0;font-size:11px;color:#666;">Stop #${displayIdx + 1} (${stop.etaMinutes} min)</div><div style="font-size:12px;">Pickup: ${pickupLabel}<br/>Home: ${homeLabel}<br/>Phone: ${phoneDisplay}</div></div>`,
           });
           infoWindows.push(empInfo);
           empMarker.addListener("click", () => {
             infoWindows.forEach((iw) => iw.close());
             empInfo.open({ map, anchor: empMarker });
           });
+
+          if (isHighlighted) {
+            empInfo.open({ map, anchor: empMarker });
+          }
         });
 
         /* Polylines removed — the platform is a transport allocation system,
@@ -469,7 +505,7 @@ export default function GoogleMapView({
       overlays.forEach((o) => o?.setMap?.(null));
       infoWindows.forEach((iw) => iw.close());
     };
-  }, [routes, selectedRouteId, mode, routeViewModes]);
+  }, [routes, selectedRouteId, mode, routeViewModes, selectedEmployeeId, canonicalSequences]);
 
   const shiftLegend = buildShiftColorMap(routes);
 

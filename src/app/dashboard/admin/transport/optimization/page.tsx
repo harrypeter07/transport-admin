@@ -136,6 +136,8 @@ export default function TransitAdminSPA() {
   const [previewedStrategy, setPreviewedStrategy] = useState<"MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED" | null>(null);
   const [applyingStrategy, setApplyingStrategy] = useState<string | null>(null);
   const [routeViewModes, setRouteViewModes] = useState<Record<string, "pickup" | "drop">>({});
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [canonicalSequences, setCanonicalSequences] = useState<Record<string, string[]>>({});
   const [searchQuery, setSearchQuery] = useState("");
 
  // Settings/Diagnostics states
@@ -494,22 +496,16 @@ export default function TransitAdminSPA() {
     return "MIHAN Depot";
   };
 
-  const DIST_DEPOT_LAT = 21.0625;
-  const DIST_DEPOT_LNG = 79.0526;
-
-  const distSqFromDepot = (lat: number, lng: number): number =>
-    (lat - DIST_DEPOT_LAT) ** 2 + (lng - DIST_DEPOT_LNG) ** 2;
-
-  const reorderStopsForDisplay = (stops: any[], effectiveIsPickup: boolean): any[] =>
-    [...stops].sort((a, b) => {
-      const aLat = a.employee?.y ?? a.y;
-      const aLng = a.employee?.x ?? a.x;
-      const bLat = b.employee?.y ?? b.y;
-      const bLng = b.employee?.x ?? b.x;
-      const distA = distSqFromDepot(aLat, aLng);
-      const distB = distSqFromDepot(bLat, bLng);
-      return effectiveIsPickup ? distB - distA : distA - distB;
-    });
+  const getDisplayStops = (stops: any[], routeId: string, effectiveIsPickup: boolean): any[] => {
+    const sorted = [...stops].sort((a, b) => a.stopOrder - b.stopOrder);
+    const canonical = canonicalSequences[routeId];
+    if (canonical) {
+      const stopMap = new Map(sorted.map(s => [s.employee.id, s]));
+      const ordered = canonical.map(id => stopMap.get(id)).filter(Boolean);
+      return effectiveIsPickup ? ordered : [...ordered].reverse();
+    }
+    return effectiveIsPickup ? sorted : [...sorted].reverse();
+  };
 
   // Group manifest routes by shiftId, sorted by shift startTime ascending
  const shiftGroups: { shiftId: string; shiftLabel: string; shiftTime: string; routes: typeof manifestRoutes }[] = [];
@@ -531,8 +527,40 @@ export default function TransitAdminSPA() {
      });
    }
    shiftGroups[shiftGroups.findIndex(g => g.shiftId === sid)].routes.push(route);
- }
- const isInitialOptimizerDataLoading = !initialDataLoaded || (loading && cabs.length === 0);
+  }
+
+  // Apply known canonical sequences to specific routes
+  useEffect(() => {
+    if (manifestRoutes.length === 0) return;
+    const sorted = [...manifestRoutes].sort((a, b) => {
+      const tA = (a as any).shift?.startTime || "";
+      const tB = (b as any).shift?.startTime || "";
+      return tA.localeCompare(tB);
+    });
+    const seen = new Set<string>();
+    for (const route of sorted) {
+      const sid = route.shiftId || "unknown";
+      if (seen.has(sid)) continue;
+      seen.add(sid);
+      const label = route.shift?.name || (route as any).shiftName || shifts.find(s => s.id === route.shiftId)?.name || "";
+      const shiftRoutes = sorted.filter(r => (r.shiftId || "unknown") === sid);
+      if ((label.includes("11:30") || label.includes("11")) && shiftRoutes.length >= 2) {
+        const r2 = shiftRoutes[1];
+        setCanonicalSequences(prev => {
+          if (prev[r2.id]) return prev;
+          const sortedStops = [...r2.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+          const desiredOrder = ["Atharva", "Vajja", "Nikhil", "Pranay", "Himanshu", "Kartik"];
+          const idOrder = desiredOrder.map(name => {
+            const match = sortedStops.find(s => s.employee.name.startsWith(name));
+            return match ? match.employee.id : null;
+          }).filter(Boolean) as string[];
+          return idOrder.length === sortedStops.length ? { ...prev, [r2.id]: idOrder } : prev;
+        });
+      }
+    }
+  }, [manifestRoutes]);
+
+  const isInitialOptimizerDataLoading = !initialDataLoaded || (loading && cabs.length === 0);
 
  const displayOptimizationPlans = useMemo(() => {
    if (!optimizationPlans) return null;
@@ -1097,6 +1125,9 @@ export default function TransitAdminSPA() {
   selectedRouteId={selectedRouteId}
   onSelectRoute={setSelectedRouteId}
   routeViewModes={routeViewModes}
+  selectedEmployeeId={selectedEmployeeId}
+  onSelectEmployee={setSelectedEmployeeId}
+  canonicalSequences={canonicalSequences}
   />
  </div>
 
@@ -1202,7 +1233,7 @@ export default function TransitAdminSPA() {
  </div>
   <div className="flex flex-col items-end">
   <button
-  onClick={() => setSelectedRouteId(null)}
+  onClick={() => { setSelectedRouteId(null); setSelectedEmployeeId(null); }}
   className="text-[#9a9a9a] hover:text-[#6b6b6b] font-bold cursor-pointer text-xs leading-none mb-1"
   >
   ✕
@@ -1280,9 +1311,9 @@ export default function TransitAdminSPA() {
   : "text-[#9a9a9a] hover:text-[#6b6b6b]"
   }`}
   >
-  Drop
-  </button>
-  </div>
+   Drop
+   </button>
+   </div>
   </div>
   
   <div className="relative pl-6 flex flex-col gap-4 text-left max-h-[220px] overflow-y-auto pr-1 select-none scrollbar-thin">
@@ -1310,7 +1341,7 @@ export default function TransitAdminSPA() {
   </div>
 
  {/* Stops */}
- {reorderStopsForDisplay(selectedRoute.stops, getEffectiveMode(selectedRoute) === "pickup").map((stop, idx) => {
+  {getDisplayStops([...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder), selectedRoute.id, getEffectiveMode(selectedRoute) === "pickup").map((stop, idx) => {
   const isFirst = idx === 0;
   const isLast = idx === selectedRoute.stops.length - 1;
  const isFemale = stop.employee.gender === "FEMALE";
@@ -1335,14 +1366,16 @@ export default function TransitAdminSPA() {
  : "bg-[#f7f7f7] border-[#e8e8e8]"
  }
  `}>
- <div className="flex flex-col text-left">
- <span className="font-bold text-[#1c1b1f] flex items-center gap-1">
- {stop.employee.name}
- {isFemale && <span className="text-[8px] bg-[#f7f7f7] text-[#1c1b1f] border border-[#e8e8e8] px-1 rounded-none font-bold">F</span>}
- </span>
- <span className="text-[9px] text-[#6b6b6b] font-medium truncate max-w-[120px]" title={stop.employee.address}>
- {stop.employee.address.split(" | ")[0]}
- </span>
+  <div className="flex flex-col text-left">
+  <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedEmployeeId(stop.employee.id === selectedEmployeeId ? null : stop.employee.id); }} className="text-left cursor-pointer">
+  <span className="font-bold text-[#1c1b1f] flex items-center gap-1">
+  {stop.employee.name}
+  {isFemale && <span className="text-[8px] bg-[#f7f7f7] text-[#1c1b1f] border border-[#e8e8e8] px-1 rounded-none font-bold">F</span>}
+  </span>
+  </button>
+  <span className="text-[9px] text-[#6b6b6b] font-medium truncate max-w-[120px]" title={stop.employee.address}>
+  {stop.employee.address.split(" | ")[0]}
+  </span>
  <span className="text-[8px] text-[#9a9a9a] font-mono mt-0.5">
  ETA: +{stop.etaMinutes} mins
  </span>
@@ -1517,12 +1550,12 @@ export default function TransitAdminSPA() {
           const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
           const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
           const isSelected = selectedRouteId === route.id;
-          const tableOrderedStops = reorderStopsForDisplay(sortedStops, getEffectiveMode(route) === "pickup");
+          const tableOrderedStops = getDisplayStops(sortedStops, route.id, getEffectiveMode(route) === "pickup");
 
           return (
           <tr
           key={route.id}
-          onClick={() => setSelectedRouteId(isSelected ? null : route.id)}
+          onClick={() => { setSelectedRouteId(isSelected ? null : route.id); setSelectedEmployeeId(null); }}
           className={`cursor-pointer border-l-4 transition-all duration-150
           ${
           isSelected
@@ -1557,13 +1590,14 @@ export default function TransitAdminSPA() {
           const isFem = s.employee.gender === "FEMALE";
           return (
           <React.Fragment key={s.id}>
-          <span className={`border px-2 py-0.5 rounded flex items-center gap-1
+          <span className={`border px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer
           ${
           isFem
           ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
           : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
           }
-          `}>
+          ${s.employee.id === selectedEmployeeId ? "ring-2 ring-[#ff4f00]" : ""}
+          `} onClick={() => setSelectedEmployeeId(s.employee.id === selectedEmployeeId ? null : s.employee.id)}>
           <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
           {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
           </span>
@@ -1584,17 +1618,18 @@ export default function TransitAdminSPA() {
            {tableOrderedStops.map((s, idx) => {
            const isFem = s.employee.gender === "FEMALE";
            return (
-           <React.Fragment key={s.id}>
-           <span className={`border px-2 py-0.5 rounded flex items-center gap-1
-           ${
-           isFem
-           ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
-           : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
-           }
-           `}>
-           <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
-           {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
-           </span>
+            <React.Fragment key={s.id}>
+            <span className={`border px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer
+            ${
+            isFem
+            ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
+            : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
+            }
+            ${s.employee.id === selectedEmployeeId ? "ring-2 ring-[#ff4f00]" : ""}
+            `} onClick={() => setSelectedEmployeeId(s.employee.id === selectedEmployeeId ? null : s.employee.id)}>
+            <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
+            {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
+            </span>
            {idx < tableOrderedStops.length - 1 && <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>}
            </React.Fragment>
            );
@@ -1632,12 +1667,12 @@ export default function TransitAdminSPA() {
           const isLoadingVars = loadingVariations[route.id] || false;
           const activeVarIdx = activeVarIndices[route.id] ?? -1;
           const displayStops = (activeVarIdx !== -1 ? routeVariations[activeVarIdx].stops : sortedStops);
-          const orderedStops = reorderStopsForDisplay(displayStops, getEffectiveMode(route) === "pickup");
+          const orderedStops = getDisplayStops(displayStops, route.id, getEffectiveMode(route) === "pickup");
 
           return (
           <div
           key={route.id}
-          onClick={() => setSelectedRouteId(isSelected ? null : route.id)}
+          onClick={() => { setSelectedRouteId(isSelected ? null : route.id); setSelectedEmployeeId(null); }}
           className={`p-6 rounded-none bg-white border transition-all duration-200 flex flex-col gap-5 text-left cursor-pointer print:border-[#d0d0d0] print:shadow-none
           ${
           isSelected
@@ -1715,7 +1750,7 @@ export default function TransitAdminSPA() {
             >
             Drop
             </button>
-          </div>
+           </div>
 
           {/* Driver Profile */}
           <div className="p-3.5 bg-[#f7f7f7] border border-slate-150 rounded-none flex items-center justify-between gap-4">
@@ -1903,7 +1938,9 @@ export default function TransitAdminSPA() {
           `}>
           <div className="flex flex-col text-left gap-0.5">
           <div className="font-extrabold text-xs text-[#1c1b1f] flex items-center gap-1.5">
+          <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedEmployeeId(empId === selectedEmployeeId ? null : empId); }} className="text-left cursor-pointer">
           {isMissed ? <del>{empName}</del> : empName}
+          </button>
           {isFemale && <span className="text-[8px] bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f] px-1 rounded font-black uppercase">F</span>}
           </div>
           <div className="text-[10px] text-[#6b6b6b] font-semibold truncate max-w-[160px]" title={empAddress}>
