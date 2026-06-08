@@ -96,6 +96,12 @@ const driverNavGroups = [
   },
 ];
 
+interface SessionUser {
+  name: string;
+  email: string;
+  role: string;
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -104,6 +110,16 @@ export default function DashboardLayout({
   const [, action, pending] = useActionState(logout, undefined);
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [session, setSession] = useState<SessionUser | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then(r => r.json())
+      .then(d => {
+        if (!d.error && d.userId) setSession(d as SessionUser);
+      })
+      .catch(() => {});
+  }, []);
 
   // Auto close drawer when path changes
   useEffect(() => {
@@ -165,6 +181,17 @@ export default function DashboardLayout({
           {/* Right actions */}
           <div className="flex items-center gap-3">
             <NotificationBell />
+            
+            {/* User identity chip (desktop) */}
+            {session && (
+              <div className="hidden md:flex items-center gap-2 px-2.5 py-1 bg-[#f7f7f7] border border-[#e8e8e8]">
+                <div className="w-5 h-5 rounded-full bg-[#1c1b1f] flex items-center justify-center text-white text-[9px] font-bold">
+                  {session.name?.charAt(0)?.toUpperCase() || "U"}
+                </div>
+                <span className="text-[11px] font-semibold text-[#4a4a4a] max-w-[100px] truncate">{session.name}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-[#6b6b6b]">{session.role}</span>
+              </div>
+            )}
             
             {/* Desktop Sign Out */}
             <div className="hidden md:flex items-center gap-3">

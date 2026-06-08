@@ -103,42 +103,34 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { id } = await params;
     const before = await prisma.cab.findUnique({ where: { id } });
 
-    const pendingRoutes = await prisma.route.findMany({
-      where: { cabId: id, status: { in: ["PENDING", "PLANNED"] } },
-      select: { id: true }
-    });
-    if (pendingRoutes.length > 0) {
-      const routeIds = pendingRoutes.map(r => r.id);
-      await prisma.routeStop.deleteMany({ where: { routeId: { in: routeIds } } });
-      await prisma.violation.deleteMany({ where: { routeId: { in: routeIds } } });
-      await prisma.route.deleteMany({ where: { id: { in: routeIds } } });
-      console.info(`[api] Deleted ${routeIds.length} pending routes for deleted cab ${id} to ensure fresh data.`);
-    }
+    await prisma.$transaction(async (tx) => {
+      // First, find all routes for this cab
+      const allRoutes = await tx.route.findMany({
+        where: { cabId: id },
+        select: { id: true }
+      });
+      const allRouteIds = allRoutes.map(r => r.id);
 
-    const routeReferences = await prisma.route.count({
-      where: { cabId: id },
-    });
-
-    if (routeReferences > 0) {
-      const cab = before;
-      if (cab) {
-        await prisma.cab.update({
-          where: { id },
-          data: {
-            status: "INACTIVE",
-            vehicleNumber: `${cab.vehicleNumber}_deleted_${Date.now()}`,
-            shifts: { set: [] },
-          }
-        });
+      if (allRouteIds.length > 0) {
+        // Cascade delete all references to these routes
+        await tx.routeStop.deleteMany({ where: { routeId: { in: allRouteIds } } });
+        await tx.violation.deleteMany({ where: { routeId: { in: allRouteIds } } });
+        await tx.operationalEvent.deleteMany({ where: { routeId: { in: allRouteIds } } });
+        await tx.vehicleLocation.deleteMany({ where: { routeId: { in: allRouteIds } } });
+        await tx.route.deleteMany({ where: { id: { in: allRouteIds } } });
       }
-      await audit({ userId: session.userId, role: session.role, action: "DELETE", entity: "Cab", entityId: id, before, after: { status: "INACTIVE" }, ip });
-      console.info("[api] ✅ DELETE /api/cabs/[id] — soft-deleted", { id, userId: session.userId, ip });
-      return NextResponse.json({ success: true });
-    }
 
-    await prisma.cab.delete({ where: { id } });
+      // Then delete the user account if it exists
+      if (before?.userId) {
+        await tx.user.delete({ where: { id: before.userId } }).catch(() => {});
+      }
+      
+      // Finally, delete the cab itself
+      await tx.cab.delete({ where: { id } });
+    });
+
     await audit({ userId: session.userId, role: session.role, action: "DELETE", entity: "Cab", entityId: id, before, ip });
-    console.info("[api] ✅ DELETE /api/cabs/[id] — OK", { id, userId: session.userId, ip });
+    console.info("[api] ✅ DELETE /api/cabs/[id] — Hard deleted", { id, userId: session.userId, ip });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("[api] ❌ DELETE /api/cabs/[id] — Failed", { ip }, error);

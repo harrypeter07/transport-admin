@@ -140,9 +140,9 @@ export default function EmployeeDashboardPage() {
  <User className="text-[#9a9a9a] mt-0.5 flex-shrink-0" size={18} />
  <div className="text-xs space-y-1">
  <span className="font-bold text-[#9a9a9a] uppercase tracking-widest text-[9px] block">Driver Details</span>
- <p className="text-sm font-bold text-[#1c1b1f]">{route.cab?.driver?.name || "Driver details N/A"}</p>
+ <p className="text-sm font-bold text-[#1c1b1f]">{route.cab?.driverName || "Driver details N/A"}</p>
  <p className="text-[#6b6b6b] font-semibold flex items-center gap-1 mt-0.5">
- <Phone size={11} /> {route.cab?.driver?.phone || "—"}
+ <Phone size={11} /> {route.cab?.driverPhone || "—"}
  </p>
  </div>
  </div>

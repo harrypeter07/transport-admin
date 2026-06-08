@@ -82,6 +82,11 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, 
   const availableEmployees = dbEmployees.filter(emp => (emp.user?.leaves || []).length === 0);
   const fallbackShiftId = availableEmployees[0]?.shiftId || shiftId || "";
 
+  // Load all shift start times for chronological comparison
+  const allShifts = await prisma.shift.findMany({ select: { id: true, startTime: true } });
+  const shiftStartTimes = new Map(allShifts.map(s => [s.id, s.startTime || "00:00"]));
+  const currentShiftStartTime = shiftStartTimes.get(fallbackShiftId) || "00:00";
+
   const dbCabs = await prisma.cab.findMany({
     where: {
       status: "AVAILABLE",
@@ -120,13 +125,16 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, 
     } else if (cabSequenceCounts && cabSequenceCounts[cab.id] !== undefined) {
       tripSequence = cabSequenceCounts[cab.id] + 1;
     } else {
-      // We look at routes on this day that are NOT for the current shift (to determine previous trips)
+      // Only count routes from chronologically EARLIER shifts
       const prevRoutes = cab.routes
-        .filter(r => r.shiftId !== fallbackShiftId)
-        .sort((a, b) => a.tripSequence - b.tripSequence);
+        .filter(r => {
+          if (r.shiftId === fallbackShiftId) return false;
+          const otherTime = shiftStartTimes.get(r.shiftId) || "";
+          return otherTime < currentShiftStartTime;
+        });
 
       if (prevRoutes.length > 0) {
-        tripSequence = prevRoutes.length + 1;
+        tripSequence = Math.max(...prevRoutes.map(r => r.tripSequence), 0) + 1;
       }
     }
 
@@ -191,7 +199,7 @@ async function persistRoutes(
           isPickup,
           totalDistance: optRoute.totalDistance,
           totalDuration: optRoute.totalDuration,
-          status: "PENDING",
+          status: "PLANNED",
           optimizationScore: optRoute.optimizationScore,
           optimizationMode: strategyLabel,
           tripSequence: cabTripSequenceMap[optRoute.cabId] || 1,
@@ -246,23 +254,30 @@ async function persistPreviewRoutes(
     new Set(validRoutes.map((route) => route.shiftId || fallbackShiftId).filter(Boolean))
   );
 
-  const shifts = await prisma.shift.findMany({
-    where: { id: { in: affectedShiftIds } },
-    select: { id: true, startTime: true },
-  });
-  const shiftStartTimeById = new Map(shifts.map((shift) => [shift.id, shift.startTime || ""]));
+  const allShifts = await prisma.shift.findMany({ select: { id: true, startTime: true } });
+  const shiftStartTimeById = new Map(allShifts.map((shift) => [shift.id, shift.startTime || ""]));
+
+  // Earliest start time among affected shifts — routes from earlier shifts are legitimate "previous trips"
+  const earliestAffectedStartTime = [...shiftStartTimeById.entries()]
+    .filter(([id]) => affectedShiftIds.includes(id))
+    .map(([, time]) => time)
+    .sort()
+    [0] || "99:99";
 
   const existingRoutes = await prisma.route.findMany({
     where: {
       date: currentDateStr,
       shiftId: { notIn: affectedShiftIds },
     },
-    select: { cabId: true, tripSequence: true },
+    select: { cabId: true, tripSequence: true, shiftId: true },
   });
 
   const cabSequenceMap: Record<string, number> = {};
   for (const route of existingRoutes) {
-    cabSequenceMap[route.cabId] = Math.max(cabSequenceMap[route.cabId] || 0, route.tripSequence || 1);
+    const otherTime = shiftStartTimeById.get(route.shiftId) || "";
+    if (otherTime < earliestAffectedStartTime) {
+      cabSequenceMap[route.cabId] = Math.max(cabSequenceMap[route.cabId] || 0, route.tripSequence || 1);
+    }
   }
 
   const sortedRoutes = [...validRoutes].sort((a, b) => {
@@ -304,7 +319,7 @@ async function persistPreviewRoutes(
         isPickup,
         totalDistance: optRoute.totalDistance,
         totalDuration: optRoute.totalDuration,
-        status: "PENDING",
+        status: "PLANNED",
         optimizationScore: optRoute.optimizationScore,
         optimizationMode: strategyLabel,
         tripSequence,

@@ -79,26 +79,59 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const newCab = await prisma.cab.create({
-      data: {
-        vehicleNumber,
-        capacity: parseInt(capacity),
-        vendor,
-        status,
-        driverName: driverName || "Unassigned",
-        driverPhone: driverPhone || "",
-        licenseNumber: licenseNumber || "",
-        driverAddress: driverAddress || null,
-        formattedAddress,
-        driverX: finalDriverX,
-        driverY: finalDriverY,
-        placeId: finalDriverPlaceId,
-        shifts: shiftIds && shiftIds.length > 0 ? {
-          connect: shiftIds.map((id: string) => ({ id }))
-        } : undefined
-      },
-      include: { shifts: true }
+    const newCab = await prisma.$transaction(async (tx) => {
+      let userId: string | null = null;
+      
+      const finalDriverName = driverName && driverName !== "Unassigned" ? driverName : `Driver ${vehicleNumber}`;
+      const sanitizedName = finalDriverName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      let generatedEmail = `${sanitizedName}@transitadmin.com`;
+      
+      let existingUser = await tx.user.findUnique({ where: { email: generatedEmail } });
+      if (existingUser) {
+          generatedEmail = `${sanitizedName}_${vehicleNumber.toLowerCase().replace(/[^a-z0-9]/g, "")}@transitadmin.com`;
+      }
+      
+      // We must dynamically import bcrypt in API route, or better, we can assume it's imported at the top.
+      // Wait, bcrypt is not imported at the top of cabs/route.ts! I should add the import!
+      // I will do that in a separate replacement or modify this.
+      // Actually I should just use `require("bcryptjs")` inline or import it.
+      const bcrypt = require("bcryptjs");
+      const defaultPassword = await bcrypt.hash("Welcome@123", 10);
+
+      const user = await tx.user.create({
+        data: {
+          email: generatedEmail,
+          password: defaultPassword,
+          name: finalDriverName,
+          role: "DRIVER",
+          requiresPasswordChange: true,
+        },
+      });
+      userId = user.id;
+
+      return await tx.cab.create({
+        data: {
+          vehicleNumber,
+          capacity: parseInt(capacity),
+          vendor,
+          status,
+          driverName: finalDriverName,
+          driverPhone: driverPhone || "",
+          licenseNumber: licenseNumber || "",
+          driverAddress: driverAddress || null,
+          formattedAddress,
+          driverX: finalDriverX,
+          driverY: finalDriverY,
+          placeId: finalDriverPlaceId,
+          userId,
+          shifts: shiftIds && shiftIds.length > 0 ? {
+            connect: shiftIds.map((id: string) => ({ id }))
+          } : undefined
+        },
+        include: { shifts: true }
+      });
     });
+
     await audit({ userId: session.userId, role: session.role, action: "CREATE", entity: "Cab", entityId: newCab.id, after: { vehicleNumber: newCab.vehicleNumber }, ip });
     console.info("[api] ✅ POST /api/cabs — OK", { vehicleNumber: newCab.vehicleNumber, id: newCab.id, userId: session.userId, ip });
     return NextResponse.json(newCab);

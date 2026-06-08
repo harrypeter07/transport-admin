@@ -24,7 +24,7 @@ export async function GET(req: Request) {
  employeeId: employee.id,
  route: {
  date: { gte: today },
- status: { in: ["PLANNED", "ASSIGNED", "IN_PROGRESS"] }
+	status: { in: ["ASSIGNED", "IN_PROGRESS"] }
  }
  },
  orderBy: {
@@ -33,7 +33,7 @@ export async function GET(req: Request) {
  include: {
  route: {
  include: {
- cab: true,
+	cab: { include: { user: { select: { name: true } } } },
  shift: true,
  stops: {
  include: { employee: true },

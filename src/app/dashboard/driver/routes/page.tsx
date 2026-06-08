@@ -9,17 +9,19 @@ export default function DriverRoutesExecutionPage() {
  const [loading, setLoading] = useState(true);
  const router = useRouter();
 
- useEffect(() => {
- fetchActiveRoute();
- }, []);
+  useEffect(() => {
+  fetchActiveRoute();
+  const interval = setInterval(fetchActiveRoute, 15000);
+  return () => clearInterval(interval);
+  }, []);
 
  async function fetchActiveRoute() {
  setLoading(true);
  const res = await fetch("/api/driver/routes");
  if (res.ok) {
  const data = await res.json();
- const inProgress = data.routes?.find((r: any) => r.status === "IN_PROGRESS");
- setRoute(inProgress || null);
+  const activeRoute = data.routes?.find((r: any) => r.status === "IN_PROGRESS" || r.status === "ASSIGNED");
+  setRoute(activeRoute || null);
  }
  setLoading(false);
  }

@@ -43,6 +43,7 @@ import {
   GitCompare,
   ChevronDown,
   ChevronUp,
+  X,
 } from "lucide-react";
 
 export default function TransitAdminSPA() {
@@ -83,7 +84,10 @@ export default function TransitAdminSPA() {
 
  const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "COMPLIANCE" | "ANALYSIS">("OPTIMIZER");
  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
- const [addressChanged, setAddressChanged] = useState(false);
+  const [addressChanged, setAddressChanged] = useState(false);
+  const [applySuccess, setApplySuccess] = useState(false);
+  const [publishCount, setPublishCount] = useState<number | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   // Analysis Dashboard State
  const [analysisData, setAnalysisData] = useState<any>(null);
@@ -265,10 +269,11 @@ export default function TransitAdminSPA() {
     setAddressChanged(changed);
   }, [employees, routes]);
 
-  const handleGeneratePlans = async () => {
- setOptimizing(true);
- setOptimizeError(null);
-  try {
+   const handleGeneratePlans = async () => {
+  setOptimizing(true);
+  setOptimizeError(null);
+  setApplySuccess(false);
+   try {
   await fetchInitialData();
   const result = await previewOptimization(isPickup);
  if (!result.success) {
@@ -285,24 +290,28 @@ export default function TransitAdminSPA() {
  }
  };
 
- const handleApplyPlan = async (strategy: "MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED") => {
- setApplyingStrategy(strategy);
- setOptimizeError(null);
- try {
- const result = await applyOptimizationPlan(strategy, isPickup);
-  if (!result.success) {
-  setOptimizeError(result.error || "Failed to apply plan.");
-  } else {
-  setVariations({});
-  setActiveVarIndices({});
-  try { sessionStorage.removeItem("opencode-opt-strategy"); } catch {}
+  const handleApplyPlan = async (strategy: "MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED") => {
+  setApplyingStrategy(strategy);
+  setOptimizeError(null);
+  setApplySuccess(false);
+  try {
+  const result = await applyOptimizationPlan(strategy, isPickup);
+   if (!result.success) {
+   setOptimizeError(result.error || "Failed to apply plan.");
+   } else {
+   setVariations({});
+   setActiveVarIndices({});
+   clearOptimizationPreview();
+   setPreviewedStrategy(null);
+   setApplySuccess(true);
+   try { sessionStorage.removeItem("opencode-opt-strategy"); } catch {}
+   }
+  } catch (err: any) {
+  setOptimizeError(err.message || "Unexpected error applying plan.");
+  } finally {
+  setApplyingStrategy(null);
   }
- } catch (err: any) {
- setOptimizeError(err.message || "Unexpected error applying plan.");
- } finally {
- setApplyingStrategy(null);
- }
- };
+  };
 
  // Legacy single-strategy handler (kept for backward compat with "Optimize Routing" button)
  const handleRunOptimization = async () => {
@@ -766,96 +775,185 @@ export default function TransitAdminSPA() {
 
  <div className="h-4 w-px bg-slate-200"></div>
 
- {optimizationPlans ? (
- <div className="flex items-center gap-1.5 px-2 py-1 bg-white border border-[#e8e8e8] rounded-none shadow-2xs">
- <span className="text-xs font-bold text-[#6b6b6b]">Preview:</span>
- <select
- value={previewedStrategy || "BALANCED"}
-  onChange={(e) => {
-  setPreviewedStrategy(e.target.value as any);
-  try { sessionStorage.setItem("opencode-opt-strategy", e.target.value); } catch {}
-  }}
- className="bg-transparent border-none text-xs font-bold text-[#1c1b1f] outline-none cursor-pointer focus:ring-0"
- >
- <option value="MAXIMIZE_UTILIZATION">Maximize Utilization</option>
- <option value="MINIMIZE_TIME">Minimize Commute</option>
- <option value="BALANCED">Balanced</option>
- </select>
- </div>
- ) : (
- <div className="flex items-center gap-2">
- <button
- onClick={handleGeneratePlans}
- disabled={optimizing || previewing || loading}
- className="flex items-center gap-1.5 bg-slate-800 text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
- >
- <RotateCw className={`w-3.5 h-3.5 ${optimizing || previewing ? "animate-spin-fast" : ""}`} />
-  {optimizing || previewing ? "Solving..." : "Optimize Routing"}
-  </button>
+  {optimizationPlans ? (
+  <div className="flex items-center gap-1.5 px-2 py-1 bg-white border border-[#e8e8e8] rounded-none shadow-2xs">
+  <span className="text-xs font-bold text-[#6b6b6b]">Preview:</span>
+  <select
+  value={previewedStrategy || "BALANCED"}
+   onChange={(e) => {
+   setPreviewedStrategy(e.target.value as any);
+   try { sessionStorage.setItem("opencode-opt-strategy", e.target.value); } catch {}
+   }}
+  className="bg-transparent border-none text-xs font-bold text-[#1c1b1f] outline-none cursor-pointer focus:ring-0"
+  >
+  <option value="MAXIMIZE_UTILIZATION">Maximize Utilization</option>
+  <option value="MINIMIZE_TIME">Minimize Commute</option>
+  <option value="BALANCED">Balanced</option>
+  </select>
+  </div>
+  ) : (
+  <div className="flex items-center gap-2">
+  <button
+  onClick={handleGeneratePlans}
+  disabled={optimizing || previewing || loading}
+  className="flex items-center gap-1.5 bg-slate-800 text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
+  >
+  <RotateCw className={`w-3.5 h-3.5 ${optimizing || previewing ? "animate-spin-fast" : ""}`} />
+   {optimizing || previewing ? "Solving..." : "Optimize Routing"}
+   </button>
 
-  {addressChanged && (
-    <div className="text-[9px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 flex items-center gap-1.5 animate-fadeIn">
-      <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-      <span>Addresses changed — re-optimize to update routes</span>
-    </div>
+   {addressChanged && (
+     <div className="text-[9px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 flex items-center gap-1.5 animate-fadeIn">
+       <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+       <span>Addresses changed — re-optimize to update routes</span>
+     </div>
+   )}
+  </div>
   )}
 
-  {routes.some(r => r.status === "PENDING" || r.status === "PLANNED") && (
- <button
- onClick={async () => {
- if (!confirm("Are you sure you want to publish these routes to the fleet? Drivers and Employees will immediately see their assignments.")) return;
- try {
- const res = await fetch("/api/optimization/publish", {
- method: "POST",
- headers: { "Content-Type": "application/json" },
- body: JSON.stringify({ date: selectedDate, shiftId: activeShiftId }),
- });
- if (res.ok) {
- alert("Routes published successfully!");
- fetchInitialData({ date: selectedDate, shiftId: activeShiftId });
- } else {
- alert("Failed to publish routes.");
- }
- } catch (e) {
- alert("Error publishing routes.");
- }
- }}
- className="bg-[#1c1b1f] text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-black transition shadow-2xs cursor-pointer"
- >
- Publish to Fleet
- </button>
- )}
- </div>
- )}
-
- {optimizationPlans && (
- <div className="flex items-center gap-2">
- <button
- onClick={() => previewedStrategy && handleApplyPlan(previewedStrategy)}
- disabled={!previewedStrategy || applyingStrategy === previewedStrategy || loading}
- className="flex items-center gap-1.5 bg-[#ff4f00] text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
- >
- {applyingStrategy ? (
- <><RotateCw className="w-3.5 h-3.5 animate-spin-fast" /> Applying...</>
- ) : (
- <><CheckCircle2 className="w-3.5 h-3.5" /> Confirm & Apply</>
- )}
- </button>
- <button
-  onClick={() => {
-  clearOptimizationPreview();
-  setPreviewedStrategy(null);
-  setHasOptimized(false);
-  try { sessionStorage.removeItem("opencode-opt-strategy"); } catch {}
+  {optimizationPlans && (
+  <div className="flex flex-wrap items-center gap-2">
+  <button
+  onClick={() => previewedStrategy && handleApplyPlan(previewedStrategy)}
+  disabled={!previewedStrategy || applyingStrategy === previewedStrategy || loading}
+  className="flex items-center gap-1.5 bg-white border border-[#e8e8e8] text-[#1c1b1f] px-3 py-1.5 rounded-none text-xs font-bold hover:bg-[#f7f7f7] transition disabled:opacity-50 shadow-2xs cursor-pointer"
+  >
+  {applyingStrategy ? (
+  <><RotateCw className="w-3.5 h-3.5 animate-spin-fast" /> Saving...</>
+  ) : (
+  <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Save Draft</>
+  )}
+  </button>
+  
+  <button
+  onClick={async () => {
+    if (!previewedStrategy) return;
+    if (!confirm("Are you sure you want to instantly publish these optimized routes? Drivers and Employees will immediately be notified.")) return;
+    
+    setPublishError(null);
+    setApplyingStrategy("PUBLISHING");
+    
+    try {
+      // 1. Apply Plan
+      const applyRes = await applyOptimizationPlan(previewedStrategy, isPickup);
+      if (!applyRes.success) {
+        setPublishError(applyRes.error || "Failed to apply plan.");
+        setApplyingStrategy(null);
+        return;
+      }
+      
+      // 2. Publish Plan
+      const res = await fetch("/api/optimization/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: selectedDate }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setVariations({});
+        setActiveVarIndices({});
+        clearOptimizationPreview();
+        setPreviewedStrategy(null);
+        try { sessionStorage.removeItem("opencode-opt-strategy"); } catch {}
+        
+        setApplySuccess(false);
+        setPublishCount(data.count || 0);
+        setTimeout(() => setPublishCount(null), 8000);
+        fetchInitialData({ date: selectedDate, shiftId: "" });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setPublishError(err.error || "Failed to publish routes.");
+      }
+    } catch (e) {
+      setPublishError("Network error while publishing routes.");
+    } finally {
+      setApplyingStrategy(null);
+    }
   }}
- className="flex items-center gap-1.5 bg-white text-[#6b6b6b] border border-[#e8e8e8] px-3 py-1.5 rounded-none text-xs font-bold hover:bg-[#f7f7f7] transition shadow-2xs cursor-pointer"
- >
- Cancel
- </button>
- </div>
- )}
+  disabled={!previewedStrategy || applyingStrategy !== null || loading}
+  className="flex items-center gap-1.5 bg-[#ff4f00] text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-[#e64500] transition disabled:opacity-50 shadow-2xs cursor-pointer"
+  >
+  {applyingStrategy === "PUBLISHING" ? (
+  <><RotateCw className="w-3.5 h-3.5 animate-spin-fast" /> Publishing...</>
+  ) : (
+  <>Publish Fleet</>
+  )}
+  </button>
 
- <button
+  <button
+   onClick={() => {
+   clearOptimizationPreview();
+   setPreviewedStrategy(null);
+   setHasOptimized(false);
+   try { sessionStorage.removeItem("opencode-opt-strategy"); } catch {}
+   }}
+  className="flex items-center gap-1.5 bg-white text-[#6b6b6b] border border-[#e8e8e8] px-3 py-1.5 rounded-none text-xs font-bold hover:bg-[#f7f7f7] transition shadow-2xs cursor-pointer ml-auto"
+  >
+  Cancel
+  </button>
+  </div>
+  )}
+
+  {applySuccess && (
+  <div className="bg-emerald-50 border border-emerald-200 px-3 py-2 text-[11px] text-emerald-800 font-semibold flex items-center gap-2 animate-fadeIn">
+  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+  <span>Routes saved as draft! You can review them below and click <strong>Publish Fleet</strong> when ready.</span>
+  </div>
+  )}
+
+  {publishCount !== null && (
+  <div className="bg-emerald-50 border border-emerald-200 px-3 py-2 text-[11px] text-emerald-800 font-semibold flex items-center gap-2 animate-fadeIn">
+  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+  <span className="flex-1">Successfully published {publishCount} routes to the fleet!</span>
+  <button onClick={() => setPublishCount(null)} className="text-emerald-500 hover:text-emerald-700 cursor-pointer">
+  <X className="w-3.5 h-3.5" />
+  </button>
+  </div>
+  )}
+
+  {publishError && (
+  <div className="bg-red-50 border border-red-200 px-3 py-2 text-[11px] text-red-700 font-semibold flex items-center gap-2 animate-fadeIn">
+  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+  <span className="flex-1">{publishError}</span>
+  <button onClick={() => setPublishError(null)} className="text-red-400 hover:text-red-600 cursor-pointer">
+  <X className="w-3.5 h-3.5" />
+  </button>
+  </div>
+  )}
+
+  {!optimizationPlans && routes.some(r => r.status === "PLANNED" || r.status === "PENDING") && (
+  <button
+  onClick={async () => {
+  if (!confirm("Are you sure you want to publish these routes to the fleet? Drivers and Employees will immediately see their assignments.")) return;
+  setPublishError(null);
+  try {
+  const res = await fetch("/api/optimization/publish", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ date: selectedDate }),
+  });
+  if (res.ok) {
+  const data = await res.json();
+  setApplySuccess(false);
+  setPublishCount(data.count || 0);
+  setTimeout(() => setPublishCount(null), 8000);
+  fetchInitialData({ date: selectedDate, shiftId: "" });
+  } else {
+  const err = await res.json().catch(() => ({}));
+  setPublishError(err.error || "Failed to publish routes.");
+  }
+  } catch (e) {
+  setPublishError("Network error while publishing routes.");
+  }
+  }}
+  className="bg-[#1c1b1f] text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-black transition shadow-2xs cursor-pointer"
+  >
+  Publish to Fleet
+  </button>
+  )}
+
+  <button
  onClick={() => setShowAttendanceChecklist(!showAttendanceChecklist)}
  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-bold transition border border-[#e8e8e8] cursor-pointer shadow-2xs
  ${showAttendanceChecklist ? "bg-[#1c1b1f] border-slate-900 text-white" : "bg-white text-[#4a4a4a] hover:bg-[#f7f7f7]"}
@@ -1431,15 +1529,15 @@ export default function TransitAdminSPA() {
   </span>
   <div className="flex-1 p-2 bg-[#f7f7f7]/80 border border-[#e8e8e8] rounded-none text-[11px] font-semibold text-[#1c1b1f]">
   <div className="flex justify-between items-center">
-  <span>
-    {getRouteEndAddress(selectedRoute)}
-  </span>
-  <span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
-  Arrive At
-  </span>
-  </div>
-  <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">
-   {isLastTripForCab(selectedRoute) ? "Driver End Location" : "Central Corporate Hub"}
+   <span>
+     {getEffectiveMode(selectedRoute) === "pickup" ? "MIHAN Depot" : getRouteEndAddress(selectedRoute)}
+   </span>
+   <span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
+   Arrive At
+   </span>
+   </div>
+   <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">
+    {getEffectiveMode(selectedRoute) === "pickup" ? "Central Corporate Hub" : (isLastTripForCab(selectedRoute) ? "Driver End Location" : "Central Corporate Hub")}
   </p>
   </div>
   </div>
@@ -1695,6 +1793,16 @@ export default function TransitAdminSPA() {
             <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
               r{route.routeNumber || index + 1}
             </span>
+            {route.status && (
+            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 border ${
+              route.status === "ASSIGNED" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+              route.status === "PLANNED" || route.status === "PENDING" ? "bg-amber-50 border-amber-200 text-amber-700" :
+              route.status === "IN_PROGRESS" ? "bg-blue-50 border-blue-200 text-blue-700" :
+              "bg-slate-50 border-slate-200 text-slate-500"
+            }`}>
+              {route.status}
+            </span>
+            )}
             </h3>
           <span className="text-[10px] text-[#6b6b6b] font-semibold uppercase tracking-wider">
           Vendor: {route.cab.vendor} · {route.stops.length} / {route.cab.capacity} passengers
@@ -1999,8 +2107,8 @@ export default function TransitAdminSPA() {
           </span>
           <div className="flex-grow p-2.5 bg-slate-105 border border-slate-150 rounded-none text-left text-[11px] font-bold text-[#1c1b1f] flex justify-between items-center">
           <div>
-          <span className="text-[#1c1b1f]">
-            {getRouteEndAddress(route)}
+           <span className="text-[#1c1b1f]">
+             {getEffectiveMode(route) === "pickup" ? "MIHAN Depot" : getRouteEndAddress(route)}
           </span>
           <p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">Arrive At</p>
           </div>

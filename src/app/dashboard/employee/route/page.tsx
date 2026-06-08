@@ -133,11 +133,11 @@ export default function EmployeeRoutePage() {
  </div>
  <div>
  <p className="text-xs text-[#6b6b6b]">Driver Name</p>
- <p className="font-bold text-[#1c1b1f]">{route.cab?.driver?.name || "Unassigned"}</p>
+ <p className="font-bold text-[#1c1b1f]">{route.cab?.driverName || "Unassigned"}</p>
  </div>
  <div>
  <p className="text-xs text-[#6b6b6b]">Driver Phone</p>
- <p className="font-bold text-[#1c1b1f]">{route.cab?.driver?.phone || "N/A"}</p>
+ <p className="font-bold text-[#1c1b1f]">{route.cab?.driverPhone || "N/A"}</p>
  </div>
  </div>
  </div>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/apiAuth";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { createNotification } from "@/lib/notifications";
 
 export async function POST(req: Request) {
 	const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
@@ -16,12 +17,12 @@ export async function POST(req: Request) {
 	return NextResponse.json({ error: "Date is required" }, { status: 400 });
 	}
 
-	// Find all PENDING or PLANNED routes for the given date and shift
+	// Find all PLANNED routes for the given date
 	const routesToUpdate = await prisma.route.findMany({
 	where: {
 	date,
 	...(shiftId ? { shiftId } : {}),
-	status: { in: ["PENDING", "PLANNED"] }
+	status: { in: ["PLANNED", "PENDING"] }
 	},
 	select: { id: true }
 	});
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
 	const routeIds = routesToUpdate.map(r => r.id);
 
 	if (routeIds.length === 0) {
-	return NextResponse.json({ success: true, message: "No pending routes found to publish." });
+	return NextResponse.json({ error: "No pending routes found to publish for the selected date." }, { status: 400 });
 	}
 
 	// Update Routes to ASSIGNED
@@ -38,10 +39,49 @@ export async function POST(req: Request) {
 	data: { status: "ASSIGNED" }
 	});
 
-	await audit({ userId: auth.session.userId, role: auth.session.role, action: "PUBLISH", entity: "Route", after: { count: routeIds.length, date, shiftId }, ip });
+	// Fetch published routes with stops to send notifications
+	const publishedRoutes = await prisma.route.findMany({
+	where: { id: { in: routeIds } },
+	include: {
+	cab: { select: { userId: true, driverName: true } },
+	stops: { include: { employee: { select: { userId: true, name: true } } } }
+	}
+	});
+
+	const notifiedUsers = new Set<string>();
+
+	for (const route of publishedRoutes) {
+	// Notify driver
+	if (route.cab?.userId && !notifiedUsers.has(route.cab.userId)) {
+	notifiedUsers.add(route.cab.userId);
+	await createNotification(
+	route.cab.userId,
+	"New Route Assigned",
+	`A new route has been assigned to you on ${date} (${route.cab.driverName || "Vehicle " + route.id}). Please check your dashboard.`,
+	"ROUTE",
+	"/dashboard/driver"
+	);
+	}
+
+	// Notify employees on this route
+	for (const stop of route.stops) {
+	if (stop.employee?.userId && !notifiedUsers.has(stop.employee.userId)) {
+	notifiedUsers.add(stop.employee.userId);
+	await createNotification(
+	stop.employee.userId,
+	"New Route Published",
+	`Your commute route for ${date} has been published. Please check your dashboard for pickup details.`,
+	"ROUTE",
+	"/dashboard/employee"
+	);
+	}
+	}
+	}
+
+	await audit({ userId: auth.session.userId, role: auth.session.role, action: "PUBLISH", entity: "Route", after: { count: routeIds.length, date, shiftId, notifications: notifiedUsers.size }, ip });
 	console.info("[api] ✅ POST /api/optimization/publish", { count: routeIds.length, userId: auth.session.userId, ip });
 
-	return NextResponse.json({ success: true, count: routeIds.length });
+	return NextResponse.json({ success: true, count: routeIds.length, notifications: notifiedUsers.size });
 	} catch (error: any) {
 	console.error("[api] ❌ POST /api/optimization/publish", { ip }, error);
 	return NextResponse.json({ error: error.message }, { status: 500 });
