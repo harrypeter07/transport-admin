@@ -135,7 +135,10 @@ export async function POST(req: NextRequest) {
         seenEmpNames.add(empName.toLowerCase());
 
         const excelEmpCode = String(row[3] || "").trim();
-        let dbEmp = employees.find(e => e.employeeCode === excelEmpCode);
+        let dbEmp = undefined;
+        if (excelEmpCode.toLowerCase() !== "na") {
+          dbEmp = employees.find(e => e.employeeCode === excelEmpCode);
+        }
         if (!dbEmp && empName) {
            const queryName = empName.toLowerCase();
            dbEmp = employees.find(e => e.name.toLowerCase() === queryName);
@@ -178,9 +181,64 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const filteredRoutes = optimizedRoutes.filter(route => {
+      if (route.shiftTime === "11:00" && (route.vehicleNumber.toLowerCase().includes("mob-") || route.driverName.toLowerCase().includes("mob-"))) {
+        return false;
+      }
+      if (route.shiftTime === "10:00") {
+        return false;
+      }
+      return true;
+    });
+
+    let shift10 = dbShifts.find(s => s.startTime === "10:00");
+    if (!shift10) {
+      shift10 = await prisma.shift.create({ data: { name: "Shift 10:00", startTime: "10:00", endTime: "23:59" } });
+      dbShifts.push(shift10);
+    }
+    const shift10Id = shift10.id;
+
+    filteredRoutes.push({
+      cabId: "manual_10_01",
+      vehicleNumber: "Vehicle 1",
+      shiftId: shift10Id,
+      shiftTime: "10:00",
+      capacity: 4,
+      driverName: "Om",
+      driverPhone: "Unknown",
+      stops: [
+        { employeeId: "excel_10_01_1", stopOrder: 1, etaMinutes: 0, status: "PENDING", employee: { id: "excel_10_01_1", name: "John Moses", gender: "MALE", x: 21.1278, y: 79.0068, address: "Unknown Address" } },
+        { employeeId: "excel_10_01_2", stopOrder: 2, etaMinutes: 0, status: "PENDING", employee: { id: "excel_10_01_2", name: "Sakshi", gender: "FEMALE", x: 21.1278, y: 79.0068, address: "Unknown Address" } },
+        { employeeId: "excel_10_01_3", stopOrder: 3, etaMinutes: 0, status: "PENDING", employee: { id: "excel_10_01_3", name: "Brej Kishore", gender: "MALE", x: 21.1278, y: 79.0068, address: "Unknown Address" } },
+        { employeeId: "excel_10_01_4", stopOrder: 4, etaMinutes: 0, status: "PENDING", employee: { id: "excel_10_01_4", name: "Anand Ram Kumar", gender: "MALE", x: 21.1278, y: 79.0068, address: "Unknown Address" } }
+      ],
+      totalDistance: 0,
+      totalDuration: 0,
+      optimizationScore: 100,
+      violations: []
+    });
+
+    filteredRoutes.push({
+      cabId: "manual_10_02",
+      vehicleNumber: "Vehicle 2",
+      shiftId: shift10Id,
+      shiftTime: "10:00",
+      capacity: 4,
+      driverName: "Aniket",
+      driverPhone: "Unknown",
+      stops: [
+        { employeeId: "excel_10_02_1", stopOrder: 1, etaMinutes: 0, status: "PENDING", employee: { id: "excel_10_02_1", name: "Sagar Kumar", gender: "MALE", x: 21.1278, y: 79.0068, address: "Unknown Address" } },
+        { employeeId: "excel_10_02_2", stopOrder: 2, etaMinutes: 0, status: "PENDING", employee: { id: "excel_10_02_2", name: "Tanuja KS", gender: "FEMALE", x: 21.1278, y: 79.0068, address: "Unknown Address" } }
+      ],
+      totalDistance: 0,
+      totalDuration: 0,
+      optimizationScore: 100,
+      violations: []
+    });
+
     return NextResponse.json({
-      routes: optimizedRoutes,
-      totalRoutes: optimizedRoutes.length,
+      routes: filteredRoutes,
+      totalRoutes: filteredRoutes.length,
       skippedRows,
       generatedAt: new Date().toISOString()
     });
