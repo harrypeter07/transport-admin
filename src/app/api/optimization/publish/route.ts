@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/apiAuth";
 import { prisma } from "@/lib/db";
@@ -49,17 +50,20 @@ export async function POST(req: Request) {
 	});
 
 	const notifiedUsers = new Set<string>();
+	const notificationPromises: Promise<any>[] = [];
 
 	for (const route of publishedRoutes) {
 	// Notify driver
 	if (route.cab?.userId && !notifiedUsers.has(route.cab.userId)) {
 	notifiedUsers.add(route.cab.userId);
-	await createNotification(
+	notificationPromises.push(
+	createNotification(
 	route.cab.userId,
 	"New Route Assigned",
 	`A new route has been assigned to you on ${date} (${route.cab.driverName || "Vehicle " + route.id}). Please check your dashboard.`,
 	"ROUTE",
 	"/dashboard/driver"
+	)
 	);
 	}
 
@@ -67,16 +71,20 @@ export async function POST(req: Request) {
 	for (const stop of route.stops) {
 	if (stop.employee?.userId && !notifiedUsers.has(stop.employee.userId)) {
 	notifiedUsers.add(stop.employee.userId);
-	await createNotification(
+	notificationPromises.push(
+	createNotification(
 	stop.employee.userId,
 	"New Route Published",
 	`Your commute route for ${date} has been published. Please check your dashboard for pickup details.`,
 	"ROUTE",
 	"/dashboard/employee"
+	)
 	);
 	}
 	}
 	}
+
+	await Promise.all(notificationPromises);
 
 	await audit({ userId: auth.session.userId, role: auth.session.role, action: "PUBLISH", entity: "Route", after: { count: routeIds.length, date, shiftId, notifications: notifiedUsers.size }, ip });
 	console.info("[api] ✅ POST /api/optimization/publish", { count: routeIds.length, userId: auth.session.userId, ip });

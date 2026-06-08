@@ -160,6 +160,8 @@ interface TransportStore {
   loading: boolean;
   optimizationPlans: OptimizationPlans | null;
   previewing: boolean;
+  manualRoutes: any[] | null;
+  excelMetrics: any | null;
   
   // Actions
   fetchInitialData: (opts?: { date?: string; shiftId?: string }) => Promise<void>;
@@ -183,6 +185,8 @@ interface TransportStore {
   swapRouteCab: (routeId: string, cabId: string) => Promise<void>;
   assignShiftsToAllCabs: () => Promise<{ fixed: number; total: number }>;
   setRoutes: (routes: Route[]) => void;
+  setManualRoutes: (routes: any[] | null) => void;
+  setExcelMetrics: (metrics: any | null) => void;
 }
 
 function storeLog(...args: unknown[]) {
@@ -200,6 +204,11 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
   loading: false,
   optimizationPlans: null,
   previewing: false,
+  manualRoutes: null,
+  excelMetrics: null,
+
+  setManualRoutes: (routes) => set({ manualRoutes: routes }),
+  setExcelMetrics: (metrics) => set({ excelMetrics: metrics }),
 
   // Helper: build the routes URL with the given (or stored) date and optional shiftId
   fetchInitialData: async (opts?: { date?: string; shiftId?: string }) => {

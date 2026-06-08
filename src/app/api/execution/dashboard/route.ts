@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 import { prisma } from "@/lib/db";
@@ -74,7 +75,12 @@ export async function GET(req: Request) {
       pendingApprovalsCount = pendingLeaves + pendingTimings;
     } else if (session.role === "ADMIN") {
       totalEmployeesCount = await prisma.employee.count({ where: { status: "ACTIVE" } });
-      totalManagersCount = await prisma.user.count({ where: { role: "MANAGER", isActive: true } });
+      totalManagersCount = await prisma.employee.count({
+        where: {
+          designation: { in: ["Manager", "Senior Manager"] },
+          status: "ACTIVE",
+        },
+      });
 
       totalLeavesTodayCount = await prisma.leaveRequest.count({
         where: {

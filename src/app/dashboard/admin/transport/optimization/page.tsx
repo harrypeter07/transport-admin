@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -44,6 +46,8 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  FileSpreadsheet,
+  Upload
 } from "lucide-react";
 
 export default function TransitAdminSPA() {
@@ -78,11 +82,19 @@ export default function TransitAdminSPA() {
    applyRouteSequence,
    swapRouteCab,
    assignShiftsToAllCabs,
+   manualRoutes,
+   setManualRoutes,
+   excelMetrics,
+   setExcelMetrics,
   } = useTransportStore();
 
  const router = useRouter();
 
- const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "COMPLIANCE" | "ANALYSIS">("OPTIMIZER");
+  const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "COMPLIANCE" | "ANALYSIS" | "MANUAL_ROUTING">("OPTIMIZER");
+  const [uploadingExcel, setUploadingExcel] = useState(false);
+  const [publishingManual, setPublishingManual] = useState(false);
+  const [publishManualSuccess, setPublishManualSuccess] = useState(false);
+  const [excelError, setExcelError] = useState<string | null>(null);
  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [addressChanged, setAddressChanged] = useState(false);
   const [applySuccess, setApplySuccess] = useState(false);
@@ -698,6 +710,20 @@ export default function TransitAdminSPA() {
  </svg>
  Route ROI & Savings Analytics
  </button>
+  <div className="w-px h-4 bg-slate-200 mx-1"></div>
+  <button
+  onClick={() => setActiveDesk("MANUAL_ROUTING")}
+  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-none text-xs font-bold tracking-wide transition-all
+  ${
+  activeDesk === "MANUAL_ROUTING"
+  ? "bg-[#1c1b1f] text-white"
+  : "text-[#6b6b6b] hover:text-[#1c1b1f] hover:bg-[#f7f7f7]"
+  }
+  `}
+  >
+  <FileSpreadsheet className="w-3.5 h-3.5" />
+  Manual Routing
+  </button>
  </nav>
 
   <div className="flex items-center gap-2 ml-auto">
@@ -927,6 +953,7 @@ export default function TransitAdminSPA() {
   onClick={async () => {
   if (!confirm("Are you sure you want to publish these routes to the fleet? Drivers and Employees will immediately see their assignments.")) return;
   setPublishError(null);
+  setApplyingStrategy("PUBLISHING");
   try {
   const res = await fetch("/api/optimization/publish", {
   method: "POST",
@@ -945,11 +972,18 @@ export default function TransitAdminSPA() {
   }
   } catch (e) {
   setPublishError("Network error while publishing routes.");
+  } finally {
+  setApplyingStrategy(null);
   }
   }}
-  className="bg-[#1c1b1f] text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-black transition shadow-2xs cursor-pointer"
+  disabled={applyingStrategy !== null || loading}
+  className="flex items-center gap-1.5 bg-[#ff4f00] text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-[#e64500] transition disabled:opacity-50 shadow-2xs cursor-pointer"
   >
-  Publish to Fleet
+  {applyingStrategy === "PUBLISHING" ? (
+  <><RotateCw className="w-3.5 h-3.5 animate-spin-fast" /> Publishing...</>
+  ) : (
+  <>Publish Fleet</>
+  )}
   </button>
   )}
 
@@ -1046,9 +1080,9 @@ export default function TransitAdminSPA() {
   {
   label: "Cabs Used",
   values: [
-  displayOptimizationPlans.MAXIMIZE_UTILIZATION.totalCabsUsed,
-  displayOptimizationPlans.MINIMIZE_TIME.totalCabsUsed,
-  displayOptimizationPlans.BALANCED.totalCabsUsed,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION?.totalCabsUsed ?? "-",
+  displayOptimizationPlans.MINIMIZE_TIME?.totalCabsUsed ?? "-",
+  displayOptimizationPlans.BALANCED?.totalCabsUsed ?? "-",
   ],
   lowerBetter: true,
   suffix: "",
@@ -1056,9 +1090,9 @@ export default function TransitAdminSPA() {
   {
   label: "Total Distance",
   values: [
-  displayOptimizationPlans.MAXIMIZE_UTILIZATION.totalDistance,
-  displayOptimizationPlans.MINIMIZE_TIME.totalDistance,
-  displayOptimizationPlans.BALANCED.totalDistance,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION?.totalDistance ?? "-",
+  displayOptimizationPlans.MINIMIZE_TIME?.totalDistance ?? "-",
+  displayOptimizationPlans.BALANCED?.totalDistance ?? "-",
   ],
   lowerBetter: true,
   suffix: " km",
@@ -1066,9 +1100,9 @@ export default function TransitAdminSPA() {
   {
   label: "Avg Commute",
   values: [
-  displayOptimizationPlans.MAXIMIZE_UTILIZATION.avgCommuteMins,
-  displayOptimizationPlans.MINIMIZE_TIME.avgCommuteMins,
-  displayOptimizationPlans.BALANCED.avgCommuteMins,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION?.avgCommuteMins ?? "-",
+  displayOptimizationPlans.MINIMIZE_TIME?.avgCommuteMins ?? "-",
+  displayOptimizationPlans.BALANCED?.avgCommuteMins ?? "-",
   ],
   lowerBetter: true,
   suffix: " min",
@@ -1076,9 +1110,9 @@ export default function TransitAdminSPA() {
   {
   label: "Violations",
   values: [
-  displayOptimizationPlans.MAXIMIZE_UTILIZATION.totalViolations,
-  displayOptimizationPlans.MINIMIZE_TIME.totalViolations,
-  displayOptimizationPlans.BALANCED.totalViolations,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION?.totalViolations ?? "-",
+  displayOptimizationPlans.MINIMIZE_TIME?.totalViolations ?? "-",
+  displayOptimizationPlans.BALANCED?.totalViolations ?? "-",
   ],
   lowerBetter: true,
   suffix: "",
@@ -1086,9 +1120,9 @@ export default function TransitAdminSPA() {
   {
   label: "Covered",
   values: [
-  displayOptimizationPlans.MAXIMIZE_UTILIZATION.totalEmployeesCovered,
-  displayOptimizationPlans.MINIMIZE_TIME.totalEmployeesCovered,
-  displayOptimizationPlans.BALANCED.totalEmployeesCovered,
+  displayOptimizationPlans.MAXIMIZE_UTILIZATION?.totalEmployeesCovered ?? "-",
+  displayOptimizationPlans.MINIMIZE_TIME?.totalEmployeesCovered ?? "-",
+  displayOptimizationPlans.BALANCED?.totalEmployeesCovered ?? "-",
   ],
   lowerBetter: false,
   suffix: ` / ${displayOptimizationPlans.totalEmployees}`,
@@ -2794,6 +2828,240 @@ export default function TransitAdminSPA() {
  </>
  );
  })()}
+  </div>
+
+  <div className={`flex flex-col gap-6 text-left ${activeDesk === "MANUAL_ROUTING" ? "" : "hidden"}`}>
+    <div className="bg-white p-6 border border-[#e8e8e8] rounded-none shadow-xs mt-8">
+      <h2 className="text-sm font-bold text-[#1c1b1f] uppercase tracking-wider mb-2 flex items-center gap-2">
+        <FileSpreadsheet className="w-4 h-4 text-[#ff4f00]" />
+        Import Manual Routing Baseline
+      </h2>
+      <p className="text-xs text-[#6b6b6b] mb-6 max-w-2xl">
+        Upload your existing Excel roster to visualize the human-planned routes on the map. This will NOT overwrite the production database or active optimizations. It is purely an in-browser sandbox for visual comparison and auditing.
+      </p>
+
+      {!manualRoutes ? (
+        <div className="border-2 border-dashed border-[#e8e8e8] hover:border-[#ff4f00] bg-[#f7f7f7] transition-colors p-8 flex flex-col items-center justify-center relative group">
+          <input
+            type="file"
+            accept=".xlsx, .xls"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setUploadingExcel(true);
+              setExcelError(null);
+              
+              const formData = new FormData();
+              formData.append("file", file);
+
+              try {
+                const res = await fetch("/api/optimization/excel-routes", {
+                  method: "POST",
+                  body: formData
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  const totalCabs = data.routes.length;
+                  const totalStops = data.routes.reduce((acc: number, r: any) => acc + (r.stops?.length || 0), 0);
+                  
+                  setManualRoutes(data.routes);
+                  setExcelMetrics({ totalCabs, totalStops, skipped: data.skippedRows });
+                  
+                  // Clear file input
+                  e.target.value = "";
+                } else {
+                  setExcelError(data.error || "Failed to parse Excel");
+                }
+              } catch (err) {
+                setExcelError("Network error uploading file");
+              } finally {
+                setUploadingExcel(false);
+              }
+            }}
+            disabled={uploadingExcel}
+          />
+          <Upload className={`w-8 h-8 mb-3 transition-colors ${uploadingExcel ? "text-[#ff4f00] animate-bounce" : "text-[#9a9a9a] group-hover:text-[#ff4f00]"}`} />
+          <div className="text-sm font-bold text-[#1c1b1f] mb-1">
+            {uploadingExcel ? "Parsing Excel File..." : "Click or drag roster.xlsx here"}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-[#9a9a9a] font-bold">
+            Supports .xlsx formats with standard columns
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 animate-fadeIn">
+          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-4 py-3">
+            <div className="flex items-center gap-2 text-emerald-800">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <div className="text-xs font-bold">
+                {publishManualSuccess ? "Manual fleet published successfully to production!" : "Manual roster parsed and mapped successfully."}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 relative z-10">
+              <button
+                onClick={() => {
+                  setManualRoutes(null);
+                  setPublishManualSuccess(false);
+                }}
+                className="text-[10px] uppercase font-bold text-[#6b6b6b] hover:text-[#1c1b1f] border border-[#e8e8e8] px-3 py-1.5 bg-white cursor-pointer transition-colors shadow-2xs"
+              >
+                Clear & Upload New
+              </button>
+              {!publishManualSuccess && (
+                <button
+                  disabled={publishingManual}
+                  onClick={async () => {
+                    if (!confirm("Are you sure you want to publish these manual routes? This will overwrite existing active routes for the selected date and shift.")) return;
+                    
+                    setPublishingManual(true);
+                    try {
+                      // Group routes by shiftId
+                      const shiftsSet = new Set<string>();
+                      manualRoutes.forEach((r: any) => {
+                        if (r.shiftId) shiftsSet.add(r.shiftId);
+                      });
+                      
+                      const shiftIds = shiftsSet.size > 0 ? Array.from(shiftsSet) : [activeShiftId];
+
+                      for (const sId of shiftIds) {
+                        const shiftRoutes = manualRoutes.filter((r: any) => (r.shiftId || activeShiftId) === sId);
+                        
+                        const previewRoutes = shiftRoutes.map((route: any) => ({
+                          cabId: route.cabId,
+                          vehicleNumber: route.vehicleNumber,
+                          shiftId: sId,
+                          isPickup: true,
+                          totalDistance: route.totalDistance,
+                          totalDuration: route.totalDuration,
+                          optimizationScore: route.optimizationScore,
+                          tripSequence: route.tripSequence || 1,
+                          stops: (route.stops || [])
+                            .filter((stop: any) => !stop.employeeId.startsWith("excel_"))
+                            .map((stop: any, index: number) => ({
+                              employeeId: stop.employeeId,
+                              stopOrder: index + 1, // Re-index after filtering
+                              etaMinutes: stop.etaMinutes || 0,
+                            })),
+                          violations: [],
+                        })).filter((r: any) => r.stops.length > 0 && r.cabId && !r.cabId.startsWith("manual_"));
+
+                        if (previewRoutes.length === 0) continue; // skip empty shifts
+
+                        const saveRes = await fetch("/api/optimization", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            shiftId: sId,
+                            isPickup: true,
+                            date: selectedDate,
+                            mode: "APPLY",
+                            selectedStrategy: "MANUAL_EXCEL",
+                            previewRoutes,
+                          }),
+                        });
+                        if (!saveRes.ok) throw new Error(`Failed to save draft routes for shift ${sId}.`);
+
+                        const pubRes = await fetch("/api/optimization/publish", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            date: selectedDate,
+                            shiftId: sId,
+                          }),
+                        });
+                        if (!pubRes.ok) throw new Error(`Failed to publish routes for shift ${sId}.`);
+                      }
+                      
+                      setPublishManualSuccess(true);
+                      await fetchInitialData();
+                    } catch (err: any) {
+                      alert(err.message);
+                    } finally {
+                      setPublishingManual(false);
+                    }
+                  }}
+                  className={`text-white px-4 py-1.5 font-bold text-xs transition-colors shadow-sm flex items-center gap-2 ${publishingManual ? "bg-[#ff4f00]/70 cursor-not-allowed" : "bg-[#ff4f00] hover:bg-[#e64600] cursor-pointer"}`}
+                >
+                  {publishingManual ? (
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  ) : (
+                    <ArrowUp className="w-3.5 h-3.5" /> 
+                  )}
+                  {publishingManual ? "Publishing..." : "Publish Manual Fleet"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-8 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+            {Array.from(new Set(manualRoutes.map((r: any) => r.shiftId || activeShiftId))).map((sId: any) => {
+              const shiftRoutes = manualRoutes.filter((r: any) => (r.shiftId || activeShiftId) === sId);
+              const shiftTimeLabel = shiftRoutes[0]?.shiftTime || String(sId);
+              return (
+                <div key={String(sId)} className="flex flex-col gap-4">
+                  <div className="text-[10px] font-bold text-[#9a9a9a] uppercase tracking-wider border-b border-[#e8e8e8] pb-2">
+                    Route Sequences (Shift: {shiftTimeLabel})
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
+                    {shiftRoutes.map((route: any, i: number) => {
+                      const isActive = selectedRouteId === route.cabId;
+                      return (
+                        <div
+                          key={`${route.cabId}-${i}`}
+                          className={`border transition-all cursor-pointer bg-white ${
+                            isActive ? "border-[#1c1b1f] shadow-md scale-[1.02]" : "border-[#e8e8e8] hover:border-[#b0b0b0]"
+                          }`}
+                          onClick={() => setSelectedRouteId(isActive ? null : route.cabId)}
+                        >
+                          <div className="p-3 bg-[#f7f7f7] border-b border-[#e8e8e8] flex justify-between items-center">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-[#1c1b1f]">{route.vehicleNumber}</span>
+                              <span className="text-[10px] text-[#6b6b6b]">{route.driverName}</span>
+                            </div>
+                            <div className="flex flex-col items-end">
+                              <span className="text-xs font-bold">{route.stops.length} Stops</span>
+                              <span className="text-[9px] text-[#9a9a9a]">{route.totalDistance ? `${route.totalDistance.toFixed(1)} km` : "No Dist"}</span>
+                            </div>
+                          </div>
+                          {isActive && (
+                            <div className="p-3 bg-white flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                              {route.stops.map((stop: any, sIdx: number) => (
+                                <div key={sIdx} className="flex gap-2">
+                                  <div className="w-4 h-4 mt-0.5 rounded-full bg-[#f7f7f7] border border-[#e8e8e8] flex items-center justify-center text-[8px] font-bold text-[#6b6b6b] shrink-0">
+                                    {stop.stopOrder}
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="text-[11px] font-bold text-[#1c1b1f]">
+                                      {stop.employee?.name || stop.employeeName || "Unknown Employee"}
+                                    </span>
+                                    <span className="text-[9px] text-[#6b6b6b] truncate max-w-[200px]" title={stop.employee?.address || stop.address}>
+                                      {stop.employee?.address || stop.address || "Unknown Address"}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {excelError && (
+        <div className="mt-4 bg-red-50 border border-red-200 px-3 py-2 text-[11px] text-red-700 font-semibold flex items-center gap-2 animate-fadeIn">
+          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+          {excelError}
+        </div>
+      )}
+    </div>
   </div>
 
   </main>

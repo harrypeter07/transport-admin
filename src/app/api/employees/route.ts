@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { geocodePlace, makeDepot } from "@/lib/optimization";
@@ -375,6 +376,15 @@ export async function PATCH(req: NextRequest) {
         status: status !== undefined ? status : undefined,
       },
     });
+
+    // Sync User role when designation changes
+    if (designation !== undefined && currentEmp.userId) {
+      const newRole = designation === "Manager" || designation === "Senior Manager" ? "MANAGER" : "EMPLOYEE";
+      const user = await prisma.user.findUnique({ where: { id: currentEmp.userId }, select: { role: true } });
+      if (user && user.role !== newRole) {
+        await prisma.user.update({ where: { id: currentEmp.userId }, data: { role: newRole } });
+      }
+    }
 
     // Remove only this employee's stops from pending/planned routes.
     // Only delete the route if it would become empty.
