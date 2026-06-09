@@ -112,14 +112,14 @@ export default function TransitAdminSPA() {
     try {
       // Group routes by shiftId
       const shiftsSet = new Set<string>();
-      manualRoutes.forEach((r: any) => {
+      manualRoutes?.forEach((r: any) => {
         if (r.shiftId) shiftsSet.add(r.shiftId);
       });
       
       const shiftIds = shiftsSet.size > 0 ? Array.from(shiftsSet) : [activeShiftId];
 
       for (const sId of shiftIds) {
-        const shiftRoutes = manualRoutes.filter((r: any) => (r.shiftId || activeShiftId) === sId);
+        const shiftRoutes = (manualRoutes ?? []).filter((r: any) => (r.shiftId || activeShiftId) === sId);
         
         const previewRoutes = shiftRoutes.map((route: any) => ({
           cabId: route.cabId,
@@ -2974,8 +2974,8 @@ export default function TransitAdminSPA() {
           </div>
 
           <div className="flex flex-col gap-8 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-            {Array.from(new Set(manualRoutes.map((r: any) => r.shiftId || activeShiftId))).map((sId: any) => {
-              const shiftRoutes = manualRoutes.filter((r: any) => (r.shiftId || activeShiftId) === sId);
+            {Array.from(new Set((manualRoutes ?? []).map((r: any) => r.shiftId || activeShiftId))).map((sId: any) => {
+        const shiftRoutes = (manualRoutes ?? []).filter((r: any) => (r.shiftId || activeShiftId) === sId);
               const shiftTimeLabel = shiftRoutes[0]?.shiftTime || String(sId);
               return (
                 <div key={String(sId)} className="flex flex-col gap-4">

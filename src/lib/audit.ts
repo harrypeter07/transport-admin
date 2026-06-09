@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 
 export type AuditAction = "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "LOGOUT" | "OPTIMIZE" | "PUBLISH";
-export type AuditEntity = "Employee" | "Cab" | "Route" | "Shift" | "SystemSettings" | "Leave" | "User";
+export type AuditEntity = "Employee" | "Cab" | "Route" | "Shift" | "SystemSettings" | "Leave" | "User" | "ManualManifest";
 
 export async function audit(opts: {
   userId?: string;

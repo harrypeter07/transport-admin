@@ -271,14 +271,13 @@ export default function AdminHolidayManagement() {
  <Trash2 size={18} />
  </button>
  )}
- </div>
- </form>
- </div>
- </div>
- </div>
- </div>
+  </div>
+  </form>
+  </div>
+  </div>
+  </div>
 
- <ConfirmModal
+  <ConfirmModal
   isOpen={!!holidayToDelete}
   onClose={() => setHolidayToDelete(null)}
   onConfirm={() => {

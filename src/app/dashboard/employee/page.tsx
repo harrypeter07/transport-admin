@@ -235,9 +235,8 @@ export default function EmployeeDashboardPage() {
   </div>
   )}
   </div>
- </div>
 
- {/* Sidebar Column */}
+  {/* Sidebar Column */}
  <div className="space-y-6">
  <div className="bg-white border border-[#e8e8e8] rounded-none p-6 shadow-xs">
  <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest mb-4">
