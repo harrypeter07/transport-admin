@@ -19,6 +19,7 @@ import { useTransportStore, Route, RouteStop } from "@/store/useTransportStore";
 import { useRouter } from "next/navigation";
 import RouteVisualizer from "@/components/RouteVisualizer";
 import CompareModal from "@/components/CompareModal";
+import ConfirmModal from "@/components/ConfirmModal";
 
 import {
  Compass,
@@ -49,6 +50,8 @@ import {
   FileSpreadsheet,
   Upload
 } from "lucide-react";
+
+import { formatDate } from "@/lib/dateFormat";
 
 export default function TransitAdminSPA() {
  const {
@@ -100,6 +103,79 @@ export default function TransitAdminSPA() {
   const [applySuccess, setApplySuccess] = useState(false);
   const [publishCount, setPublishCount] = useState<number | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [confirmPublishDraft, setConfirmPublishDraft] = useState(false);
+  const [confirmPublishExisting, setConfirmPublishExisting] = useState(false);
+  const [isPublishManualModalOpen, setIsPublishManualModalOpen] = useState(false);
+
+  const handlePublishManualRoutes = async () => {
+    setPublishingManual(true);
+    try {
+      // Group routes by shiftId
+      const shiftsSet = new Set<string>();
+      manualRoutes.forEach((r: any) => {
+        if (r.shiftId) shiftsSet.add(r.shiftId);
+      });
+      
+      const shiftIds = shiftsSet.size > 0 ? Array.from(shiftsSet) : [activeShiftId];
+
+      for (const sId of shiftIds) {
+        const shiftRoutes = manualRoutes.filter((r: any) => (r.shiftId || activeShiftId) === sId);
+        
+        const previewRoutes = shiftRoutes.map((route: any) => ({
+          cabId: route.cabId,
+          vehicleNumber: route.vehicleNumber,
+          shiftId: sId,
+          isPickup: true,
+          totalDistance: route.totalDistance,
+          totalDuration: route.totalDuration,
+          optimizationScore: route.optimizationScore,
+          tripSequence: route.tripSequence || 1,
+          stops: (route.stops || [])
+            .filter((stop: any) => !stop.employeeId.startsWith("excel_"))
+            .map((stop: any, index: number) => ({
+              employeeId: stop.employeeId,
+              stopOrder: index + 1, // Re-index after filtering
+              etaMinutes: stop.etaMinutes || 0,
+            })),
+          violations: [],
+        })).filter((r: any) => r.stops.length > 0 && r.cabId && !r.cabId.startsWith("manual_"));
+
+        if (previewRoutes.length === 0) continue; // skip empty shifts
+
+        const saveRes = await fetch("/api/optimization", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shiftId: sId,
+            isPickup: true,
+            date: selectedDate,
+            mode: "APPLY",
+            selectedStrategy: "MANUAL_EXCEL",
+            previewRoutes,
+          }),
+        });
+        if (!saveRes.ok) throw new Error(`Failed to save draft routes for shift ${sId}.`);
+
+        const pubRes = await fetch("/api/optimization/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: selectedDate,
+            shiftId: sId,
+          }),
+        });
+        if (!pubRes.ok) throw new Error(`Failed to publish routes for shift ${sId}.`);
+      }
+
+      setPublishManualSuccess(true);
+      fetchAnalysisData();
+    } catch (err: any) {
+      alert("Failed to publish manual routes: " + err.message);
+    } finally {
+      setPublishingManual(false);
+      setIsPublishManualModalOpen(false);
+    }
+  };
 
   // Analysis Dashboard State
  const [analysisData, setAnalysisData] = useState<any>(null);
@@ -153,7 +229,6 @@ export default function TransitAdminSPA() {
   const [applyingStrategy, setApplyingStrategy] = useState<string | null>(null);
   const [routeViewModes, setRouteViewModes] = useState<Record<string, "pickup" | "drop">>({});
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
-  const [canonicalSequences, setCanonicalSequences] = useState<Record<string, string[]>>({});
   const [searchQuery, setSearchQuery] = useState("");
 
  // Settings/Diagnostics states
@@ -191,6 +266,8 @@ export default function TransitAdminSPA() {
  const [dispatchLoading, setDispatchLoading] = useState(false);
  const [dispatchResult, setDispatchResult] = useState<any>(null);
  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
+ const [temporaryReplacements, setTemporaryReplacements] = useState<Record<string, string>>({});
+ const [dispatchReplacementCabId, setDispatchReplacementCabId] = useState<string>("");
 
  // Sidebar attendance checklist toggle
  const [showAttendanceChecklist, setShowAttendanceChecklist] = useState(false);
@@ -481,10 +558,22 @@ export default function TransitAdminSPA() {
        if (timeA !== timeB) return timeA.localeCompare(timeB);
        return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
      })
-   : dbActiveRoutes)
+    : dbActiveRoutes.map(r => {
+        const replacementCabId = temporaryReplacements[r.cabId];
+        if (replacementCabId) {
+          const repCab = cabs.find(c => c.id === replacementCabId);
+          if (repCab) return { ...r, cabId: repCab.id, cab: repCab };
+        }
+        return r;
+      }))
  : [];
  const activeRoutes = activeRoutesRaw as Route[];
   const manifestRoutes = activeRoutes.filter(r => (r.stops || []).length > 0);
+  
+  const getDriverTripCount = (cabId: string) => {
+    if (!cabId) return 0;
+    return manifestRoutes.filter(r => r.cabId === cabId && r.status !== "CANCELLED").length;
+  };
   const getRouteShiftLabel = (route: any) =>
   route.shift?.name || route.shiftName || shifts.find((shift) => shift.id === route.shiftId)?.name || "Shift";
 
@@ -519,12 +608,6 @@ export default function TransitAdminSPA() {
 
   const getDisplayStops = (stops: any[], routeId: string, effectiveIsPickup: boolean): any[] => {
     const sorted = [...stops].sort((a, b) => a.stopOrder - b.stopOrder);
-    const canonical = canonicalSequences[routeId];
-    if (canonical) {
-      const stopMap = new Map(sorted.map(s => [s.employee.id, s]));
-      const ordered = canonical.map(id => stopMap.get(id)).filter(Boolean);
-      return effectiveIsPickup ? ordered : [...ordered].reverse();
-    }
     return effectiveIsPickup ? sorted : [...sorted].reverse();
   };
 
@@ -563,21 +646,6 @@ export default function TransitAdminSPA() {
       const sid = route.shiftId || "unknown";
       if (seen.has(sid)) continue;
       seen.add(sid);
-      const label = route.shift?.name || (route as any).shiftName || shifts.find(s => s.id === route.shiftId)?.name || "";
-      const shiftRoutes = sorted.filter(r => (r.shiftId || "unknown") === sid);
-      if ((label.includes("11:30") || label.includes("11")) && shiftRoutes.length >= 2) {
-        const r2 = shiftRoutes[1];
-        setCanonicalSequences(prev => {
-          if (prev[r2.id]) return prev;
-          const sortedStops = [...r2.stops].sort((a, b) => a.stopOrder - b.stopOrder);
-          const desiredOrder = ["Atharva", "Vajja", "Nikhil", "Pranay", "Himanshu", "Kartik"];
-          const idOrder = desiredOrder.map(name => {
-            const match = sortedStops.find(s => s.employee.name.startsWith(name));
-            return match ? match.employee.id : null;
-          }).filter(Boolean) as string[];
-          return idOrder.length === sortedStops.length ? { ...prev, [r2.id]: idOrder } : prev;
-        });
-      }
     }
   }, [manifestRoutes]);
 
@@ -854,7 +922,12 @@ export default function TransitAdminSPA() {
   <button
   onClick={async () => {
     if (!previewedStrategy) return;
-    if (!confirm("Are you sure you want to instantly publish these optimized routes? Drivers and Employees will immediately be notified.")) return;
+    if (!confirmPublishDraft) {
+      setConfirmPublishDraft(true);
+      setTimeout(() => setConfirmPublishDraft(false), 3000);
+      return;
+    }
+    setConfirmPublishDraft(false);
     
     setPublishError(null);
     setApplyingStrategy("PUBLISHING");
@@ -902,6 +975,8 @@ export default function TransitAdminSPA() {
   >
   {applyingStrategy === "PUBLISHING" ? (
   <><RotateCw className="w-3.5 h-3.5 animate-spin-fast" /> Publishing...</>
+  ) : confirmPublishDraft ? (
+  <>Click to Confirm</>
   ) : (
   <>Publish Fleet</>
   )}
@@ -931,7 +1006,7 @@ export default function TransitAdminSPA() {
   {publishCount !== null && (
   <div className="bg-emerald-50 border border-emerald-200 px-3 py-2 text-[11px] text-emerald-800 font-semibold flex items-center gap-2 animate-fadeIn">
   <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-  <span className="flex-1">Successfully published {publishCount} routes to the fleet!</span>
+  <span className="flex-1">Successfully published {publishCount} routes to the fleet! ({formatDate(selectedDate)})</span>
   <button onClick={() => setPublishCount(null)} className="text-emerald-500 hover:text-emerald-700 cursor-pointer">
   <X className="w-3.5 h-3.5" />
   </button>
@@ -951,7 +1026,13 @@ export default function TransitAdminSPA() {
   {!optimizationPlans && routes.some(r => r.status === "PLANNED" || r.status === "PENDING") && (
   <button
   onClick={async () => {
-  if (!confirm("Are you sure you want to publish these routes to the fleet? Drivers and Employees will immediately see their assignments.")) return;
+  if (!confirmPublishExisting) {
+    setConfirmPublishExisting(true);
+    setTimeout(() => setConfirmPublishExisting(false), 3000);
+    return;
+  }
+  setConfirmPublishExisting(false);
+  
   setPublishError(null);
   setApplyingStrategy("PUBLISHING");
   try {
@@ -981,6 +1062,8 @@ export default function TransitAdminSPA() {
   >
   {applyingStrategy === "PUBLISHING" ? (
   <><RotateCw className="w-3.5 h-3.5 animate-spin-fast" /> Publishing...</>
+  ) : confirmPublishExisting ? (
+  <>Click to Confirm</>
   ) : (
   <>Publish Fleet</>
   )}
@@ -1259,7 +1342,6 @@ export default function TransitAdminSPA() {
   routeViewModes={routeViewModes}
   selectedEmployeeId={selectedEmployeeId}
   onSelectEmployee={setSelectedEmployeeId}
-  canonicalSequences={canonicalSequences}
   />
  </div>
 
@@ -1668,123 +1750,82 @@ export default function TransitAdminSPA() {
           <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
           <thead>
-          <tr className="bg-[#f7f7f7] border-b border-[#e8e8e8] text-[#9a9a9a] font-mono text-[9px] uppercase tracking-wider">
-          <th className="p-3">Driver Details</th>
-          <th className="p-3">Vehicle Number</th>
-          <th className="p-3">Load Info</th>
-          <th className="p-3">Route Type</th>
-          <th className="p-3">Itinerary Stop sequence list</th>
-          <th className="p-3">Alert Status</th>
+          <tr className="bg-[#f7f7f7] border-b border-[#e8e8e8] text-[#9a9a9a] font-mono text-[9px] uppercase tracking-wider sticky top-0 z-10">
+          <th className="p-3 w-12">Sr. No.</th>
+          <th className="p-3">Emp Name</th>
+          <th className="p-3">Address</th>
+          <th className="p-3">Shift Time</th>
+          <th className="p-3">Status</th>
           </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 font-semibold text-[#4a4a4a]">
-            {group.routes.map((route, index) => {
-          const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
-          const activeViolationsCount = route.violations.filter(v => !v.resolved).length;
-          const isSelected = selectedRouteId === route.id;
-          const tableOrderedStops = getDisplayStops(sortedStops, route.id, getEffectiveMode(route) === "pickup");
+          
+            {group.routes
+              .slice()
+              .sort((a, b) => (a.cab.driverName || "").localeCompare(b.cab.driverName || ""))
+              .map((route, index) => {
+                const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+                const tableOrderedStops = getDisplayStops(sortedStops, route.id, getEffectiveMode(route) === "pickup");
+                const isSelected = selectedRouteId === route.id;
 
-          return (
-          <tr
-          key={route.id}
-          onClick={() => { setSelectedRouteId(isSelected ? null : route.id); setSelectedEmployeeId(null); }}
-          className={`cursor-pointer border-l-4 transition-all duration-150
-          ${
-          isSelected
-          ? "bg-[#f7f7f7]/70 border-l-blue-600 hover:bg-[#f7f7f7]"
-          : "border-l-transparent hover:bg-[#f7f7f7]/50"
-          }
-          `}
-          >
-          <td className="p-3">
-          <div className="flex flex-col text-left">
-          <span className="text-[#1c1b1f] font-bold">{route.cab.driverName || "N/A"}</span>
-          <span className="text-[9px] text-[#9a9a9a] font-mono">{route.cab.driverPhone || "N/A"}</span>
-          </div>
-          </td>
-            <td className="p-3 font-mono text-[#1c1b1f]">
-              <span className="text-[10px] text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1 py-0.5 font-bold mr-1">r{route.routeNumber || index + 1}</span>
-              {route.cab.vehicleNumber}
-            </td>
-          <td className="p-3 text-[#6b6b6b]">
-          {route.stops.length} / {route.cab.capacity} seats
-          </td>
-          <td className="p-3">
-          <span className="text-[10px] bg-[#f7f7f7] border border-[#e8e8e8] text-[#6b6b6b] px-2 py-0.5 rounded uppercase font-bold tracking-wider">
-          {getEffectiveMode(route) === "pickup" ? "Pickup (To MIHAN)" : "Drop (From MIHAN)"}
-          </span>
-          </td>
-          <td className="p-3">
-          <div className="flex flex-wrap items-center gap-1.5 font-sans font-bold text-[10px]">
-           {getEffectiveMode(route) === "pickup" ? (
-           <>
-           {tableOrderedStops.map((s, idx) => {
-          const isFem = s.employee.gender === "FEMALE";
-          return (
-          <React.Fragment key={s.id}>
-          <span className={`border px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer
-          ${
-          isFem
-          ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
-          : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
-          }
-          ${s.employee.id === selectedEmployeeId ? "ring-2 ring-[#ff4f00]" : ""}
-          `} onClick={() => setSelectedEmployeeId(s.employee.id === selectedEmployeeId ? null : s.employee.id)}>
-          <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
-          {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
-          </span>
-          <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>
-          </React.Fragment>
-          );
-          })}
-          <span className="bg-[#1c1b1f] border border-slate-900 text-white px-2 py-0.5 rounded flex items-center gap-1 font-extrabold">
-          🏢 MIHAN Depot
-          </span>
-          </>
-          ) : (
-          <>
-          <span className="bg-[#1c1b1f] border border-slate-900 text-white px-2 py-0.5 rounded flex items-center gap-1 font-extrabold">
-          🏢 MIHAN Depot
-          </span>
-          <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>
-           {tableOrderedStops.map((s, idx) => {
-           const isFem = s.employee.gender === "FEMALE";
-           return (
-            <React.Fragment key={s.id}>
-            <span className={`border px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer
-            ${
-            isFem
-            ? "bg-[#f7f7f7] border-[#e8e8e8] text-[#1c1b1f]"
-            : "bg-[#f7f7f7] border-[#e8e8e8] text-[#4a4a4a]"
-            }
-            ${s.employee.id === selectedEmployeeId ? "ring-2 ring-[#ff4f00]" : ""}
-            `} onClick={() => setSelectedEmployeeId(s.employee.id === selectedEmployeeId ? null : s.employee.id)}>
-            <span className={`text-[8px] font-mono ${isFem ? "text-[#6b6b6b]" : "text-[#9a9a9a]"}`}>#{idx + 1}</span>
-            {s.employee.name.split(" ")[0]} ({s.employee.address.split(" | ")[0]})
-            </span>
-           {idx < tableOrderedStops.length - 1 && <span className="text-[#9a9a9a] font-mono text-[9px]">➔</span>}
-           </React.Fragment>
-           );
-           })}
-          </>
-          )}
-          </div>
-          </td>
-          <td className="p-3">
-          {activeViolationsCount > 0 ? (
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f] animate-pulse">
-          {activeViolationsCount} Alert(s)
-          </span>
-          ) : (
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f]">
-          Clear
-          </span>
-          )}
-          </td>
-          </tr>
-          );
-          })}
-          </tbody>
+                return (
+                  <tbody key={route.id} className="divide-y divide-slate-100 font-semibold text-[#4a4a4a] border-b-[4px] border-[#d1d5db]">
+                    <tr className="bg-slate-100/50 border-b border-slate-200">
+                      <td colSpan={5} className="p-2.5 px-3 text-left">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-[#1c1b1f] bg-white border border-[#e8e8e8] px-2 py-0.5 font-bold shadow-sm">
+                            Route r{route.routeNumber || index + 1}
+                          </span>
+                          <span className="text-[10px] text-[#4a4a4a] font-bold flex items-center gap-1.5">
+                            Driver: {route.cab.driverName || "No Driver"}
+                            {route.cabId && (
+                              <span className="font-mono text-[8px] bg-[#e8e8e8] text-[#4a4a4a] px-1 py-0.5 rounded-sm">
+                                {getDriverTripCount(route.cabId)} Trip{getDriverTripCount(route.cabId) !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                    {tableOrderedStops.map((stop, stopIndex) => {
+                      return (
+                        <tr
+                          key={stop.id}
+                          onClick={() => { setSelectedRouteId(isSelected ? null : route.id); setSelectedEmployeeId(stop.employee.id); }}
+                          className={`cursor-pointer transition-all duration-150
+                          ${
+                            isSelected && selectedEmployeeId === stop.employee.id
+                              ? "bg-[#f7f7f7]/70 border-l-[3px] border-[#ff4f00] hover:bg-[#f7f7f7]"
+                              : isSelected
+                              ? "bg-[#f7f7f7]/40 border-l-[3px] border-blue-600 hover:bg-[#f7f7f7]"
+                              : "border-l-[3px] border-transparent hover:bg-[#f7f7f7]/50"
+                          }
+                          `}
+                        >
+                          <td className="p-3 text-[#9a9a9a] font-mono font-bold text-[10px]">
+                            {stopIndex + 1}
+                          </td>
+                          <td className="p-3 text-[#1c1b1f] font-bold">
+                            {stop.employee.name}
+                          </td>
+                          <td className="p-3 text-xs text-[#6b6b6b] max-w-xs truncate" title={stop.employee.address || "Unknown Address"}>
+                            {stop.employee.address || "Unknown Address"}
+                          </td>
+                          <td className="p-3 text-[#1c1b1f]">
+                            <span>
+                              {group.shiftTime || group.shiftLabel}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <span className="text-[10px] bg-[#f7f7f7] border border-[#e8e8e8] text-[#6b6b6b] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                              {stop.status || "PENDING"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                );
+              })}
           </table>
           </div>
         ) : (
@@ -1816,31 +1857,45 @@ export default function TransitAdminSPA() {
           {/* Header */}
           <div className="flex justify-between items-start border-b border-slate-100 pb-3">
           <div className="flex flex-col gap-0.5 text-left">
-          <div className="flex items-center gap-2">
-          <span className="text-[9px] uppercase font-extrabold tracking-widest text-[#9a9a9a]">
-          Vehicle Assignment Details
-          </span>
-          </div>
-            <h3 className="text-base font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
-            <Truck className="w-4 h-4 text-[#9a9a9a]" />
-            {route.cab.vehicleNumber}
-            <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
-              r{route.routeNumber || index + 1}
-            </span>
-            {route.status && (
-            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 border ${
-              route.status === "ASSIGNED" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
-              route.status === "PLANNED" || route.status === "PENDING" ? "bg-amber-50 border-amber-200 text-amber-700" :
-              route.status === "IN_PROGRESS" ? "bg-blue-50 border-blue-200 text-blue-700" :
-              "bg-slate-50 border-slate-200 text-slate-500"
-            }`}>
-              {route.status}
-            </span>
+            <h3 className="text-lg font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
+            {route.cab.driverName || "Unknown Driver"}
+            {route.cabId && (
+              <span className="font-mono text-[9px] font-bold bg-[#e8e8e8] text-[#4a4a4a] px-1.5 py-0.5 rounded-none ml-1">
+                {getDriverTripCount(route.cabId)} Trip{getDriverTripCount(route.cabId) !== 1 ? 's' : ''}
+              </span>
             )}
             </h3>
-          <span className="text-[10px] text-[#6b6b6b] font-semibold uppercase tracking-wider">
-          Vendor: {route.cab.vendor} · {route.stops.length} / {route.cab.capacity} passengers
-          </span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs font-semibold text-[#6b6b6b] flex items-center gap-1">
+                <Truck className="w-3.5 h-3.5 text-[#9a9a9a]" />
+                {route.cab.vehicleNumber}
+              </span>
+              <span className="text-[10px] text-[#9a9a9a] font-mono font-medium">
+                {route.cab.driverPhone || "N/A"}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
+                Route r{route.routeNumber || index + 1}
+              </span>
+              <span className="text-[10px] text-[#6b6b6b] font-semibold uppercase tracking-wider">
+                Shift: {route.shift?.startTime || (route as any).shiftTime || "N/A"}
+              </span>
+              <span className="text-[10px] text-[#6b6b6b] font-semibold uppercase tracking-wider">
+                {route.stops.length} / {route.cab.capacity} passengers
+              </span>
+              {route.status && (
+                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 border ml-auto ${
+                  route.status === "ASSIGNED" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+                  route.status === "PLANNED" || route.status === "PENDING" ? "bg-amber-50 border-amber-200 text-amber-700" :
+                  route.status === "IN_PROGRESS" ? "bg-blue-50 border-blue-200 text-blue-700" :
+                  "bg-slate-50 border-slate-200 text-slate-500"
+                }`}>
+                  {route.status}
+                </span>
+              )}
+            </div>
           </div>
           
           <div className="flex flex-col items-end gap-0.5 group/score relative">
@@ -1862,46 +1917,39 @@ export default function TransitAdminSPA() {
           </div>
           </div>
 
-          {/* Pickup/Drop Toggle */}
-          <div className="flex items-center gap-1 bg-[#f7f7f7] p-0.5 rounded-none border border-[#e8e8e8] self-start print:hidden">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setRouteViewModes(prev => ({ ...prev, [route.id]: "pickup" }));
-              }}
-              className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
-                getEffectiveMode(route) === "pickup"
-                  ? "bg-white text-[#1c1b1f] shadow-xs"
-                  : "text-[#9a9a9a] hover:text-[#6b6b6b]"
-              }`}
-            >
-            Pickup
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setRouteViewModes(prev => ({ ...prev, [route.id]: "drop" }));
-              }}
-              className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
-                getEffectiveMode(route) === "drop"
-                  ? "bg-white text-[#1c1b1f] shadow-xs"
-                  : "text-[#9a9a9a] hover:text-[#6b6b6b]"
-              }`}
-            >
-            Drop
-            </button>
-           </div>
-
-          {/* Driver Profile */}
-          <div className="p-3.5 bg-[#f7f7f7] border border-slate-150 rounded-none flex items-center justify-between gap-4">
-          <div className="flex flex-col text-left">
-          <span className="text-[8px] uppercase font-extrabold tracking-wider text-[#9a9a9a]">Driver</span>
-          <span className="text-xs font-bold text-slate-950">{route.cab.driverName || "N/A"}</span>
-          <span className="text-[9px] text-[#6b6b6b] font-mono font-medium">{route.cab.driverPhone || "N/A"}</span>
-          </div>
-          <div className="flex gap-1.5 print:hidden">
+          <div className="flex items-center justify-between mt-[-0.5rem]">
+            {/* Pickup/Drop Toggle */}
+            <div className="flex items-center gap-1 bg-[#f7f7f7] p-0.5 rounded-none border border-[#e8e8e8] self-start print:hidden">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRouteViewModes(prev => ({ ...prev, [route.id]: "pickup" }));
+                }}
+                className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                  getEffectiveMode(route) === "pickup"
+                    ? "bg-white text-[#1c1b1f] shadow-xs"
+                    : "text-[#9a9a9a] hover:text-[#6b6b6b]"
+                }`}
+              >
+              Pickup
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRouteViewModes(prev => ({ ...prev, [route.id]: "drop" }));
+                }}
+                className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                  getEffectiveMode(route) === "drop"
+                    ? "bg-white text-[#1c1b1f] shadow-xs"
+                    : "text-[#9a9a9a] hover:text-[#6b6b6b]"
+                }`}
+              >
+              Drop
+              </button>
+            </div>
+            <div className="flex gap-1.5 print:hidden">
           <button
           type="button"
           onClick={(e) => {
@@ -2314,16 +2362,15 @@ export default function TransitAdminSPA() {
  Analyze vehicle route efficiencies, driver metrics, and cumulative distance projections.
  </p>
  </div>
- <button
- onClick={fetchAnalysisData}
- disabled={analysisLoading}
- className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e8e8e8] bg-white hover:bg-[#f7f7f7] text-[#6b6b6b] rounded-none text-xs font-bold transition disabled:opacity-50 cursor-pointer"
- >
- <RefreshCw className={`w-3.5 h-3.5 ${analysisLoading ? "animate-spin-fast" : ""}`} />
- {analysisLoading ? "Recalculating..." : "Refresh Report"}
- </button>
- </div>
-
+  <button
+  onClick={fetchAnalysisData}
+  disabled={analysisLoading}
+  className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e8e8e8] bg-white hover:bg-[#f7f7f7] text-[#6b6b6b] rounded-none text-xs font-bold transition disabled:opacity-50 cursor-pointer"
+  >
+  <RefreshCw className={`w-3.5 h-3.5 ${analysisLoading ? "animate-spin-fast" : ""}`} />
+  {analysisLoading ? "Recalculating..." : "Refresh Report"}
+  </button>
+  </div>
  {(() => {
  if (analysisLoading) {
  return (
@@ -2911,76 +2958,7 @@ export default function TransitAdminSPA() {
               {!publishManualSuccess && (
                 <button
                   disabled={publishingManual}
-                  onClick={async () => {
-                    if (!confirm("Are you sure you want to publish these manual routes? This will overwrite existing active routes for the selected date and shift.")) return;
-                    
-                    setPublishingManual(true);
-                    try {
-                      // Group routes by shiftId
-                      const shiftsSet = new Set<string>();
-                      manualRoutes.forEach((r: any) => {
-                        if (r.shiftId) shiftsSet.add(r.shiftId);
-                      });
-                      
-                      const shiftIds = shiftsSet.size > 0 ? Array.from(shiftsSet) : [activeShiftId];
-
-                      for (const sId of shiftIds) {
-                        const shiftRoutes = manualRoutes.filter((r: any) => (r.shiftId || activeShiftId) === sId);
-                        
-                        const previewRoutes = shiftRoutes.map((route: any) => ({
-                          cabId: route.cabId,
-                          vehicleNumber: route.vehicleNumber,
-                          shiftId: sId,
-                          isPickup: true,
-                          totalDistance: route.totalDistance,
-                          totalDuration: route.totalDuration,
-                          optimizationScore: route.optimizationScore,
-                          tripSequence: route.tripSequence || 1,
-                          stops: (route.stops || [])
-                            .filter((stop: any) => !stop.employeeId.startsWith("excel_"))
-                            .map((stop: any, index: number) => ({
-                              employeeId: stop.employeeId,
-                              stopOrder: index + 1, // Re-index after filtering
-                              etaMinutes: stop.etaMinutes || 0,
-                            })),
-                          violations: [],
-                        })).filter((r: any) => r.stops.length > 0 && r.cabId && !r.cabId.startsWith("manual_"));
-
-                        if (previewRoutes.length === 0) continue; // skip empty shifts
-
-                        const saveRes = await fetch("/api/optimization", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            shiftId: sId,
-                            isPickup: true,
-                            date: selectedDate,
-                            mode: "APPLY",
-                            selectedStrategy: "MANUAL_EXCEL",
-                            previewRoutes,
-                          }),
-                        });
-                        if (!saveRes.ok) throw new Error(`Failed to save draft routes for shift ${sId}.`);
-
-                        const pubRes = await fetch("/api/optimization/publish", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            date: selectedDate,
-                            shiftId: sId,
-                          }),
-                        });
-                        if (!pubRes.ok) throw new Error(`Failed to publish routes for shift ${sId}.`);
-                      }
-                      
-                      setPublishManualSuccess(true);
-                      await fetchInitialData();
-                    } catch (err: any) {
-                      alert(err.message);
-                    } finally {
-                      setPublishingManual(false);
-                    }
-                  }}
+                  onClick={() => setIsPublishManualModalOpen(true)}
                   className={`text-white px-4 py-1.5 font-bold text-xs transition-colors shadow-sm flex items-center gap-2 ${publishingManual ? "bg-[#ff4f00]/70 cursor-not-allowed" : "bg-[#ff4f00] hover:bg-[#e64600] cursor-pointer"}`}
                 >
                   {publishingManual ? (
@@ -3017,8 +2995,8 @@ export default function TransitAdminSPA() {
                         >
                           <div className="p-3 bg-[#f7f7f7] border-b border-[#e8e8e8] flex justify-between items-center">
                             <div className="flex flex-col">
-                              <span className="text-xs font-bold text-[#1c1b1f]">{route.vehicleNumber}</span>
-                              <span className="text-[10px] text-[#6b6b6b]">{route.driverName}</span>
+                              <span className="text-xs font-bold text-[#1c1b1f]">{route.driverName || "Unknown Driver"}</span>
+                              <span className="text-[10px] font-semibold text-[#6b6b6b]">{route.vehicleNumber}</span>
                             </div>
                             <div className="flex flex-col items-end">
                               <span className="text-xs font-bold">{route.stops.length} Stops</span>
@@ -3401,47 +3379,25 @@ export default function TransitAdminSPA() {
 
  {!dispatchResult ? (
  <form
- onSubmit={async (e) => {
+ onSubmit={(e) => {
  e.preventDefault();
- const formData = new FormData(e.currentTarget);
- const mode = formData.get("mode") as string;
- const reason = formData.get("reason") as string;
- const fromTime = formData.get("fromTime") as string;
- const toTime = formData.get("toTime") as string;
- const cabId = dispatchCab?.id;
-
- if (!cabId) {
- alert("Please select a cab first");
- return;
- }
-
- setDispatchLoading(true);
- try {
- const res = await fetch("/api/routes/reassign-driver", {
- method: "POST",
- headers: { "Content-Type": "application/json" },
- body: JSON.stringify({
- cabId,
- mode,
- reason,
- ...(mode === "TIME_WINDOW" ? { fromTime, toTime } : {}),
- }),
- });
- const data = await res.json();
- if (!res.ok) throw new Error(data.error || "Failed to process dispatch");
- setDispatchResult(data);
- await fetchInitialData();
- } catch (err: any) {
- alert(err.message || "Failed to process dispatch control");
- } finally {
- setDispatchLoading(false);
- }
+ if (!dispatchCab) { alert("Select an absent driver."); return; }
+ if (!dispatchReplacementCabId) { alert("Select a replacement driver."); return; }
+ if (dispatchCab.id === dispatchReplacementCabId) { alert("Absent and replacement driver cannot be the same."); return; }
+ 
+ setTemporaryReplacements(prev => ({ ...prev, [dispatchCab.id]: dispatchReplacementCabId }));
+ setDispatchResult({ message: `Driver ${dispatchCab.driverName} has been temporarily replaced by the selected driver for today's dispatch. Original assignments will remain unchanged.` });
  }}
  className="flex flex-col gap-4"
  >
+ <div className="flex flex-col gap-3">
+ <p className="text-[11px] text-[#6b6b6b] leading-relaxed border-b border-slate-100 pb-3">
+ Temporarily substitute an absent driver for today's operational cycle. Existing database routes and permanent assignments will not be altered.
+ </p>
+
  <div className="flex flex-col gap-1.5">
  <label className="text-[10px] font-bold text-[#1c1b1f] uppercase tracking-wider">
- Select Vehicle / Driver
+ Absent Driver
  </label>
  <select
  className="w-full px-3 py-2 border border-[#e8e8e8] rounded-none text-xs text-[#1c1b1f] bg-white focus:outline-none focus:border-slate-400 transition"
@@ -3452,114 +3408,31 @@ export default function TransitAdminSPA() {
  setDispatchCab(cab || null);
  }}
  >
- <option value="" disabled>Select a vehicle...</option>
+ <option value="" disabled>Select absent driver...</option>
  {cabs.map(cab => (
  <option key={cab.id} value={cab.id}>
- {cab.vehicleNumber} — {cab.driverName || "Unknown Driver"} {cab.status === "MAINTENANCE" ? "(UNAVAILABLE)" : ""}
+ {cab.driverName || "Unknown Driver"} ({cab.vehicleNumber}) {temporaryReplacements[cab.id] ? "[ALREADY REPLACED]" : ""}
  </option>
  ))}
  </select>
  </div>
 
- {dispatchCab && (
- <>
- {dispatchCab.status === "MAINTENANCE" ? (
- <div className="flex flex-col gap-3">
- <p className="text-[11px] text-[#6b6b6b]">
- This vehicle is currently marked as unavailable (MAINTENANCE).
- </p>
- <button
- type="button"
- disabled={dispatchLoading}
- onClick={async () => {
- setDispatchLoading(true);
- try {
- const res = await fetch("/api/routes/reassign-driver", {
- method: "PATCH",
- headers: { "Content-Type": "application/json" },
- body: JSON.stringify({ cabId: dispatchCab.id }),
- });
- const data = await res.json();
- if (!res.ok) throw new Error(data.error || "Failed to restore cab");
- alert("Cab restored to AVAILABLE");
- setDispatchCab({ ...dispatchCab, status: "AVAILABLE" });
- await fetchInitialData();
- } catch (err: any) {
- alert(err.message);
- } finally {
- setDispatchLoading(false);
- }
- }}
- className="px-4 py-2 bg-emerald-600 text-white rounded-none text-xs font-bold hover:bg-emerald-700 transition cursor-pointer self-start"
- >
- {dispatchLoading ? "Processing..." : "Restore to Available"}
- </button>
- </div>
- ) : (
- <>
- <p className="text-[11px] text-[#6b6b6b] leading-relaxed border-t border-slate-100 pt-3">
- Handle driver unavailability or vehicle breakdown by reassigning pending routes.
- Affected employees will be notified automatically.
- </p>
-
- <div className="flex flex-col gap-3">
  <div className="flex flex-col gap-1.5">
  <label className="text-[10px] font-bold text-[#1c1b1f] uppercase tracking-wider">
- Unavailability Mode
+ Replacement Driver
  </label>
  <select
- name="mode"
- required
- defaultValue="FULL_DAY"
- onChange={(e) => setDispatchMode(e.target.value)}
  className="w-full px-3 py-2 border border-[#e8e8e8] rounded-none text-xs text-[#1c1b1f] bg-white focus:outline-none focus:border-slate-400 transition"
+ required
+ value={dispatchReplacementCabId}
+ onChange={(e) => setDispatchReplacementCabId(e.target.value)}
  >
- <option value="FULL_DAY">Full Day (End day early)</option>
- <option value="TIME_WINDOW">Temporary Absence (Time window)</option>
- </select>
- </div>
-
- {dispatchMode === "TIME_WINDOW" && (
- <div className="flex gap-4">
- <div className="flex flex-col gap-1.5 flex-1">
- <label className="text-[10px] font-bold text-[#1c1b1f] uppercase tracking-wider">
- From Time
- </label>
- <input
- type="time"
- name="fromTime"
- required
- className="w-full px-3 py-2 border border-[#e8e8e8] rounded-none text-xs text-[#1c1b1f] focus:outline-none focus:border-slate-400 transition"
- />
- </div>
- <div className="flex flex-col gap-1.5 flex-1">
- <label className="text-[10px] font-bold text-[#1c1b1f] uppercase tracking-wider">
- To Time
- </label>
- <input
- type="time"
- name="toTime"
- required
- className="w-full px-3 py-2 border border-[#e8e8e8] rounded-none text-xs text-[#1c1b1f] focus:outline-none focus:border-slate-400 transition"
- />
- </div>
- </div>
- )}
-
- <div className="flex flex-col gap-1.5">
- <label className="text-[10px] font-bold text-[#1c1b1f] uppercase tracking-wider">
- Reason
- </label>
- <select
- name="reason"
- required
- defaultValue="DRIVER_UNAVAILABLE"
- className="w-full px-3 py-2 border border-[#e8e8e8] rounded-none text-xs text-[#1c1b1f] bg-white focus:outline-none focus:border-slate-400 transition"
- >
- <option value="DRIVER_UNAVAILABLE">Driver Unavailable</option>
- <option value="VEHICLE_BREAKDOWN">Vehicle Breakdown</option>
- <option value="DRIVER_TEMP_ABSENCE">Driver Temporary Absence</option>
- <option value="OTHER">Other Operational Change</option>
+ <option value="" disabled>Select temporary replacement...</option>
+ {cabs.map(cab => (
+ <option key={`rep-${cab.id}`} value={cab.id} disabled={cab.status === "MAINTENANCE"}>
+ {cab.driverName || "Unknown Driver"} ({cab.vehicleNumber}) {cab.status === "MAINTENANCE" ? "[UNAVAILABLE]" : ""}
+ </option>
+ ))}
  </select>
  </div>
  </div>
@@ -3567,71 +3440,55 @@ export default function TransitAdminSPA() {
  <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 mt-2">
  <button
  type="button"
- onClick={() => { setIsDispatchModalOpen(false); setDispatchCab(null); setDispatchMode("FULL_DAY"); }}
+ onClick={() => { setIsDispatchModalOpen(false); setDispatchCab(null); setDispatchReplacementCabId(""); }}
  className="px-4 py-2 border border-[#e8e8e8] rounded-none text-xs font-bold text-[#6b6b6b] hover:bg-[#f7f7f7] cursor-pointer"
  >
  Cancel
  </button>
  <button
  type="submit"
- disabled={dispatchLoading}
- className="px-4 py-2 bg-amber-600 text-white rounded-none text-xs font-bold hover:bg-amber-700 transition disabled:opacity-50 cursor-pointer"
+ className="px-4 py-2 bg-black text-white rounded-none text-xs font-bold hover:bg-slate-900 transition cursor-pointer"
  >
- {dispatchLoading ? "Processing..." : "Confirm & Reassign Routes"}
+ Apply Temporary Replacement
  </button>
  </div>
- </>
- )}
- </>
- )}
  </form>
  ) : (
- <>
- <div className="flex flex-col gap-3">
- <p className="text-xs text-[#1c1b1f] font-bold">{dispatchResult.message}</p>
- 
- {dispatchResult.reassigned?.length > 0 && (
- <div className="flex flex-col gap-2">
- <h4 className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Reassigned Routes</h4>
- <div className="flex flex-col gap-1 max-h-40 overflow-y-auto border border-slate-100 p-2">
- {dispatchResult.reassigned.map((r: any, i: number) => (
- <div key={i} className="text-[11px] flex justify-between items-center border-b border-slate-50 pb-1">
- <span className="font-medium">{r.shiftName}</span>
- <span className="text-[#6b6b6b]">→ {r.toDriverName} ({r.toVehicleNumber})</span>
- </div>
- ))}
- </div>
- </div>
- )}
-
- {dispatchResult.failed?.length > 0 && (
- <div className="flex flex-col gap-2 mt-2">
- <h4 className="text-[10px] font-bold text-red-700 uppercase tracking-wider">Failed to Reassign</h4>
- <div className="flex flex-col gap-1 max-h-40 overflow-y-auto border border-red-100 bg-red-50 p-2">
- {dispatchResult.failed.map((r: any, i: number) => (
- <div key={i} className="text-[11px] text-red-800">
- <span className="font-bold">{r.shiftName}:</span> {r.reason}
- </div>
- ))}
- </div>
- </div>
- )}
+ <div className="flex flex-col gap-4">
+ <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs leading-relaxed">
+ <span className="font-bold block mb-1">Replacement Active</span>
+ {dispatchResult.message}
  </div>
  
- <div className="flex justify-end border-t border-slate-100 pt-3">
+ <div className="flex justify-end items-center gap-2 border-t border-slate-100 pt-3 mt-2">
+ <button
+ type="button"
+ onClick={() => {
+ const newReps = { ...temporaryReplacements };
+ delete newReps[dispatchCab?.id || ""];
+ setTemporaryReplacements(newReps);
+ setIsDispatchModalOpen(false);
+ setDispatchCab(null);
+ setDispatchResult(null);
+ setDispatchReplacementCabId("");
+ }}
+ className="px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-none text-xs font-bold hover:bg-red-100 cursor-pointer"
+ >
+ Remove Replacement
+ </button>
  <button
  onClick={() => {
  setIsDispatchModalOpen(false);
  setDispatchCab(null);
  setDispatchResult(null);
- setDispatchMode("FULL_DAY");
+ setDispatchReplacementCabId("");
  }}
- className="px-4 py-2 bg-black text-white rounded-none text-xs font-bold hover:bg-[#1c1b1f] cursor-pointer"
+ className="px-4 py-2 bg-[#f7f7f7] border border-[#e8e8e8] text-[#1c1b1f] rounded-none text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
  >
  Done
  </button>
  </div>
- </>
+ </div>
  )}
  </div>
  </div>
@@ -3714,9 +3571,14 @@ export default function TransitAdminSPA() {
     fallbackRoutes={activeRoutes}
   />
 
-  </div>
+      <ConfirmModal
+        isOpen={isPublishManualModalOpen}
+        onClose={() => setIsPublishManualModalOpen(false)}
+        onConfirm={handlePublishManualRoutes}
+        title="Publish Manual Routes"
+        message="Are you sure you want to publish these manual routes? This will overwrite existing active routes for the selected date and shift."
+        confirmText="Publish Routes"
+      />
+    </div>
   );
 }
-
-
-

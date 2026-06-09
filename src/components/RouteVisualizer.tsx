@@ -16,7 +16,6 @@ interface RouteVisualizerProps {
   routeViewModes?: Record<string, "pickup" | "drop">;
   selectedEmployeeId?: string | null;
   onSelectEmployee?: (id: string | null) => void;
-  canonicalSequences?: Record<string, string[]>;
 }
 
 const GoogleMapView = dynamic(() => import("./GoogleMapView"), {
@@ -40,7 +39,6 @@ export default function RouteVisualizer({
   routeViewModes,
   selectedEmployeeId,
   onSelectEmployee,
-  canonicalSequences,
 }: RouteVisualizerProps) {
  const [settings, setSettings] = useState<any>(null);
  const [apiKey, setApiKey] = useState<string>("");
@@ -84,7 +82,6 @@ export default function RouteVisualizer({
     routeViewModes={routeViewModes}
     selectedEmployeeId={selectedEmployeeId}
     onSelectEmployee={onSelectEmployee}
-    canonicalSequences={canonicalSequences}
     />
   </div>
   </div>

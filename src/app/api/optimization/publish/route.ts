@@ -18,12 +18,12 @@ export async function POST(req: Request) {
 	return NextResponse.json({ error: "Date is required" }, { status: 400 });
 	}
 
-	// Find all PLANNED routes for the given date
+	// Find all routes that should be published or re-published
 	const routesToUpdate = await prisma.route.findMany({
 	where: {
 	date,
 	...(shiftId ? { shiftId } : {}),
-	status: { in: ["PLANNED", "PENDING"] }
+	status: { in: ["PLANNED", "PENDING", "ASSIGNED"] }
 	},
 	select: { id: true }
 	});
@@ -31,10 +31,10 @@ export async function POST(req: Request) {
 	const routeIds = routesToUpdate.map(r => r.id);
 
 	if (routeIds.length === 0) {
-	return NextResponse.json({ error: "No pending routes found to publish for the selected date." }, { status: 400 });
+	return NextResponse.json({ error: "No pending or assigned routes found to publish for the selected date." }, { status: 400 });
 	}
 
-	// Update Routes to ASSIGNED
+	// Update Routes to ASSIGNED (safe to apply to already ASSIGNED ones)
 	await prisma.route.updateMany({
 	where: { id: { in: routeIds } },
 	data: { status: "ASSIGNED" }

@@ -3,11 +3,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { MapPin, UserCheck, XCircle, CheckCircle, Navigation } from "lucide-react";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function DriverRoutesExecutionPage() {
  const [route, setRoute] = useState<any>(null);
  const [loading, setLoading] = useState(true);
  const router = useRouter();
+ const [isExecuting, setIsExecuting] = useState(false);
+ const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
 
   useEffect(() => {
   fetchActiveRoute();
@@ -20,38 +23,77 @@ export default function DriverRoutesExecutionPage() {
  const res = await fetch("/api/driver/routes");
  if (res.ok) {
  const data = await res.json();
-  const activeRoute = data.routes?.find((r: any) => r.status === "IN_PROGRESS" || r.status === "ASSIGNED");
+  const activeRoute = data.routes?.find((r: any) => r.status === "IN_PROGRESS");
   setRoute(activeRoute || null);
  }
  setLoading(false);
  }
 
- async function handleStopAction(stopId: string, action: "REACH_STOP" | "BOARD_EMPLOYEE" | "SKIP_STOP") {
- const res = await fetch("/api/execution/stop", {
- method: "POST",
- headers: { "Content-Type": "application/json" },
- body: JSON.stringify({ stopId, action }),
- });
- if (res.ok) {
- fetchActiveRoute();
- } else {
- alert("Failed to update stop status");
- }
- }
+  async function handleStopAction(stopId: string, action: "REACH_STOP" | "BOARD_EMPLOYEE" | "SKIP_STOP") {
+    if (isExecuting) return;
+    setIsExecuting(true);
+    try {
+      const res = await fetch("/api/execution/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stopId, action }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchActiveRoute();
+      } else {
+        alert(data.error || "Unable to update stop status.");
+      }
+    } catch (e) {
+      alert("Network connection lost. Please try again.");
+    } finally {
+      setIsExecuting(false);
+    }
+  }
 
- async function completeRoute(routeId: string) {
- if (!confirm("Are you sure you want to complete this route?")) return;
- const res = await fetch("/api/execution/route", {
- method: "POST",
- headers: { "Content-Type": "application/json" },
- body: JSON.stringify({ routeId, action: "COMPLETE_ROUTE" }),
- });
- if (res.ok) {
- router.push("/dashboard/driver");
- } else {
- alert("Failed to complete route");
- }
- }
+  async function completeRoute(routeId: string) {
+    if (isExecuting) return;
+    setIsExecuting(true);
+    try {
+      const res = await fetch("/api/execution/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ routeId, action: "COMPLETE_ROUTE" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        router.push("/dashboard/driver");
+      } else {
+        alert(data.error || "Unable to complete route.");
+      }
+    } catch (e) {
+      alert("Network connection lost. Please try again.");
+    } finally {
+      setIsExecuting(false);
+    }
+  }
+
+  async function startRoute(routeId: string) {
+    if (isExecuting) return;
+    setIsExecuting(true);
+    try {
+      const res = await fetch("/api/execution/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ routeId, action: "START_ROUTE" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchActiveRoute();
+      } else {
+        alert(data.error || "Unable to start route.");
+      }
+    } catch (e) {
+      alert("Network connection lost. Please try again.");
+    } finally {
+      setIsExecuting(false);
+    }
+  }
 
  if (loading) {
  return (
@@ -88,16 +130,15 @@ export default function DriverRoutesExecutionPage() {
  <div>
  <h1 className="text-2xl font-bold text-[#1c1b1f]">Route Execution</h1>
  <p className="text-sm text-[#6b6b6b] mt-1 flex items-center gap-2">
- <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-[#f7f7f7] text-[#1c1b1f] tracking-widest uppercase">
- In Progress
+ <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black tracking-widest uppercase ${route.status === 'IN_PROGRESS' ? 'bg-[#f7f7f7] text-[#1c1b1f]' : 'bg-orange-100 text-orange-800'}`}>
+ {route.status.replace("_", " ")}
  </span>
- Started at {new Date(route.startedAt).toLocaleTimeString()}
  </p>
  </div>
  <div className="flex items-center gap-3">
- {allStopsCompleted && (
+ {route.status === "IN_PROGRESS" && allStopsCompleted && (
  <button 
- onClick={() => completeRoute(route.id)}
+ onClick={() => setShowCompleteConfirm(true)}
  className="px-4 py-2 bg-[#1c1b1f] text-white text-sm font-bold rounded-none hover:bg-[#1c1b1f] transition-colors flex items-center gap-2 shadow-xs"
  >
  <CheckCircle size={16} /> End Trip
@@ -180,19 +221,8 @@ export default function DriverRoutesExecutionPage() {
  </div>
 
  {/* Action Buttons */}
- {!isCompleted && (
+ {!isCompleted && route.status === "IN_PROGRESS" && (
  <div className="mt-5 flex items-center gap-3 bg-[#f7f7f7] p-3 rounded-none border border-slate-100">
- {isPending && (
- <button
- onClick={() => handleStopAction(stop.id, "REACH_STOP")}
- className="px-4 py-2 bg-[#1c1b1f] text-white text-sm font-bold rounded-none hover:bg-black transition-all flex items-center gap-2"
- >
- <Navigation size={16} /> Reached Stop
- </button>
- )}
-
- {(isPending || isReached) && (
- <>
  <button
  onClick={() => handleStopAction(stop.id, "BOARD_EMPLOYEE")}
  className="px-4 py-2 bg-[#1c1b1f] text-white text-sm font-bold rounded-none hover:bg-[#1c1b1f] transition-all flex items-center gap-2"
@@ -205,8 +235,6 @@ export default function DriverRoutesExecutionPage() {
  >
  <XCircle size={16} /> Skip Passenger
  </button>
- </>
- )}
  </div>
  )}
  </div>
@@ -217,6 +245,18 @@ export default function DriverRoutesExecutionPage() {
  </ul>
  </div>
  </div>
+
+ <ConfirmModal
+  isOpen={showCompleteConfirm}
+  onClose={() => setShowCompleteConfirm(false)}
+  onConfirm={() => {
+    setShowCompleteConfirm(false);
+    completeRoute(route.id);
+  }}
+  title="Complete Route"
+  message="Are you sure you want to complete this route?"
+  confirmText="Complete Route"
+ />
  </div>
  );
 }

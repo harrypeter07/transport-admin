@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Map, Clock, PlayCircle, CheckCircle, Calendar, Users, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { formatDate } from "@/lib/dateFormat";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function DriverDashboardPage() {
  const [activeRoutes, setActiveRoutes] = useState<any[]>([]);
@@ -11,63 +13,94 @@ export default function DriverDashboardPage() {
  const [loading, setLoading] = useState(true);
  const router = useRouter();
 
- useEffect(() => {
- fetchRoutes();
- }, [activeTab]);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
+  const [tripToEnd, setTripToEnd] = useState<string | null>(null);
 
- const [sessionError, setSessionError] = useState(false);
+  useEffect(() => {
+    fetchRoutes();
+    // Poll for new assignments every 15 seconds if on ACTIVE tab
+    const interval = setInterval(() => {
+      if (activeTab === "ACTIVE") {
+        fetchRoutes(true); // silent fetch
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
- async function fetchRoutes() {
- setLoading(true);
- try {
- const isHistory = activeTab === "HISTORY";
- const res = await fetch(`/api/driver/routes${isHistory ? "?history=true" : ""}`);
- if (res.status === 401) {
- setSessionError(true);
- return;
- }
- if (res.ok) {
- const data = await res.json();
- if (isHistory) {
- setHistoryRoutes(data.routes || []);
- } else {
- setActiveRoutes(data.routes || []);
- }
- }
- } catch (e) {
- console.error("Failed to fetch driver routes", e);
- } finally {
- setLoading(false);
- }
- }
+  const [sessionError, setSessionError] = useState(false);
 
- async function startRoute(routeId: string) {
- if (!confirm("Start this route now?")) return;
- const res = await fetch("/api/execution/route", {
- method: "POST",
- headers: { "Content-Type": "application/json" },
- body: JSON.stringify({ routeId, action: "START_ROUTE" }),
- });
- if (res.ok) {
- router.push(`/dashboard/driver/routes`);
- } else {
- alert("Failed to start route");
- }
- }
+  async function fetchRoutes(silent = false) {
+    if (!silent) setLoading(true);
+    try {
+      const isHistory = activeTab === "HISTORY";
+      const res = await fetch(`/api/driver/routes${isHistory ? "?history=true" : ""}`);
+      if (res.status === 401) {
+        setSessionError(true);
+        return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        if (isHistory) {
+          setHistoryRoutes(data.routes || []);
+        } else {
+          setActiveRoutes(data.routes || []);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch driver routes", e);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }
 
- async function endTrip(routeId: string) {
- if (!confirm("Are you sure you want to end this trip?")) return;
- const res = await fetch("/api/execution/route", {
- method: "POST",
- headers: { "Content-Type": "application/json" },
- body: JSON.stringify({ routeId, action: "COMPLETE_ROUTE" }),
- });
- if (res.ok) {
- fetchRoutes();
- } else {
- alert("Failed to end trip");
- }
- }
+  async function startRoute(routeId: string) {
+    // Check if another route is already IN_PROGRESS
+    if (activeRoutes.some(r => r.status === "IN_PROGRESS" && r.id !== routeId)) {
+      alert("You already have an active route in progress. Please complete it first.");
+      return;
+    }
+    
+    setIsExecuting(true);
+    try {
+      const res = await fetch("/api/execution/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ routeId, action: "START_ROUTE" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        router.push(`/dashboard/driver/routes`);
+      } else {
+        alert(data.error || "Unable to start route.");
+      }
+    } catch (e) {
+      alert("Network connection lost. Please try again.");
+    } finally {
+      setIsExecuting(false);
+    }
+  }
+
+  async function endTrip(routeId: string) {
+    setIsExecuting(true);
+    try {
+      const res = await fetch("/api/execution/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ routeId, action: "COMPLETE_ROUTE" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchRoutes();
+      } else {
+        alert(data.error || "Unable to complete route.");
+      }
+    } catch (e) {
+      alert("Network connection lost. Please try again.");
+    } finally {
+      setIsExecuting(false);
+    }
+  }
 
  const routesToRender = activeTab === "ACTIVE" ? activeRoutes : historyRoutes;
 
@@ -168,7 +201,7 @@ export default function DriverDashboardPage() {
  <div className="flex items-center justify-between md:justify-end gap-4 border-t border-slate-100 pt-4 md:border-0 md:pt-0">
  {activeTab === "HISTORY" && (
  <span className="text-xs font-bold text-slate-450 flex items-center gap-1">
- <Calendar size={13} /> {route.date}
+  <Calendar size={13} /> {formatDate(route.date)}
  </span>
  )}
  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-none text-[10px] font-black uppercase tracking-widest ${
@@ -186,13 +219,20 @@ export default function DriverDashboardPage() {
  <strong className="text-[#1c1b1f] font-bold block sm:inline">Manifest sequence:</strong>{" "}
  {route.stops.map((s: any, idx: number) => (
  <span key={s.id}>
- {s.employee?.name} {idx !== route.stops.length - 1 ? "→ " : ""}
+ {s.employee?.name}
+ {idx !== route.stops.length - 1 ? <span className="mx-1 text-slate-300">→</span> : ""}
  </span>
  ))}
  </div>
  
  {activeTab === "ACTIVE" && (
- <div className="flex-shrink-0">
+ <div className="flex-shrink-0 flex items-center gap-2">
+ <button 
+ onClick={() => setExpandedRouteId(expandedRouteId === route.id ? null : route.id)}
+ className="w-full sm:w-auto px-4 py-2 border border-[#e8e8e8] text-[#1c1b1f] text-xs font-bold rounded-none hover:bg-[#f7f7f7] transition cursor-pointer flex items-center justify-center gap-1.5"
+ >
+ {expandedRouteId === route.id ? "Hide Details" : "Inspect Route"}
+ </button>
  {route.status === "PLANNED" || route.status === "ASSIGNED" || route.status === "PENDING" ? (
  <button 
  onClick={() => startRoute(route.id)}
@@ -209,7 +249,7 @@ export default function DriverDashboardPage() {
  Resume Execution
  </button>
  <button 
- onClick={() => endTrip(route.id)}
+ onClick={() => setTripToEnd(route.id)}
  className="w-full sm:w-auto px-4 py-2 bg-[#1c1b1f] text-white text-xs font-bold rounded-none hover:bg-[#1c1b1f] transition cursor-pointer flex items-center justify-center gap-1.5"
  >
  <CheckCircle size={15} /> End Trip
@@ -221,12 +261,43 @@ export default function DriverDashboardPage() {
  </div>
  )}
  </div>
+ {expandedRouteId === route.id && (
+ <div className="mt-4 pt-4 border-t border-slate-100">
+ <h4 className="text-xs font-black text-[#1c1b1f] uppercase tracking-widest mb-3">Route Details</h4>
+ <div className="space-y-3">
+ {route.stops.map((s: any, idx: number) => (
+ <div key={s.id} className="flex items-start gap-3 bg-[#f7f7f7] p-3 rounded-none">
+ <div className="w-6 h-6 rounded-none bg-[#1c1b1f] text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+ {idx + 1}
+ </div>
+ <div>
+ <p className="text-sm font-bold text-[#1c1b1f]">{s.employee?.name}</p>
+ <p className="text-xs text-[#6b6b6b] mt-0.5 leading-snug">{s.employee?.address}</p>
+ {s.employee?.phone && <p className="text-[10px] font-semibold text-slate-400 mt-1">📞 {s.employee.phone}</p>}
+ </div>
+ </div>
+ ))}
+ </div>
+ </div>
+ )}
  </div>
  ))}
  </div>
  )}
  </div>
  </div>
+
+ <ConfirmModal
+  isOpen={!!tripToEnd}
+  onClose={() => setTripToEnd(null)}
+  onConfirm={() => {
+    if (tripToEnd) endTrip(tripToEnd);
+    setTripToEnd(null);
+  }}
+  title="End Trip"
+  message="Are you sure you want to end this trip? This will mark the route as completed."
+  confirmText="End Trip"
+ />
  </div>
  );
 }

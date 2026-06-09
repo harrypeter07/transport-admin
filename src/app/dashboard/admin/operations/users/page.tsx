@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { User } from "lucide-react";
+import ConfirmModal from "@/components/ConfirmModal";
 
 type AppUser = {
  id: string;
@@ -36,15 +37,10 @@ export default function UsersPage() {
  setLoading(false);
  }
 
-  async function handleAction(id: string, action: "ENABLE" | "DISABLE" | "RESET_PASSWORD" | "DELETE") {
-    if (action === "RESET_PASSWORD") {
-      if (!confirm("Are you sure you want to reset this user's password to the default?")) return;
-    }
-    if (action === "DELETE") {
-      const user = users.find((u) => u.id === id);
-      if (!confirm(`⚠️ Permanently delete user "${user?.name}"? This cannot be undone.`)) return;
-    }
+  const [userToReset, setUserToReset] = useState<AppUser | null>(null);
+  const [userToDelete, setUserToDelete] = useState<AppUser | null>(null);
 
+  async function handleAction(id: string, action: "ENABLE" | "DISABLE" | "RESET_PASSWORD" | "DELETE") {
     const method = action === "DELETE" ? "DELETE" : "PATCH";
     const res = await fetch("/api/users", {
       method,
@@ -162,13 +158,13 @@ export default function UsersPage() {
  <td className="px-6 py-4 text-right">
  <div className="flex items-center justify-end gap-2">
               <button
-                onClick={() => handleAction(user.id, "RESET_PASSWORD")}
+                onClick={() => setUserToReset(user)}
                 className="px-3 py-1.5 text-xs font-bold text-[#6b6b6b] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded-none transition-colors"
               >
                 Reset Pass
               </button>
               <button
-                onClick={() => handleAction(user.id, "DELETE")}
+                onClick={() => setUserToDelete(user)}
                 className="px-3 py-1.5 text-xs font-bold text-[#dc2626] hover:bg-[#fef2f2] rounded-none transition-colors"
               >
                 Delete
@@ -195,8 +191,31 @@ export default function UsersPage() {
  )}
  </tbody>
  </table>
- </div>
- </div>
+  </div>
+  </div>
+
+  <ConfirmModal
+    isOpen={!!userToReset}
+    onClose={() => setUserToReset(null)}
+    onConfirm={() => {
+      if (userToReset) handleAction(userToReset.id, "RESET_PASSWORD");
+    }}
+    title="Reset Password"
+    message={`Are you sure you want to reset the password for "${userToReset?.name}" to the default?`}
+    confirmText="Reset Password"
+  />
+
+  <ConfirmModal
+    isOpen={!!userToDelete}
+    onClose={() => setUserToDelete(null)}
+    onConfirm={() => {
+      if (userToDelete) handleAction(userToDelete.id, "DELETE");
+    }}
+    title="Delete User"
+    message={`Are you sure you want to permanently delete user "${userToDelete?.name}"? This action cannot be undone.`}
+    confirmText="Delete User"
+    isDestructive={true}
+  />
  </div>
  );
 }

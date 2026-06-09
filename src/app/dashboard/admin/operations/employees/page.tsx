@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search, Plus, Edit, Trash2, ChevronRight, X } from "lucide-react";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { useTransportStore } from "@/store/useTransportStore";
+import ConfirmModal from "@/components/ConfirmModal";
 
 type Shift = { id: string; name: string };
 
@@ -52,6 +53,8 @@ export default function EmployeesPage() {
  const t = setTimeout(() => fetchEmployees(), 250);
  return () => clearTimeout(t);
  }, [search]);
+
+  const [empToDelete, setEmpToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
   e.preventDefault();
@@ -106,8 +109,7 @@ export default function EmployeesPage() {
  }
  };
 
- const handleDelete = async (id: string, name: string) => {
- if (!confirm(`Delete employee "${name}"? This cannot be undone.`)) return;
+ const handleDelete = async (id: string) => {
  try {
  const res = await fetch(`/api/employees?id=${id}`, { method: "DELETE" });
  if (res.ok) fetchEmployees();
@@ -256,7 +258,7 @@ export default function EmployeesPage() {
  <Edit className="w-3.5 h-3.5" />
  </button>
  <button
- onClick={() => handleDelete(emp.id, emp.name)}
+ onClick={() => setEmpToDelete({ id: emp.id, name: emp.name })}
  className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"
  >
  <Trash2 className="w-3.5 h-3.5" />
@@ -361,6 +363,18 @@ export default function EmployeesPage() {
  </div>
  </div>
  )}
+
+ <ConfirmModal
+  isOpen={!!empToDelete}
+  onClose={() => setEmpToDelete(null)}
+  onConfirm={() => {
+    if (empToDelete) handleDelete(empToDelete.id);
+  }}
+  title="Delete Employee"
+  message={`Are you sure you want to permanently delete "${empToDelete?.name}"? This action cannot be undone.`}
+  confirmText="Delete Employee"
+  isDestructive={true}
+ />
  </>
  );
 }

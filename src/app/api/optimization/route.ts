@@ -232,6 +232,20 @@ async function persistRoutes(
         });
       }
     }
+
+    // Save to permanent OptimizedRouteSnapshot
+    const stats = {
+      routeCount: nonEmptyRoutes.length,
+      totalDistance: nonEmptyRoutes.reduce((s, r) => s + (r.totalDistance || 0), 0)
+    };
+    await tx.optimizedRouteSnapshot.create({
+      data: {
+        optimizationId: `opt_${Date.now()}`,
+        date: currentDateStr,
+        routeData: JSON.stringify(nonEmptyRoutes),
+        statistics: JSON.stringify(stats),
+      }
+    });
   }, { timeout: 20000, maxWait: 10000 });
 }
 
@@ -355,6 +369,20 @@ async function persistPreviewRoutes(
     if (violationRows.length > 0) {
       await tx.violation.createMany({ data: violationRows });
     }
+
+    // Save to permanent OptimizedRouteSnapshot
+    const stats = {
+      routeCount: routeRows.length,
+      totalDistance: routeRows.reduce((s, r) => s + r.totalDistance, 0)
+    };
+    await tx.optimizedRouteSnapshot.create({
+      data: {
+        optimizationId: `opt_${Date.now()}`,
+        date: currentDateStr,
+        routeData: JSON.stringify(validRoutes),
+        statistics: JSON.stringify(stats),
+      }
+    });
   }, { timeout: 30000, maxWait: 10000 });
 
   return { count: validRoutes.length, shiftCount: affectedShiftIds.length };

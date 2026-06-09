@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { CheckCircle, XCircle } from "lucide-react";
+import { formatDate } from "@/lib/dateFormat";
 
 export default function ManagerApprovalsPage() {
  const [leaves, setLeaves] = useState<any[]>([]);
@@ -67,7 +68,7 @@ export default function ManagerApprovalsPage() {
  <div>
  <p className="font-bold text-[#1c1b1f]">{l.applicant?.name}</p>
  <p className="text-xs text-[#6b6b6b]">
- {l.startDate} to {l.endDate}
+  {formatDate(l.startDate)} to {formatDate(l.endDate)}
  </p>
  {l.description && <p className="text-xs text-[#9a9a9a] mt-1">"{l.description}"</p>}
  </div>

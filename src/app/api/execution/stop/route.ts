@@ -40,7 +40,7 @@ export async function POST(req: Request) {
  return NextResponse.json({ error: "Route is not in progress" }, { status: 400 });
  }
 
- if (session.role === "DRIVER" && stop.route.cab.userId !== session.userId) {
+ if (session.role === "DRIVER" && stop.route.cab?.userId !== session.userId) {
  return NextResponse.json({ error: "Stop not assigned to this driver" }, { status: 403 });
  }
 
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
  timestamp: now,
  routeId: stop.routeId,
  routeStopId: stopId,
- cabId: stop.route.cab.id,
+ cabId: stop.route.cab?.id,
  employeeId: stop.employeeId,
  metadata: metadata ? JSON.stringify(metadata) : null,
  }
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
 
   await audit({ userId: session.userId, role: session.role, action: "UPDATE", entity: "Route", entityId: stop.routeId, after: { stopId, status: "REACHED", actualArrivalTime: now }, ip });
 
-  if (stop.employee.userId) {
+  if (stop.employee?.userId) {
   createNotification(
   stop.employee.userId,
   "Driver is arriving!",
@@ -106,11 +106,17 @@ export async function POST(req: Request) {
  const newStatus = action === "BOARD_EMPLOYEE" ? "BOARDED" : "SKIPPED";
  const eventType = action === "BOARD_EMPLOYEE" ? "EMPLOYEE_BOARDED" : "STOP_SKIPPED";
 
- // Employee Delay only calculated if BOARDED and stop was REACHED
- let employeeDelayMins = stop.employeeDelayMins;
- const actualArrival = stop.actualArrivalTime || now; // If they skipped without hitting reached
+ let driverDelayMins = stop.driverDelayMins || 0;
+ if (stop.status === "PENDING" && stop.expectedTime) {
+ const diffMs = now.getTime() - stop.expectedTime.getTime();
+ driverDelayMins = Math.max(0, Math.floor(diffMs / 60000));
+ }
 
- if (action === "BOARD_EMPLOYEE") {
+ // Employee Delay only calculated if BOARDED and stop was REACHED
+ let employeeDelayMins = stop.employeeDelayMins || 0;
+ const actualArrival = stop.actualArrivalTime || now; 
+
+ if (action === "BOARD_EMPLOYEE" && stop.status === "REACHED") {
  const diffMs = now.getTime() - actualArrival.getTime();
  employeeDelayMins = Math.max(0, Math.floor(diffMs / 60000));
  }
@@ -121,7 +127,8 @@ export async function POST(req: Request) {
  data: {
  status: newStatus,
  boardedTime: action === "BOARD_EMPLOYEE" ? now : undefined,
- actualArrivalTime: stop.actualArrivalTime ? undefined : now, // set if they didn't explicitly reach
+ actualArrivalTime: stop.actualArrivalTime || now, 
+ driverDelayMins,
  employeeDelayMins,
  }
  });
@@ -132,7 +139,7 @@ export async function POST(req: Request) {
  timestamp: now,
  routeId: stop.routeId,
  routeStopId: stopId,
- cabId: stop.route.cab.id,
+ cabId: stop.route.cab?.id,
  employeeId: stop.employeeId,
  metadata: metadata ? JSON.stringify(metadata) : null,
  }
@@ -143,7 +150,7 @@ export async function POST(req: Request) {
 
   await audit({ userId: session.userId, role: session.role, action: "UPDATE", entity: "Route", entityId: stop.routeId, after: { stopId, status: newStatus, employeeDelayMins }, ip });
 
-  if (stop.employee.userId) {
+  if (stop.employee?.userId) {
   createNotification(
   stop.employee.userId,
   newStatus === "BOARDED" ? "You have boarded" : "You were skipped",
@@ -154,7 +161,7 @@ export async function POST(req: Request) {
   }
 
  // If employee was delayed by more than 5 minutes, notify their manager
- if (employeeDelayMins > 5 && stop.employee.managerId) {
+ if (employeeDelayMins > 5 && stop.employee?.managerId) {
  const manager = await prisma.employee.findUnique({ where: { id: stop.employee.managerId } });
  if (manager?.userId) {
  createNotification(

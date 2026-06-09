@@ -261,3 +261,29 @@ model AuditLog {
   ip        String?
   createdAt DateTime @default(now())
 }
+
+model BaselineRoute {
+  id              String   @id @default(uuid())
+  snapshotId      String
+  date            String   @default("")
+  routeData       Json
+  markers         Json?
+  routeGeometry   Json?
+  statistics      Json
+  createdAt       DateTime @default(now())
+
+  @@map("baseline_routes")
+}
+
+model OptimizedRouteSnapshot {
+  id              String   @id @default(uuid())
+  optimizationId  String
+  date            String   @default("")
+  routeData       Json
+  markers         Json?
+  routeGeometry   Json?
+  statistics      Json
+  createdAt       DateTime @default(now())
+
+  @@map("optimized_routes")
+}

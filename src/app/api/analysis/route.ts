@@ -15,10 +15,19 @@ export async function GET(req: Request) {
 
  const { searchParams } = new URL(req.url);
  const date = searchParams.get("date");
+ const startDate = searchParams.get("startDate");
+ const endDate = searchParams.get("endDate");
  const period = searchParams.get("period") || "DAILY"; // DAILY, WEEKLY, MONTHLY, ANNUAL
 
  const whereClause: any = {};
- if (date) whereClause.date = date;
+ if (date) {
+   whereClause.date = date;
+ } else if (startDate && endDate) {
+   whereClause.date = {
+     gte: startDate,
+     lte: endDate
+   };
+ }
 
  const routes = await prisma.route.findMany({
  where: whereClause,

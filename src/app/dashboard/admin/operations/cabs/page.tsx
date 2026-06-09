@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Search, Plus, Edit, Trash2, ChevronRight, X } from "lucide-react";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
+import ConfirmModal from "@/components/ConfirmModal";
 
 type Shift = { id: string; name: string };
 type CabShift = { id: string; name: string };
@@ -61,6 +62,8 @@ export default function CabsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  const [cabToDelete, setCabToDelete] = useState<{ id: string; vehicleNumber: string } | null>(null);
+
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
@@ -106,8 +109,7 @@ export default function CabsPage() {
     }
   };
 
-  const handleDelete = async (id: string, vn: string) => {
-    if (!confirm(`Remove cab "${vn}" from the fleet?`)) return;
+  const handleDelete = async (id: string) => {
     try {
       const res = await fetch(`/api/cabs/${id}`, { method: "DELETE" });
       if (res.ok) fetchCabs();
@@ -263,7 +265,7 @@ export default function CabsPage() {
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleDelete(cab.id, cab.vehicleNumber)} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setCabToDelete({ id: cab.id, vehicleNumber: cab.vehicleNumber })} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                       </td>
                     </tr>
@@ -359,6 +361,18 @@ export default function CabsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!cabToDelete}
+        onClose={() => setCabToDelete(null)}
+        onConfirm={() => {
+          if (cabToDelete) handleDelete(cabToDelete.id);
+        }}
+        title="Remove Cab"
+        message={`Are you sure you want to remove cab "${cabToDelete?.vehicleNumber}" from the fleet? This action cannot be undone.`}
+        confirmText="Remove Cab"
+        isDestructive={true}
+      />
     </>
   );
 }

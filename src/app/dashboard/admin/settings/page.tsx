@@ -11,8 +11,10 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
+import ConfirmModal from "@/components/ConfirmModal";
 
 type Settings = {
   leaveApprovalRequired: boolean;
@@ -96,6 +98,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -364,6 +367,52 @@ export default function SettingsPage() {
           </button>
         </div>
       </Panel>
+
+      {/* Panel 4 — Data Management */}
+      <Panel title="Data Management" icon={Trash2}>
+        <div className="flex items-center justify-between p-4 bg-red-50 rounded-none border border-red-100">
+          <div>
+            <p className="text-sm font-bold text-red-700">Clear Routing History</p>
+            <p className="text-xs text-red-600/80 mt-0.5 max-w-xl">
+              This will permanently delete all routes, stops, locations, and analytics history.
+              Employees, cabs, and system settings will remain intact. This action cannot be undone.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsClearModalOpen(true)}
+            disabled={saving === "clearing"}
+            className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-none transition disabled:opacity-50"
+          >
+            {saving === "clearing" ? <Loader2 className="w-3.5 h-3.5 animate-spin-fast" /> : <Trash2 className="w-3.5 h-3.5" />}
+            Clear History
+          </button>
+        </div>
+      </Panel>
+
+      <ConfirmModal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onConfirm={async () => {
+          setSaving("clearing");
+          try {
+            const res = await fetch("/api/settings/clear-routing", { method: "DELETE" });
+            if (res.ok) {
+              showToast("Routing history cleared successfully.", "success");
+            } else {
+              const err = await res.json();
+              showToast(err.error || "Failed to clear.", "error");
+            }
+          } catch {
+            showToast("Network error. Please try again.", "error");
+          } finally {
+            setSaving(null);
+          }
+        }}
+        title="Clear Routing History"
+        message="Are you absolutely sure you want to clear all routing history? This will permanently delete all routes, stops, locations, and analytics history. This action cannot be undone."
+        confirmText="Clear History"
+        isDestructive={true}
+      />
     </div>
   );
 }

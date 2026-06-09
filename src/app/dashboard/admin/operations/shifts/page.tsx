@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Plus, Edit, Trash2, ChevronRight, X, Users, CarFront, Bus, Clock } from "lucide-react";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function ShiftsPage() {
  const [shifts, setShifts] = useState<any[]>([]);
@@ -12,6 +13,7 @@ export default function ShiftsPage() {
  const [submitting, setSubmitting] = useState(false);
  const [formError, setFormError] = useState<string | null>(null);
  const formRef = useRef<HTMLFormElement>(null);
+ const [shiftToDelete, setShiftToDelete] = useState<string | null>(null);
 
  const fetchShifts = async () => {
  setLoading(true);
@@ -59,7 +61,6 @@ export default function ShiftsPage() {
  };
 
  const handleDelete = async (id: string) => {
- if (!confirm("Delete this shift?")) return;
  try {
  const res = await fetch(`/api/shifts/${id}`, { method: "DELETE" });
  if (res.ok) fetchShifts();
@@ -114,8 +115,8 @@ export default function ShiftsPage() {
  </div>
  </div>
  <div className="flex gap-1">
- <button onClick={() => { setEditingShift(shift); setShowModal(true); setFormError(null); }} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Edit className="w-3.5 h-3.5" /></button>
- <button onClick={() => handleDelete(shift.id)} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
+  <button onClick={() => { setEditingShift(shift); setShowModal(true); setFormError(null); }} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Edit className="w-3.5 h-3.5" /></button>
+  <button onClick={() => setShiftToDelete(shift.id)} className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
  </div>
  </div>
  <div className="p-5 bg-[#f7f7f7] flex flex-col gap-4">
@@ -198,6 +199,18 @@ export default function ShiftsPage() {
  </div>
  </div>
  )}
+
+ <ConfirmModal
+  isOpen={!!shiftToDelete}
+  onClose={() => setShiftToDelete(null)}
+  onConfirm={() => {
+    if (shiftToDelete) handleDelete(shiftToDelete);
+  }}
+  title="Delete Shift"
+  message="Are you sure you want to delete this shift? This will unassign any currently assigned resources for this shift."
+  confirmText="Delete"
+  isDestructive={true}
+ />
  </>
  );
 }

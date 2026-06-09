@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { getSessionCache, setSessionCache, invalidateSessionCache } from "@/lib/sessionCache";
 import LoadingProgress, { type ProgressStage } from "@/components/LoadingProgress";
+import { formatDateLong } from "@/lib/dateFormat";
 
 const CACHE_KEY_DASHBOARD = "admin_dashboard_metrics";
 const CACHE_KEY_SETTINGS = "admin_dashboard_settings";
@@ -185,9 +186,7 @@ export default function AdminDashboardPage() {
  const fuelSaved = m.savings ? Math.max(0, m.savings) / mileage : 0;
  const costSaved = fuelSaved * fuelPrice;
 
- const today = new Date().toLocaleDateString("en-US", {
- weekday: "long", year: "numeric", month: "long", day: "numeric"
- });
+  const today = formatDateLong(new Date().toISOString().split("T")[0]);
 
  const issueCount = (m.delayedRoutesCount || 0) + (m.totalPendingRequestsCount || 0);
  const systemStatus = issueCount > 0

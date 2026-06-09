@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Calendar, Clock, AlertCircle, Trash2, CalendarRange, Clock3, MessageSquarePlus } from "lucide-react";
+import { formatDate } from "@/lib/dateFormat";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function EmployeeRequestsPage() {
  const [leaves, setLeaves] = useState<any[]>([]);
@@ -24,6 +26,7 @@ export default function EmployeeRequestsPage() {
 
  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
  const [submitting, setSubmitting] = useState(false);
+ const [requestToCancel, setRequestToCancel] = useState<{ id: string; type: "LEAVE" | "TIMING" } | null>(null);
 
  useEffect(() => {
  fetchRequests();
@@ -121,7 +124,6 @@ export default function EmployeeRequestsPage() {
  }
 
  async function handleCancelRequest(requestId: string, type: "LEAVE" | "TIMING") {
- if (!confirm("Are you sure you want to cancel this pending request?")) return;
  try {
  const res = await fetch("/api/employee/requests", {
  method: "PATCH",
@@ -338,7 +340,7 @@ export default function EmployeeRequestsPage() {
  {leaves.map((l) => (
  <tr key={l.id} className="hover:bg-[#f7f7f7]">
  <td className="p-3 pl-4 font-bold text-slate-850">
- {l.startDate} to {l.endDate}
+  {formatDate(l.startDate)} to {formatDate(l.endDate)}
  </td>
  <td className="p-3 text-[#6b6b6b] max-w-xs truncate" title={l.comments}>
  {l.comments || "—"}
@@ -356,7 +358,7 @@ export default function EmployeeRequestsPage() {
  <td className="p-3 text-right pr-4">
  {l.status === "PENDING" && (
  <button
- onClick={() => handleCancelRequest(l.id, "LEAVE")}
+ onClick={() => setRequestToCancel({ id: l.id, type: "LEAVE" })}
  className="text-[#6b6b6b] hover:text-[#1c1b1f] font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
  >
  <Trash2 size={12} /> Cancel
@@ -423,7 +425,7 @@ export default function EmployeeRequestsPage() {
  <td className="p-3 text-right pr-4">
  {t.status === "PENDING" && (
  <button
- onClick={() => handleCancelRequest(t.id, "TIMING")}
+ onClick={() => setRequestToCancel({ id: t.id, type: "TIMING" })}
  className="text-[#6b6b6b] hover:text-[#1c1b1f] font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
  >
  <Trash2 size={12} /> Cancel
@@ -438,6 +440,19 @@ export default function EmployeeRequestsPage() {
  )}
  </div>
  </div>
+
+ <ConfirmModal
+  isOpen={!!requestToCancel}
+  onClose={() => setRequestToCancel(null)}
+  onConfirm={() => {
+    if (requestToCancel) handleCancelRequest(requestToCancel.id, requestToCancel.type);
+    setRequestToCancel(null);
+  }}
+  title="Cancel Request"
+  message="Are you sure you want to cancel this pending request?"
+  confirmText="Cancel Request"
+  isDestructive={true}
+ />
  </div>
  );
 }

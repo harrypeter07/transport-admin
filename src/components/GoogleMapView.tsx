@@ -126,7 +126,6 @@ interface GoogleMapViewProps {
   routeViewModes?: Record<string, "pickup" | "drop">;
   selectedEmployeeId?: string | null;
   onSelectEmployee?: (id: string | null) => void;
-  canonicalSequences?: Record<string, string[]>;
 }
 
 export default function GoogleMapView({
@@ -142,7 +141,6 @@ export default function GoogleMapView({
   routeViewModes,
   selectedEmployeeId,
   onSelectEmployee,
-  canonicalSequences,
 }: GoogleMapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -193,12 +191,6 @@ export default function GoogleMapView({
 
   const getDisplayOrderedStops = (route: Route, isPickup: boolean): any[] => {
     const sorted = [...route.stops].sort((a: any, b: any) => a.stopOrder - b.stopOrder);
-    const canonical = canonicalSequences?.[route.id];
-    if (canonical) {
-      const stopMap = new Map(sorted.map(s => [s.employee.id, s]));
-      const ordered = canonical.map(id => stopMap.get(id)).filter(Boolean);
-      return isPickup ? ordered : [...ordered].reverse();
-    }
     return isPickup ? sorted : [...sorted].reverse();
   };
 
@@ -383,15 +375,8 @@ export default function GoogleMapView({
         const effectiveIsPickup = routeViewModes?.[selectedRoute.id]
           ? routeViewModes[selectedRoute.id] === "pickup"
           : true;
-        const canonical = canonicalSequences?.[selectedRoute.id];
-        let orderedStops: any[];
-        if (canonical) {
-          const stopMap = new Map(stopsList.map(s => [s.employee.id, s]));
-          const ordered = canonical.map(id => stopMap.get(id)).filter(Boolean);
-          orderedStops = effectiveIsPickup ? ordered : [...ordered].reverse();
-        } else {
-          orderedStops = effectiveIsPickup ? stopsList : [...stopsList].reverse();
-        }
+        let orderedStops = effectiveIsPickup ? stopsList : [...stopsList].reverse();
+        
         const routeStart = getRouteStartLatLng(selectedRoute);
         const seenCoords: Record<string, number> = {};
 
@@ -505,7 +490,7 @@ export default function GoogleMapView({
       overlays.forEach((o) => o?.setMap?.(null));
       infoWindows.forEach((iw) => iw.close());
     };
-  }, [routes, selectedRouteId, mode, routeViewModes, selectedEmployeeId, canonicalSequences]);
+  }, [routes, selectedRouteId, mode, routeViewModes, selectedEmployeeId]);
 
   const shiftLegend = buildShiftColorMap(routes);
 
@@ -519,12 +504,11 @@ export default function GoogleMapView({
           <div className="font-bold text-[#1c1b1f] uppercase tracking-wider text-[9px] border-b border-slate-100 pb-1 mb-0.5">Shifts</div>
           {Array.from(shiftLegend.entries()).map(([shiftId, color]) => {
             const shiftRoute = routes.find(r => r.shiftId === shiftId);
-            const shiftName = shiftRoute?.shift?.name || shiftId;
-            const shiftTime = shiftRoute?.shift?.startTime ? ` · ${shiftRoute.shift.startTime}` : "";
+            const shiftName = shiftRoute?.shift?.startTime || shiftId;
             return (
               <div key={shiftId} className="flex items-center gap-1.5 font-semibold text-[#4a4a4a]">
                 <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
-                <span>{shiftName}{shiftTime}</span>
+                <span>{shiftName}</span>
               </div>
             );
           })}

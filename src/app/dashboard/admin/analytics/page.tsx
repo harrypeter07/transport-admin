@@ -19,15 +19,29 @@ export default function AnalyticsPage() {
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
 
+ const [analysisDateMode, setAnalysisDateMode] = useState<"SINGLE_DAY" | "DATE_RANGE">("SINGLE_DAY");
+ const [analysisSingleDate, setAnalysisSingleDate] = useState<string>(new Date().toISOString().split('T')[0]);
+ const [analysisStartDate, setAnalysisStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+ const [analysisEndDate, setAnalysisEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
  useEffect(() => {
  fetchAnalytics();
- }, [period]);
+ }, [period, analysisDateMode, analysisSingleDate, analysisStartDate, analysisEndDate]);
 
  async function fetchAnalytics() {
  setLoading(true);
  setError(null);
  try {
- const res = await fetch(`/api/analysis?period=${period}`);
+ const params = new URLSearchParams();
+ params.append("period", period);
+ if (analysisDateMode === "SINGLE_DAY") {
+   if (analysisSingleDate) params.append("date", analysisSingleDate);
+ } else {
+   if (analysisStartDate) params.append("startDate", analysisStartDate);
+   if (analysisEndDate) params.append("endDate", analysisEndDate);
+ }
+
+ const res = await fetch(`/api/analysis?${params.toString()}`);
  if (res.ok) {
  setData(await res.json());
  } else {
@@ -131,6 +145,72 @@ export default function AnalyticsPage() {
  </button>
  </div>
  </div>
+
+ {/* Analytics Date Filter Section */}
+  <div className="bg-[#f7f7f7] border border-[#e8e8e8] p-4 flex flex-col gap-3">
+    <h3 className="text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">Analytics Period</h3>
+    <div className="flex flex-col md:flex-row gap-6">
+      
+      {/* Single Day */}
+      <div className="flex flex-col gap-2 border-r border-[#e8e8e8] pr-6">
+        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-[#4a4a4a]">
+          <input
+            type="radio"
+            name="analysisDateMode"
+            value="SINGLE_DAY"
+            checked={analysisDateMode === "SINGLE_DAY"}
+            onChange={() => setAnalysisDateMode("SINGLE_DAY")}
+            className="accent-black w-3.5 h-3.5 cursor-pointer"
+          />
+          Single Day
+        </label>
+        <div className={`transition-opacity ${analysisDateMode === "SINGLE_DAY" ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+          <input
+            type="date"
+            value={analysisSingleDate}
+            onChange={(e) => setAnalysisSingleDate(e.target.value)}
+            className="px-3 py-1.5 border border-[#e8e8e8] rounded-none text-xs text-[#1c1b1f] bg-white focus:outline-none focus:border-slate-400"
+          />
+        </div>
+      </div>
+
+      {/* Date Range */}
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-[#4a4a4a]">
+          <input
+            type="radio"
+            name="analysisDateMode"
+            value="DATE_RANGE"
+            checked={analysisDateMode === "DATE_RANGE"}
+            onChange={() => setAnalysisDateMode("DATE_RANGE")}
+            className="accent-black w-3.5 h-3.5 cursor-pointer"
+          />
+          Date Range
+        </label>
+        <div className={`flex gap-3 transition-opacity ${analysisDateMode === "DATE_RANGE" ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] text-[#9a9a9a] uppercase font-bold tracking-wider">Start Date</span>
+            <input
+              type="date"
+              value={analysisStartDate}
+              onChange={(e) => setAnalysisStartDate(e.target.value)}
+              className="px-3 py-1.5 border border-[#e8e8e8] rounded-none text-xs text-[#1c1b1f] bg-white focus:outline-none focus:border-slate-400"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] text-[#9a9a9a] uppercase font-bold tracking-wider">End Date</span>
+            <input
+              type="date"
+              value={analysisEndDate}
+              onChange={(e) => setAnalysisEndDate(e.target.value)}
+              className="px-3 py-1.5 border border-[#e8e8e8] rounded-none text-xs text-[#1c1b1f] bg-white focus:outline-none focus:border-slate-400"
+            />
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
  {error ? (
  <div className="p-4 bg-[#f7f7f7] border border-[#e8e8e8] rounded-none text-[#1c1b1f] text-xs font-semibold">{error}</div>

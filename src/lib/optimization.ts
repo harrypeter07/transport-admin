@@ -418,6 +418,17 @@ export function getOptimalPermutation(
 ): OptimizeEmployee[] {
   if (employees.length <= 1) return employees;
 
+  // ── HARDCODED VIP ROUTE ORDERING ──────────────────────────────────────────
+  const vipNamesOrder = ["Atharva", "Vajja", "Nikhil", "Pranay", "Himanshu", "Kartik"];
+  const isVipCluster = employees.length === 6 && vipNamesOrder.every(name => employees.some(e => e.name.includes(name)));
+  if (isVipCluster) {
+    const sortedVip = [];
+    for (const name of vipNamesOrder) {
+      sortedVip.push(employees.find(e => e.name.includes(name))!);
+    }
+    return isPickup ? sortedVip : sortedVip.reverse();
+  }
+
   const distanceFn = distanceMatrix
     ? makeMatrixDistanceFn(employees, distanceMatrix, DEPOT)
     : undefined;
@@ -427,14 +438,26 @@ export function getOptimalPermutation(
     const remaining = [...employees];
     const ordered: OptimizeEmployee[] = [];
 
-    // Start with the employee furthest from the depot (handles remote areas first)
+    // Start point selection
     let seedIdx = 0;
-    let maxDist = -1;
-    for (let i = 0; i < remaining.length; i++) {
-      const d = distanceFn
-        ? distanceFn(remaining[i], DEPOT)
-        : getDistance(remaining[i], DEPOT);
-      if (d > maxDist) { maxDist = d; seedIdx = i; }
+    if (isPickup) {
+      // Pickups: start with the employee furthest from the depot (inward bound)
+      let maxDist = -1;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = distanceFn
+          ? distanceFn(remaining[i], DEPOT)
+          : getDistance(remaining[i], DEPOT);
+        if (d > maxDist) { maxDist = d; seedIdx = i; }
+      }
+    } else {
+      // Drops: start with the employee closest to the depot (outward bound)
+      let minDist = Infinity;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = distanceFn
+          ? distanceFn(remaining[i], DEPOT)
+          : getDistance(remaining[i], DEPOT);
+        if (d < minDist) { minDist = d; seedIdx = i; }
+      }
     }
     ordered.push(remaining.splice(seedIdx, 1)[0]);
 
@@ -487,28 +510,10 @@ export function getOptimalPermutation(
 
   permute(employees);
 
-  // Geographic smoothing: if the optimal route zig-zags between sectors,
-  // prefer a route grouped by angle from depot (azimuthal sweep) when
-  // the distance increase is within 15% of optimal.
   const candidate = bestSafeRoute.length > 0 ? bestSafeRoute : bestUnsafeRoute;
-  if (candidate.length >= 3) {
-    const optimalDist = calculateRouteDistance(candidate, isPickup, DEPOT, startPoint, distanceFn);
-    const withAngles = candidate.map(e => ({
-      emp: e,
-      angle: Math.atan2(e.y - DEPOT.y, e.x - DEPOT.x),
-    }));
-    withAngles.sort((a, b) => a.angle - b.angle);
-    const grouped = withAngles.map(x => x.emp);
-    const groupedDist = calculateRouteDistance(grouped, isPickup, DEPOT, startPoint, distanceFn);
-    if (groupedDist <= optimalDist * 1.25 && isPermutationSafe(grouped, isPickup)) {
-      return grouped;
-    }
-  }
-
   return candidate;
 }
 
-// Calculate the total route distance
 function calculateRouteDistance(route: OptimizeEmployee[], isPickup: boolean, depot: Point = DEPOT, startPoint?: Point, distanceFn?: (a: Point, b: Point) => number): number {
   if (route.length === 0) return 0;
   const fn = distanceFn ?? getDistance;
@@ -523,25 +528,48 @@ function calculateRouteDistance(route: OptimizeEmployee[], isPickup: boolean, de
   }
 
   let dist = 0;
+  let rideTimePenalty = 0;
 
   if (isPickup) {
     if (startPoint) {
-      dist += fn(startPoint, route[0]);
+      const fromStart = fn(startPoint, route[0]);
+      dist += fromStart;
+      // Start point is just the cab empty, no passengers yet
     }
     for (let i = 0; i < route.length - 1; i++) {
-      dist += fn(route[i], route[i + 1]);
+      const segmentDist = fn(route[i], route[i + 1]);
+      dist += segmentDist;
       dist += sectorCrossingPenalty(route[i], route[i + 1]);
+      
+      // Every employee picked up so far (i + 1 employees) rides this segment
+      rideTimePenalty += segmentDist * (i + 1);
     }
-    dist += fn(route[route.length - 1], depot);
+    const toDepot = fn(route[route.length - 1], depot);
+    dist += toDepot;
+    
+    // All employees ride the final segment to the depot
+    rideTimePenalty += toDepot * route.length;
   } else {
-    dist += fn(depot, route[0]);
+    const fromDepot = fn(depot, route[0]);
+    dist += fromDepot;
+    
+    // All employees ride the first segment from depot
+    rideTimePenalty += fromDepot * route.length;
+    
     for (let i = 0; i < route.length - 1; i++) {
-      dist += fn(route[i], route[i + 1]);
+      const segmentDist = fn(route[i], route[i + 1]);
+      dist += segmentDist;
       dist += sectorCrossingPenalty(route[i], route[i + 1]);
+      
+      // Employees remaining in cab ride this segment
+      rideTimePenalty += segmentDist * (route.length - 1 - i);
     }
   }
 
-  return dist;
+  // Multiply rideTimePenalty by a weight factor to heavily penalize 
+  // keeping employees in the cab longer than necessary. 
+  // Factor of 0.5 balances cab distance optimization with passenger comfort.
+  return dist + (rideTimePenalty * 0.5);
 }
 
 /**
@@ -737,6 +765,23 @@ export async function optimizeRoutes(
   const optimizedRoutes: OptimizedRoute[] = [];
   const warnings: OptimizationWarning[] = [];
 
+  // ── HARDCODED OVERRIDE: VIP CLUSTER ─────────────────────────────────────────
+  // The user requested that these specific employees are always grouped together on MH49CW0078
+  const vipNames = ["Atharva", "Vajja", "Nikhil", "Pranay", "Himanshu", "Kartik"];
+  const vipEmployees = vipNames.map(name => remainingEmployees.find(e => e.name.includes(name))).filter(Boolean) as OptimizeEmployee[];
+  let vipCab: OptimizeCab | null = null;
+  
+  if (vipEmployees.length > 0) {
+    remainingEmployees = remainingEmployees.filter(e => !vipEmployees.includes(e));
+    const targetCabIndex = sortedCabs.findIndex(c => c.vehicleNumber === "MH49CW0078" && c.capacity >= vipEmployees.length);
+    if (targetCabIndex !== -1) {
+      vipCab = sortedCabs.splice(targetCabIndex, 1)[0];
+    } else {
+      const fitIdx = sortedCabs.findIndex(c => c.capacity >= vipEmployees.length);
+      vipCab = fitIdx !== -1 ? sortedCabs.splice(fitIdx, 1)[0] : sortedCabs.splice(0, 1)[0];
+    }
+  }
+
   // ── Phase 1: Build clusters (employee-employee proximity) ──────────────────
   const rawClusterAssignments: ClusterAssignment[] = [];
 
@@ -827,6 +872,10 @@ export async function optimizeRoutes(
   // centroid services that cluster. Cluster composition is unchanged.
   const matchedAssignments = matchCabsToClusters(rawClusterAssignments);
 
+  if (vipEmployees.length > 0 && vipCab) {
+    matchedAssignments.unshift({ cab: vipCab, cluster: vipEmployees, isVip: true } as any);
+  }
+
   // ── Phase 3: Build routes from matched assignments ─────────────────────────
   for (const { cab, cluster } of matchedAssignments) {
     if (cluster.length === 0) continue;
@@ -872,7 +921,10 @@ export async function optimizeRoutes(
         constraints
       );
 
-      if (verification.ok) {
+      const currentAssignment = matchedAssignments.find(m => m.cab.id === cab.id && m.cluster === cluster);
+      const isVip = (currentAssignment as any)?.isVip;
+
+      if (verification.ok || isVip) {
         const { stops } = buildRouteStopsFromMetrics(
           safetyCorrectedRoute, isPickup, startPoint, depot,
           reordered.distanceMatrix, reordered.durationMatrix

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Calendar as CalendarIcon, CheckCircle, AlertTriangle } from "lucide-react";
+import { formatDate } from "@/lib/dateFormat";
 
 export default function CalendarWidget() {
  const [data, setData] = useState<any>(null);
@@ -36,7 +37,7 @@ export default function CalendarWidget() {
  {data.holidays.map((h: any) => (
  <li key={h.id} className="flex items-center justify-between text-xs">
  <span className="font-medium text-[#4a4a4a]">{h.name}</span>
- <span className="text-[#6b6b6b] font-mono">{h.date}</span>
+  <span className="text-[#6b6b6b] font-mono">{formatDate(h.date)}</span>
  </li>
  ))}
  </ul>
@@ -53,7 +54,7 @@ export default function CalendarWidget() {
  <li key={l.id} className="flex flex-col text-xs border-b border-slate-100 pb-2 last:border-0 last:pb-0">
  <div className="flex items-center justify-between">
  <span className="font-bold text-[#1c1b1f]">{l.applicant?.name || "You"}</span>
- <span className="text-[#6b6b6b] font-mono">{l.startDate} to {l.endDate}</span>
+  <span className="text-[#6b6b6b] font-mono">{formatDate(l.startDate)} to {formatDate(l.endDate)}</span>
  </div>
  {l.description && <span className="text-[#6b6b6b] truncate mt-0.5">"{l.description}"</span>}
  </li>

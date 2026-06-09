@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Calendar as CalendarIcon, Trash2, Plus, ChevronLeft, ChevronRight, Edit2 } from "lucide-react";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function AdminHolidayManagement() {
  const [holidays, setHolidays] = useState<any[]>([]);
@@ -107,8 +108,9 @@ export default function AdminHolidayManagement() {
  setSubmitting(false);
  }
 
+ const [holidayToDelete, setHolidayToDelete] = useState<string | null>(null);
+
  async function handleDelete(id: string) {
- if (!confirm("Are you sure you want to delete this holiday?")) return;
  try {
  const res = await fetch(`/api/calendar/holidays?id=${id}`, { method: "DELETE" });
  if (res.ok) {
@@ -263,7 +265,7 @@ export default function AdminHolidayManagement() {
  {isEditMode && (
  <button 
  type="button" 
- onClick={() => handleDelete(form.id)}
+ onClick={() => setHolidayToDelete(form.id)}
  className="px-4 bg-[#f7f7f7] text-[#1c1b1f] border border-[#e8e8e8] rounded-none hover:bg-[#f7f7f7] transition"
  >
  <Trash2 size={18} />
@@ -274,6 +276,19 @@ export default function AdminHolidayManagement() {
  </div>
  </div>
  </div>
+ </div>
+
+ <ConfirmModal
+  isOpen={!!holidayToDelete}
+  onClose={() => setHolidayToDelete(null)}
+  onConfirm={() => {
+    if (holidayToDelete) handleDelete(holidayToDelete);
+  }}
+  title="Delete Holiday"
+  message="Are you sure you want to permanently delete this holiday? This action cannot be undone."
+  confirmText="Delete Holiday"
+  isDestructive={true}
+ />
  </div>
  );
 }

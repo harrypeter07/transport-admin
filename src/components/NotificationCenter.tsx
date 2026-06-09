@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Check, CheckCircle2, BellRing, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { formatDate } from "@/lib/dateFormat";
 
 export default function NotificationCenter() {
  const [notifications, setNotifications] = useState<any[]>([]);
@@ -112,7 +113,7 @@ export default function NotificationCenter() {
  {n.category}
  </span>
  <span className="text-xs text-[#6b6b6b] font-medium">
- {new Date(n.createdAt).toLocaleString()}
+  {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {formatDate(n.createdAt)}
  </span>
  </div>
  <h3 className={`text-base ${!n.read ? "font-bold text-[#1c1b1f]" : "font-semibold text-[#4a4a4a]"}`}>

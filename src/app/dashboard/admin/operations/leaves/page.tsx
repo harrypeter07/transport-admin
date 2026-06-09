@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Calendar as CalendarIcon, CheckCircle, XCircle, Clock, Plus, User as UserIcon } from "lucide-react";
+import { formatDate } from "@/lib/dateFormat";
+import ConfirmModal from "@/components/ConfirmModal";
 
 type LeaveRequest = {
  id: string;
@@ -31,6 +33,8 @@ export default function LeaveManagementPage() {
  const [form, setForm] = useState({ applicantId: "", startDate: "", endDate: "", comments: "" });
  const [submitting, setSubmitting] = useState(false);
  const [error, setError] = useState("");
+ 
+ const [leaveActionInfo, setLeaveActionInfo] = useState<{ id: string; action: "APPROVE" | "REJECT" } | null>(null);
 
  useEffect(() => {
  fetchLeaves();
@@ -64,8 +68,6 @@ export default function LeaveManagementPage() {
  }
 
  async function handleAction(id: string, action: "APPROVE" | "REJECT") {
- if (!confirm(`Are you sure you want to ${action.toLowerCase()} this leave request?`)) return;
-
  try {
  const res = await fetch("/api/leaves", {
  method: "PATCH",
@@ -252,8 +254,8 @@ export default function LeaveManagementPage() {
  </td>
  <td className="px-6 py-4">
  <div className="flex flex-col gap-1">
- <span className="text-[#1c1b1f] font-bold font-mono">{leave.startDate}</span>
- <span className="text-xs text-[#9a9a9a]">to <span className="text-[#6b6b6b] font-mono">{leave.endDate}</span></span>
+  <span className="text-[#1c1b1f] font-bold font-mono">{formatDate(leave.startDate)}</span>
+  <span className="text-xs text-[#9a9a9a]">to <span className="text-[#6b6b6b] font-mono">{formatDate(leave.endDate)}</span></span>
  </div>
  </td>
  <td className="px-6 py-4">
@@ -285,13 +287,13 @@ export default function LeaveManagementPage() {
  {leave.status === "PENDING" ? (
  <div className="flex items-center justify-end gap-2">
  <button
- onClick={() => handleAction(leave.id, "REJECT")}
+ onClick={() => setLeaveActionInfo({ id: leave.id, action: "REJECT" })}
  className="px-3 py-1.5 text-xs font-bold text-[#1c1b1f] hover:bg-[#f7f7f7] rounded-none transition-colors border border-transparent hover:border-[#e8e8e8]"
  >
  Reject
  </button>
  <button
- onClick={() => handleAction(leave.id, "APPROVE")}
+ onClick={() => setLeaveActionInfo({ id: leave.id, action: "APPROVE" })}
  className="px-3 py-1.5 text-xs font-bold text-[#1c1b1f] bg-[#f7f7f7] hover:bg-[#f7f7f7] rounded-none transition-colors border border-[#e8e8e8]"
  >
  Approve
@@ -308,6 +310,18 @@ export default function LeaveManagementPage() {
  </table>
  </div>
  </div>
+
+ <ConfirmModal
+    isOpen={!!leaveActionInfo}
+    onClose={() => setLeaveActionInfo(null)}
+    onConfirm={() => {
+      if (leaveActionInfo) handleAction(leaveActionInfo.id, leaveActionInfo.action);
+    }}
+    title={`${leaveActionInfo?.action === "APPROVE" ? "Approve" : "Reject"} Leave Request`}
+    message={`Are you sure you want to ${leaveActionInfo?.action.toLowerCase()} this leave request?`}
+    confirmText={leaveActionInfo?.action === "APPROVE" ? "Approve" : "Reject"}
+    isDestructive={leaveActionInfo?.action === "REJECT"}
+  />
  </div>
  );
 }

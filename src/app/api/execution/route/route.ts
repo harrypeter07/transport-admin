@@ -125,7 +125,7 @@ export async function POST(req: Request) {
  type: "ROUTE_STARTED",
  timestamp: now,
  routeId,
- cabId: route.cab.id,
+ cabId: route.cab?.id,
  metadata: metadata ? JSON.stringify(metadata) : null,
  }
  });
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
   await createNotification(
   stop.employee.userId,
   "Route Started",
-  `Your assigned cab (${route.cab.vehicleNumber}) has started the route.`,
+  `Your assigned cab (${route.cab?.vehicleNumber || "Vehicle"}) has started the route.`,
   "ROUTE",
   "/dashboard/employee/route"
   );
@@ -188,7 +188,7 @@ export async function POST(req: Request) {
  type: "ROUTE_COMPLETED",
  timestamp: now,
  routeId,
- cabId: route.cab.id,
+ cabId: route.cab?.id,
  metadata: metadata ? JSON.stringify(metadata) : null,
  }
  });
@@ -204,7 +204,7 @@ export async function POST(req: Request) {
   createNotification(
   admin.id,
   "Route Completed",
-  `Cab ${route.cab.vehicleNumber} has completed its route.`,
+  `Cab ${route.cab?.vehicleNumber || "Vehicle"} has completed its route.`,
   "SYSTEM",
   "/dashboard/admin"
   );

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Car, Clock, Navigation, CheckCircle, Calendar, User, Phone, MapPin, AlertCircle } from "lucide-react";
 import CalendarWidget from "@/components/CalendarWidget";
+import { formatDate } from "@/lib/dateFormat";
 
 export default function EmployeeDashboardPage() {
   const [routeData, setRouteData] = useState<any>(null);
@@ -87,7 +88,7 @@ export default function EmployeeDashboardPage() {
  <div className="bg-white border border-[#e8e8e8] rounded-none p-6 shadow-xs">
  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
  <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest">
- Next Commute {route ? `(${route.date})` : `(${todayStr})`}
+  Next Commute {route ? `(${formatDate(route.date)})` : `(${formatDate(todayStr)})`}
  </h2>
  {route && (
  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black tracking-widest uppercase ${
@@ -201,7 +202,7 @@ export default function EmployeeDashboardPage() {
  {upcomingHolidays.map((h: any) => (
  <div key={h.id} className="flex justify-between items-center text-xs p-2 bg-[#f7f7f7] rounded border border-slate-100">
  <span className="font-bold text-[#1c1b1f]">{h.name}</span>
- <span className="text-[10px] text-[#9a9a9a] font-bold font-mono">{h.date}</span>
+  <span className="text-[10px] text-[#9a9a9a] font-bold font-mono">{formatDate(h.date)}</span>
  </div>
  ))}
  </div>
