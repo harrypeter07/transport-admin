@@ -26,7 +26,7 @@ async function main() {
   for (const route of shift.routes) {
     console.log(`Route ID: ${route.id} | Cab: ${route.cab?.vehicleNumber} | Date: ${route.date}`);
     for (const stop of route.stops) {
-      console.log(`  Stop ${stop.stopOrder}: ${stop.employee?.name} (${stop.employee?.address}) [Lat: ${stop.employee?.lat}, Lng: ${stop.employee?.lng}]`);
+      console.log(`  Stop ${stop.stopOrder}: ${stop.employee?.name} (${stop.employee?.address}) [Lat/Y: ${stop.employee?.y}, Lng/X: ${stop.employee?.x}]`);
     }
   }
 }

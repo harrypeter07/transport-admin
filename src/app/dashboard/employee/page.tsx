@@ -60,118 +60,181 @@ export default function EmployeeDashboardPage() {
  ?.sort((a: any, b: any) => a.date.localeCompare(b.date))
  ?.slice(0, 3) || [];
 
- return (
+  const isManualManifest = routeData?.isManualManifest;
+  const manualRoutes = routeData?.manualRoutes || [];
+  const [selectedManualRouteId, setSelectedManualRouteId] = useState<string | null>(null);
+
+  return (
+   <div className="space-y-6">
+   {loadError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{loadError}</div>}
+   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+   <div>
+   <h1 className="text-2xl font-bold text-[#1c1b1f]">Employee Portal</h1>
+  <p className="text-sm text-[#6b6b6b] mt-1">
+  Welcome to your transportation hub.
+  </p>
+  </div>
+  </div>
+
+  {isOnLeaveToday && (
+  <div className="bg-[#f7f7f7] border border-[#e8e8e8] rounded-none p-4 flex items-center gap-3 animate-fadeIn">
+  <AlertCircle className="w-5 h-5 text-[#6b6b6b] flex-shrink-0" />
+  <div className="text-sm text-amber-850">
+  <span className="font-bold">Out of Office: </span>
+  You are scheduled on approved leave today. You will be automatically excluded from the optimization roster.
+  </div>
+  </div>
+  )}
+
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  {/* Main Column */}
+  <div className="lg:col-span-2 space-y-6">
+  
+  {isManualManifest ? (
+    <div className="space-y-6">
+      <div className="bg-[#f7f7f7] border border-slate-200 p-4 rounded-none mb-4">
+        <h3 className="font-bold text-sm uppercase tracking-widest text-[#1c1b1f] flex items-center gap-2">
+          <MapPin size={16} /> Manual Published Manifest
+        </h3>
+        <p className="text-xs text-[#6b6b6b] mt-1">
+          Optimization is bypassed. This is the exact manifest published by the administrator for today.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        {manualRoutes.map((route: any, i: number) => {
+          const isActive = selectedManualRouteId === route.cabId;
+          return (
+            <div
+              key={`${route.cabId}-${i}`}
+              className={`border transition-all cursor-pointer bg-white ${
+                isActive ? "border-[#1c1b1f] shadow-md scale-[1.02]" : "border-[#e8e8e8] hover:border-[#b0b0b0]"
+              }`}
+              onClick={() => setSelectedManualRouteId(isActive ? null : route.cabId)}
+            >
+              <div className="p-3 bg-[#f7f7f7] border-b border-[#e8e8e8] flex justify-between items-center">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-[#1c1b1f]">{route.driverName || "Unknown Driver"}</span>
+                  <span className="text-[10px] font-semibold text-[#6b6b6b]">{route.vehicleNumber}</span>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-xs font-bold">{route.stops.length} Stops</span>
+                  <span className="text-[9px] text-[#9a9a9a]">{route.shiftTime || ""}</span>
+                </div>
+              </div>
+              {isActive && (
+                <div className="p-3 bg-white flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                  {route.stops.map((stop: any, sIdx: number) => (
+                    <div key={sIdx} className="flex gap-2">
+                      <div className="w-4 h-4 mt-0.5 rounded-full bg-[#f7f7f7] border border-[#e8e8e8] flex items-center justify-center text-[8px] font-bold text-[#6b6b6b] shrink-0">
+                        {stop.stopOrder}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-bold text-[#1c1b1f]">
+                          {stop.employee?.name || stop.employeeName || "Unknown Employee"}
+                        </span>
+                        <span className="text-[9px] text-[#6b6b6b] truncate max-w-[200px]" title={stop.employee?.address || stop.address}>
+                          {stop.employee?.address || stop.address || "Unknown Address"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  ) : (
+  <div className="bg-white border border-[#e8e8e8] rounded-none p-6 shadow-xs">
+  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+  <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest">
+   Next Commute {route ? `(${formatDate(route.date)})` : `(${formatDate(todayStr)})`}
+  </h2>
+  {route && (
+  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black tracking-widest uppercase ${
+  isInProgress ? 'bg-[#f7f7f7] text-[#1c1b1f]' : 'bg-slate-150 text-slate-650'
+  }`}>
+  {route.status}
+  </span>
+  )}
+  </div>
+
+  {loading ? (
+  <div className="py-10 text-center text-slate-450 text-xs">Loading route data...</div>
+  ) : !route ? (
+  <div className="flex flex-col items-center justify-center py-12 bg-[#f7f7f7] rounded-none border border-slate-100 border-dashed text-center px-4">
+  <span className="text-[#9a9a9a] mb-2 font-bold uppercase tracking-widest text-xs">No Published Route</span>
+  <p className="text-xs text-[#6b6b6b] max-w-xs leading-relaxed">
+  You are not assigned to a published route for today. Check back later once administration publishes the fleet plan.
+  </p>
+  </div>
+  ) : (
   <div className="space-y-6">
-  {loadError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{loadError}</div>}
-  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-  <div>
-  <h1 className="text-2xl font-bold text-[#1c1b1f]">Employee Portal</h1>
- <p className="text-sm text-[#6b6b6b] mt-1">
- Welcome to your transportation hub.
- </p>
- </div>
- </div>
+  <div className="text-center py-4 bg-[#f7f7f7] border border-slate-100 rounded-none">
+  <h3 className="text-3xl font-black text-[#1c1b1f] tracking-tight">
+  {myStop?.status === "BOARDED" ? "On Board" :
+  myStop?.status === "SKIPPED" ? "Skipped" :
+  !isInProgress ? "Driver Dispatch Pending" :
+  myStop?.status === "REACHED" ? "Cab Arrived!" :
+  stopsAway === 0 ? "Cab Arriving Now!" :
+  `${stopsAway} Stop${stopsAway > 1 ? 's' : ''} Away`}
+  </h3>
+  {myStop?.expectedTime && !["BOARDED", "SKIPPED"].includes(myStop?.status) && (
+  <p className="text-[#6b6b6b] text-xs font-semibold mt-2 flex items-center justify-center gap-1">
+  <Clock size={12} /> Expected Pickup: {new Date(myStop.expectedTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+  </p>
+  )}
+  </div>
 
- {isOnLeaveToday && (
- <div className="bg-[#f7f7f7] border border-[#e8e8e8] rounded-none p-4 flex items-center gap-3 animate-fadeIn">
- <AlertCircle className="w-5 h-5 text-[#6b6b6b] flex-shrink-0" />
- <div className="text-sm text-amber-850">
- <span className="font-bold">Out of Office: </span>
- You are scheduled on approved leave today. You will be automatically excluded from the optimization roster.
- </div>
- </div>
- )}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  {/* Cab & Driver details */}
+  <div className="border border-slate-150 rounded-none p-4 flex gap-3 items-start">
+  <Car className="text-[#9a9a9a] mt-0.5 flex-shrink-0" size={18} />
+  <div className="text-xs space-y-1">
+  <span className="font-bold text-[#9a9a9a] uppercase tracking-widest text-[9px] block">Vehicle Details</span>
+  <p className="text-sm font-bold text-[#1c1b1f]">{route.cab?.vehicleNumber || "No vehicle assigned"}</p>
+  <p className="text-[#6b6b6b]">{route.cab?.vendor || "Vendor details N/A"}</p>
+  </div>
+  </div>
 
- <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
- {/* Main Column */}
- <div className="lg:col-span-2 space-y-6">
- <div className="bg-white border border-[#e8e8e8] rounded-none p-6 shadow-xs">
- <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
- <h2 className="text-sm font-black text-[#4a4a4a] uppercase tracking-widest">
-  Next Commute {route ? `(${formatDate(route.date)})` : `(${formatDate(todayStr)})`}
- </h2>
- {route && (
- <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black tracking-widest uppercase ${
- isInProgress ? 'bg-[#f7f7f7] text-[#1c1b1f]' : 'bg-slate-150 text-slate-650'
- }`}>
- {route.status}
- </span>
- )}
- </div>
+  <div className="border border-slate-150 rounded-none p-4 flex gap-3 items-start">
+  <User className="text-[#9a9a9a] mt-0.5 flex-shrink-0" size={18} />
+  <div className="text-xs space-y-1">
+  <span className="font-bold text-[#9a9a9a] uppercase tracking-widest text-[9px] block">Driver Details</span>
+  <p className="text-sm font-bold text-[#1c1b1f]">{route.cab?.driverName || "Driver details N/A"}</p>
+  <p className="text-[#6b6b6b] font-semibold flex items-center gap-1 mt-0.5">
+  <Phone size={11} /> {route.cab?.driverPhone || "—"}
+  </p>
+  </div>
+  </div>
+  </div>
 
- {loading ? (
- <div className="py-10 text-center text-slate-450 text-xs">Loading route data...</div>
- ) : !route ? (
- <div className="flex flex-col items-center justify-center py-12 bg-[#f7f7f7] rounded-none border border-slate-100 border-dashed text-center px-4">
- <span className="text-[#9a9a9a] mb-2 font-bold uppercase tracking-widest text-xs">No Published Route</span>
- <p className="text-xs text-[#6b6b6b] max-w-xs leading-relaxed">
- You are not assigned to a published route for today. Check back later once administration publishes the fleet plan.
- </p>
- </div>
- ) : (
- <div className="space-y-6">
- <div className="text-center py-4 bg-[#f7f7f7] border border-slate-100 rounded-none">
- <h3 className="text-3xl font-black text-[#1c1b1f] tracking-tight">
- {myStop?.status === "BOARDED" ? "On Board" :
- myStop?.status === "SKIPPED" ? "Skipped" :
- !isInProgress ? "Driver Dispatch Pending" :
- myStop?.status === "REACHED" ? "Cab Arrived!" :
- stopsAway === 0 ? "Cab Arriving Now!" :
- `${stopsAway} Stop${stopsAway > 1 ? 's' : ''} Away`}
- </h3>
- {myStop?.expectedTime && !["BOARDED", "SKIPPED"].includes(myStop?.status) && (
- <p className="text-[#6b6b6b] text-xs font-semibold mt-2 flex items-center justify-center gap-1">
- <Clock size={12} /> Expected Pickup: {new Date(myStop.expectedTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
- </p>
- )}
- </div>
-
- <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
- {/* Cab & Driver details */}
- <div className="border border-slate-150 rounded-none p-4 flex gap-3 items-start">
- <Car className="text-[#9a9a9a] mt-0.5 flex-shrink-0" size={18} />
- <div className="text-xs space-y-1">
- <span className="font-bold text-[#9a9a9a] uppercase tracking-widest text-[9px] block">Vehicle Details</span>
- <p className="text-sm font-bold text-[#1c1b1f]">{route.cab?.vehicleNumber || "No vehicle assigned"}</p>
- <p className="text-[#6b6b6b]">{route.cab?.vendor || "Vendor details N/A"}</p>
- </div>
- </div>
-
- <div className="border border-slate-150 rounded-none p-4 flex gap-3 items-start">
- <User className="text-[#9a9a9a] mt-0.5 flex-shrink-0" size={18} />
- <div className="text-xs space-y-1">
- <span className="font-bold text-[#9a9a9a] uppercase tracking-widest text-[9px] block">Driver Details</span>
- <p className="text-sm font-bold text-[#1c1b1f]">{route.cab?.driverName || "Driver details N/A"}</p>
- <p className="text-[#6b6b6b] font-semibold flex items-center gap-1 mt-0.5">
- <Phone size={11} /> {route.cab?.driverPhone || "—"}
- </p>
- </div>
- </div>
- </div>
-
- {/* Progress bar */}
- <div className="bg-[#f7f7f7] p-4 border border-slate-150 rounded-none">
- <span className="text-[10px] font-black text-[#6b6b6b] uppercase tracking-widest block mb-3">Manifest Progress</span>
- <div className="w-full bg-slate-200 rounded-none h-2 overflow-hidden flex">
- {route.stops.map((s: any) => {
- let color = "bg-slate-200";
- if (s.status === "BOARDED") color = "bg-[#1c1b1f]";
- if (s.status === "SKIPPED") color = "bg-[#1c1b1f]";
- if (s.status === "REACHED") color = "bg-[#1c1b1f]";
- 
- return (
- <div key={s.id} className={`h-2 flex-1 border-r border-white last:border-0 ${color}`} />
- );
- })}
- </div>
- <div className="flex justify-between text-[10px] font-bold text-[#9a9a9a] mt-1 px-0.5 uppercase tracking-wide">
- <span>Departure</span>
- <span>MIHAN Depot</span>
- </div>
- </div>
- </div>
- )}
- </div>
+  {/* Progress bar */}
+  <div className="bg-[#f7f7f7] p-4 border border-slate-150 rounded-none">
+  <span className="text-[10px] font-black text-[#6b6b6b] uppercase tracking-widest block mb-3">Manifest Progress</span>
+  <div className="w-full bg-slate-200 rounded-none h-2 overflow-hidden flex">
+  {route.stops.map((s: any) => {
+  let color = "bg-slate-200";
+  if (s.status === "BOARDED") color = "bg-[#1c1b1f]";
+  if (s.status === "SKIPPED") color = "bg-[#1c1b1f]";
+  if (s.status === "REACHED") color = "bg-[#1c1b1f]";
+  
+  return (
+  <div key={s.id} className={`h-2 flex-1 border-r border-white last:border-0 ${color}`} />
+  );
+  })}
+  </div>
+  <div className="flex justify-between text-[10px] font-bold text-[#9a9a9a] mt-1 px-0.5 uppercase tracking-wide">
+  <span>Departure</span>
+  <span>MIHAN Depot</span>
+  </div>
+  </div>
+  </div>
+  )}
+  </div>
+  )}
+  </div>
  </div>
 
  {/* Sidebar Column */}

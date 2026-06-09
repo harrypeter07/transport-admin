@@ -22,7 +22,8 @@ export async function GET(req: Request) {
  return NextResponse.json({ routes: [] });
  }
 
- const routes = await prisma.route.findMany({
+ // 1. CHECK DATABASE FOR OPTIMIZED ROUTES
+ const dbRoutes = await prisma.route.findMany({
  where: {
  cabId: cab.id,
  ...(history
@@ -49,7 +50,35 @@ export async function GET(req: Request) {
  ]
  });
 
- return NextResponse.json({ routes });
+ if (dbRoutes.length > 0) {
+   return NextResponse.json({ routes: dbRoutes });
+ }
+
+ // 2. FALLBACK TO BASELINE SNAPSHOT DIRECTLY FOR MANUAL ROUTING BYPASS
+ const baseline = await prisma.baselineRoute.findFirst({
+   where: { date: today }, // Only match today's published manual manifest
+   orderBy: { createdAt: 'desc' }
+ });
+
+ if (baseline) {
+   let routeData = baseline.routeData;
+   if (typeof routeData === 'string') routeData = JSON.parse(routeData);
+   if (routeData && !Array.isArray(routeData) && Array.isArray((routeData as any).routes)) routeData = (routeData as any).routes;
+
+   if (Array.isArray(routeData)) {
+     // EXACT MANIFEST AS REQUESTED - No filtering
+     const myRoutes = routeData.map((r: any) => ({
+       ...r,
+       isManualManifest: true
+     }));
+
+     if (myRoutes.length > 0) {
+       return NextResponse.json({ routes: myRoutes, isManualManifest: true });
+     }
+   }
+ }
+
+ return NextResponse.json({ routes: [] });
 
  } catch (error: any) {
  return NextResponse.json({ error: error.message }, { status: 500 });

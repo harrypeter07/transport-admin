@@ -162,6 +162,7 @@ export default function TransitAdminSPA() {
           body: JSON.stringify({
             date: selectedDate,
             shiftId: sId,
+            isManual: true
           }),
         });
         if (!pubRes.ok) throw new Error(`Failed to publish routes for shift ${sId}.`);

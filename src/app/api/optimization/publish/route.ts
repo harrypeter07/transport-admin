@@ -12,10 +12,16 @@ export async function POST(req: Request) {
 	if (auth.response) return auth.response;
 
 	const body = await req.json();
-	const { date, shiftId } = body;
+	const { date, shiftId, isManual } = body;
 
 	if (!date) {
 	return NextResponse.json({ error: "Date is required" }, { status: 400 });
+	}
+
+	// MANUAL ROUTING BYPASS
+	if (isManual) {
+		await audit({ userId: auth.session.userId, role: auth.session.role, action: "PUBLISH", entity: "ManualManifest", after: { date, shiftId }, ip });
+		return NextResponse.json({ success: true, count: 0, notifications: 0, message: "Manual manifest published via snapshot" });
 	}
 
 	// Find all routes that should be published or re-published

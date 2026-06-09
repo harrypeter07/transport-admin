@@ -436,6 +436,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === "APPLY" && selectedStrategy && Array.isArray(previewRoutes)) {
+      if (selectedStrategy === "MANUAL_EXCEL") {
+        return NextResponse.json({ success: true, message: "Manual routes published as snapshot" });
+      }
       const result = await persistPreviewRoutes(previewRoutes, currentDateStr, shiftId || "", isPickup ?? true, selectedStrategy);
       return NextResponse.json({ success: true, ...result });
     }

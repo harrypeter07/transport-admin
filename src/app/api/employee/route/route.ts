@@ -17,7 +17,7 @@ export async function GET(req: Request) {
  });
 
  if (!employee) {
- return NextResponse.json({ route: null });
+ return NextResponse.json({ route: null, myStop: null });
  }
 
  const routeStop = await prisma.routeStop.findFirst({
@@ -45,7 +45,35 @@ export async function GET(req: Request) {
  }
  });
 
- return NextResponse.json({ route: routeStop?.route || null, myStop: routeStop || null });
+ if (routeStop) {
+   return NextResponse.json({ route: routeStop.route, myStop: routeStop });
+ }
+
+ // FALLBACK TO BASELINE SNAPSHOT DIRECTLY FOR MANUAL ROUTING BYPASS
+ const baseline = await prisma.baselineRoute.findFirst({
+   where: { date: today }, // Only match today's published manual manifest
+   orderBy: { createdAt: 'desc' }
+ });
+
+ if (baseline) {
+   let routeData = baseline.routeData;
+   if (typeof routeData === 'string') routeData = JSON.parse(routeData);
+   if (routeData && !Array.isArray(routeData) && Array.isArray((routeData as any).routes)) routeData = (routeData as any).routes;
+
+   if (Array.isArray(routeData)) {
+     // EXACT MANIFEST AS REQUESTED - No filtering
+     const myRoutes = routeData.map((r: any) => ({
+       ...r,
+       isManualManifest: true
+     }));
+
+     if (myRoutes.length > 0) {
+       return NextResponse.json({ route: null, myStop: null, isManualManifest: true, manualRoutes: myRoutes });
+     }
+   }
+ }
+
+ return NextResponse.json({ route: null, myStop: null });
 
  } catch (error: any) {
  return NextResponse.json({ error: error.message }, { status: 500 });
