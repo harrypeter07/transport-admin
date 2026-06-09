@@ -359,11 +359,17 @@ export default function TransitAdminSPA() {
     setAddressChanged(changed);
   }, [employees, routes]);
 
-   const handleGeneratePlans = async () => {
-  setOptimizing(true);
-  setOptimizeError(null);
-  setApplySuccess(false);
-   try {
+    const handleGeneratePlans = async () => {
+   setOptimizing(true);
+   setOptimizeError(null);
+   setApplySuccess(false);
+   const PROTECTED = ["shift-0800"];
+   if (PROTECTED.includes(activeShiftId)) {
+     setOptimizeError("8:00 AM shift routes are protected. Use 'Rebuild 8:00 AM Baseline' to update these routes.");
+     setOptimizing(false);
+     return;
+   }
+    try {
   await fetchInitialData();
   const result = await previewOptimization(isPickup);
  if (!result.success) {
@@ -380,11 +386,17 @@ export default function TransitAdminSPA() {
  }
  };
 
-  const handleApplyPlan = async (strategy: "MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED") => {
-  setApplyingStrategy(strategy);
-  setOptimizeError(null);
-  setApplySuccess(false);
-  try {
+   const handleApplyPlan = async (strategy: "MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED") => {
+   setApplyingStrategy(strategy);
+   setOptimizeError(null);
+   setApplySuccess(false);
+   const PROTECTED = ["shift-0800"];
+   if (PROTECTED.includes(activeShiftId)) {
+     setOptimizeError("8:00 AM shift routes are protected. Use 'Rebuild 8:00 AM Baseline' to update these routes.");
+     setApplyingStrategy(null);
+     return;
+   }
+   try {
   const result = await applyOptimizationPlan(strategy, isPickup);
    if (!result.success) {
    setOptimizeError(result.error || "Failed to apply plan.");
@@ -1144,7 +1156,7 @@ export default function TransitAdminSPA() {
   >
     <option value="ALL">Overall</option>
     {shifts.map((shift) => (
-      <option key={shift.id} value={shift.id}>{shift.name}</option>
+      <option key={shift.id} value={shift.id}>{shift.name}{["shift-0800"].includes(shift.id) ? " 🔒" : ""}</option>
     ))}
   </select>
   </div>
@@ -1332,7 +1344,7 @@ export default function TransitAdminSPA() {
     >
       <option value="ALL">All Shifts</option>
       {shifts.map((shift) => (
-        <option key={shift.id} value={shift.id}>{shift.name}</option>
+        <option key={shift.id} value={shift.id}>{shift.name}{["shift-0800"].includes(shift.id) ? " 🔒" : ""}</option>
       ))}
     </select>
   </div>

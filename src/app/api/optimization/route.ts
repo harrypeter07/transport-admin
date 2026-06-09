@@ -399,6 +399,11 @@ export async function POST(req: NextRequest) {
     const { shiftId, isPickup, date, mode = "FASTEST_TRAVEL", selectedStrategy, previewRoutes, tripSequence: bodyTripSequence, cabSequenceCounts } = body;
     const currentDateStr = date || new Date().toISOString().split("T")[0];
 
+    const PROTECTED_SHIFTS = ["shift-0800"];
+    if (shiftId && PROTECTED_SHIFTS.includes(shiftId)) {
+      return NextResponse.json({ error: "8:00 AM shift routes are protected and cannot be modified by optimization. Use 'Rebuild 8:00 AM Baseline' to update these routes." }, { status: 403 });
+    }
+
     const holiday = await prisma.holiday.findUnique({
       where: { date: currentDateStr }
     });
