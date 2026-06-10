@@ -11,9 +11,7 @@ import {
  YAxis,
  CartesianGrid,
  Tooltip,
- Legend,
- AreaChart,
- Area,
+  Legend,
 } from "recharts";
 import { useTransportStore, Route, RouteStop } from "@/store/useTransportStore";
 import { useRouter } from "next/navigation";
@@ -183,18 +181,17 @@ export default function TransitAdminSPA() {
  const [analysisLoading, setAnalysisLoading] = useState<boolean>(false);
  const [analysisError, setAnalysisError] = useState<string | null>(null);
  const [isMounted, setIsMounted] = useState(false);
- const [selectedCabsForChart, setSelectedCabsForChart] = useState<string[]>([]);
- const [projectionPeriod, setProjectionPeriod] = useState<"DAILY" | "MONTHLY" | "YEARLY">("DAILY");
- const [ledgerCabFilter, setLedgerCabFilter] = useState<string>("ALL");
+  const [selectedCabsForChart, setSelectedCabsForChart] = useState<string[]>([]);
+  const [ledgerCabFilter, setLedgerCabFilter] = useState<string>("ALL");
 
  const fetchAnalysisData = async () => {
  setAnalysisLoading(true);
  setAnalysisError(null);
  try {
  const params = new URLSearchParams();
- if (selectedDate) params.append("date", selectedDate);
- 
- const res = await fetch(`/api/analysis?${params.toString()}`);
+   if (selectedDate) params.append("date", selectedDate);
+  
+  const res = await fetch(`/api/analysis?${params.toString()}`);
  if (!res.ok) throw new Error("Failed to fetch analysis data");
  const json = await res.json();
  setAnalysisData(json);
@@ -2416,120 +2413,42 @@ export default function TransitAdminSPA() {
  selectedCabsForChart.includes(r.cabPlate)
  ) || [];
 
- let accumulatedNormal = 0;
- let accumulatedOptimized = 0;
-
- const projectionData = Array.from(
- { length: projectionPeriod === "DAILY" ? 30 : projectionPeriod === "MONTHLY" ? 12 : 5 },
- (_, i) => {
- const multiplier = i + 1;
- let factor = 1.0;
-
- if (projectionPeriod === "DAILY") {
- // Weekend factor: Sunday (day % 7 === 0) has 20% activity, Saturday (day % 7 === 6) has 45% activity.
- // Weekdays fluctuate between 88% and 112%.
- const isSunday = multiplier % 7 === 0;
- const isSaturday = multiplier % 7 === 6;
- if (isSunday) {
- factor = 0.2;
- } else if (isSaturday) {
- factor = 0.45;
- } else {
- factor = 0.95 + (Math.sin(multiplier) * 0.12);
- }
- accumulatedNormal += analysisData.unoptimizedKm * factor;
- accumulatedOptimized += analysisData.optimizedKm * factor;
- } else if (projectionPeriod === "MONTHLY") {
- // Seasonal factor: summer break (Month 5) and winter holidays (Month 12) have less activity.
- // Other months fluctuate slightly by ±8%.
- const isSummer = multiplier === 5;
- const isDecember = multiplier === 12;
- if (isSummer) {
- factor = 0.75;
- } else if (isDecember) {
- factor = 0.8;
- } else {
- factor = 0.95 + (Math.cos(multiplier * 0.8) * 0.08);
- }
- accumulatedNormal += (analysisData.unoptimizedKm * 30) * factor;
- accumulatedOptimized += (analysisData.optimizedKm * 30) * factor;
- } else {
- // Yearly factor: operational year-on-year growth of ~5% compound, plus minor cycle variations
- factor = (1.0 + (multiplier - 1) * 0.05) * (0.95 + Math.sin(multiplier * 1.5) * 0.05);
- accumulatedNormal += (analysisData.unoptimizedKm * 365) * factor;
- accumulatedOptimized += (analysisData.optimizedKm * 365) * factor;
- }
-
- return {
- label: projectionPeriod === "DAILY" ? `Day ${multiplier}` : projectionPeriod === "MONTHLY" ? `Month ${multiplier}` : `Year ${multiplier}`,
- normalKm: Math.round(accumulatedNormal * 10) / 10,
- optimizedKm: Math.round(accumulatedOptimized * 10) / 10,
- };
- }
- );
-
- const filteredLedgerRoutes = analysisData.routeBreakdowns?.filter(
+  const filteredLedgerRoutes = analysisData.routeBreakdowns?.filter(
  (r: any) => ledgerCabFilter === "ALL" || r.cabPlate === ledgerCabFilter
  ) || [];
 
- return (
- <>
- {/* KPI Summaries */}
- <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
- {/* Card 1: Daily Distance Conserved */}
- <div className="bg-white rounded-none p-5 border border-[#e8e8e8] shadow-2xs hover:shadow-xs transition">
- <div className="flex justify-between items-start mb-2">
- <span className="text-[10px] font-bold text-[#9a9a9a] uppercase tracking-wider">Daily Distance Conserved</span>
- <span className="bg-[#f7f7f7] text-[#1c1b1f] text-[9px] font-bold px-1.5 py-0.5 rounded border border-[#e8e8e8] uppercase font-mono">
- Today
- </span>
- </div>
- <div className="text-2xl font-black text-[#1c1b1f]">{analysisData.kmSavedPerDay?.toLocaleString()} km</div>
- <p className="text-[10px] text-[#9a9a9a] mt-1">Reduced from {analysisData.unoptimizedKm?.toLocaleString()} km naive length</p>
- </div>
+  return (
+  <>
+  {/* KPI Summaries */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  {/* Card 1: Daily Distance Conserved */}
+  <div className="bg-white rounded-none p-5 border border-[#e8e8e8] shadow-2xs hover:shadow-xs transition">
+  <div className="flex justify-between items-start mb-2">
+  <span className="text-[10px] font-bold text-[#9a9a9a] uppercase tracking-wider">Daily Distance Conserved</span>
+  <span className="bg-[#f7f7f7] text-[#1c1b1f] text-[9px] font-bold px-1.5 py-0.5 rounded border border-[#e8e8e8] uppercase font-mono">
+  Today
+  </span>
+  </div>
+  <div className="text-2xl font-black text-[#1c1b1f]">{analysisData.kmSaved?.toLocaleString()} km</div>
+  <p className="text-[10px] text-[#9a9a9a] mt-1">Reduced from {analysisData.unoptimizedKm?.toLocaleString()} km naive length</p>
+  </div>
 
- {/* Card 2: Monthly Projected Distance Saved */}
- <div className="bg-white rounded-none p-5 border border-[#e8e8e8] shadow-2xs hover:shadow-xs transition">
- <div className="flex justify-between items-start mb-2">
- <span className="text-[10px] font-bold text-[#9a9a9a] uppercase tracking-wider">Monthly Projected Conserved</span>
- <span className="bg-[#f7f7f7] text-[#4a4a4a] text-[9px] font-bold px-1.5 py-0.5 rounded border border-[#e8e8e8] uppercase font-mono">
- 30 Days
- </span>
- </div>
- <div className="text-2xl font-black text-[#1c1b1f]">{(analysisData.kmSavedPerDay * 30)?.toLocaleString()} km</div>
- <p className="text-[10px] text-[#9a9a9a] mt-1">Extrapolated monthly optimization growth</p>
- </div>
+  {/* Card 2: Overall Efficiency */}
+  <div className="bg-[#1c1b1f] text-white rounded-none p-5 border border-[#1c1b1f] shadow-none">
+  <div className="flex justify-between items-start mb-2">
+  <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Overall Efficiency Rate</span>
+  <span className="bg-[#1c1b1f] text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase font-mono">
+  Rate
+  </span>
+  </div>
+  <div className="text-2xl font-black text-[#6b6b6b]">
+  {analysisData.unoptimizedKm > 0 ? Math.round((analysisData.kmSaved / analysisData.unoptimizedKm) * 100) : 0}% Saved
+  </div>
+  <p className="text-[10px] text-[#9a9a9a] mt-1">Total optimized: {analysisData.optimizedKm?.toLocaleString()} km</p>
+  </div>
+  </div>
 
- {/* Card 3: Yearly Projected Distance Saved */}
- <div className="bg-white rounded-none p-5 border border-[#e8e8e8] shadow-2xs hover:shadow-xs transition">
- <div className="flex justify-between items-start mb-2">
- <span className="text-[10px] font-bold text-[#9a9a9a] uppercase tracking-wider">Yearly Projected Conserved</span>
- <span className="bg-[#f7f7f7] text-[#4a4a4a] text-[9px] font-bold px-1.5 py-0.5 rounded border border-[#e8e8e8] uppercase font-mono">
- 365 Days
- </span>
- </div>
- <div className="text-2xl font-black text-[#1c1b1f]">{(analysisData.kmSavedPerDay * 365)?.toLocaleString()} km</div>
- <p className="text-[10px] text-[#9a9a9a] mt-1">Extrapolated annual optimization growth</p>
- </div>
-
- {/* Card 4: Overall Efficiency */}
- <div className="bg-[#1c1b1f] text-white rounded-none p-5 border border-[#1c1b1f] shadow-none">
- <div className="flex justify-between items-start mb-2">
- <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Overall Efficiency Rate</span>
- <span className="bg-[#1c1b1f] text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase font-mono">
- Rate
- </span>
- </div>
- <div className="text-2xl font-black text-[#6b6b6b]">
- {analysisData.unoptimizedKm > 0 ? Math.round((analysisData.kmSavedPerDay / analysisData.unoptimizedKm) * 100) : 0}% Saved
- </div>
- <p className="text-[10px] text-[#9a9a9a] mt-1">Total optimized: {analysisData.optimizedKm?.toLocaleString()} km</p>
- </div>
- </div>
-
- {/* Grid for Visual Charts */}
- <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
- {/* Chart 1: Route Distance Comparison */}
+  {/* Chart 1: Route Distance Comparison */}
  <div className="bg-white rounded-none p-5 border border-[#e8e8e8] shadow-2xs flex flex-col gap-4">
  <div>
  <h3 className="text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">Distance Comparison per Route</h3>
@@ -2625,113 +2544,9 @@ export default function TransitAdminSPA() {
  {chartFilteredData.length === 0 ? "Select one or more cabs above to view route distances" : "Loading visualization..."}
  </div>
  )}
- </div>
- </div>
-
- {/* Chart 2: Cumulative Distance Traveled (Comparison) */}
- <div className="bg-white rounded-none p-5 border border-[#e8e8e8] shadow-2xs flex flex-col gap-4">
- <div className="flex justify-between items-start flex-wrap gap-2 border-b border-slate-50 pb-2">
- <div>
- <h3 className="text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">
- {projectionPeriod === "DAILY" ? "30-Day Cumulative Distance Growth" : 
- projectionPeriod === "MONTHLY" ? "12-Month Cumulative Distance Growth" : 
- "5-Year Cumulative Distance Growth"}
- </h3>
- <p className="text-[10px] text-[#9a9a9a]">
- Compares cumulative route distance driven between the unoptimized normal baseline and optimized routes.
- </p>
- </div>
- 
- <select
- value={projectionPeriod}
- onChange={(e: any) => setProjectionPeriod(e.target.value)}
- className="bg-white border border-[#e8e8e8] rounded-none py-1.5 px-2.5 text-[10px] font-bold text-[#4a4a4a] outline-none focus:border-slate-350 cursor-pointer shadow-2xs"
- >
- <option value="DAILY">Daily (30 Days)</option>
- <option value="MONTHLY">Monthly (12 Months)</option>
- <option value="YEARLY">Yearly (5 Years)</option>
- </select>
- </div>
-
- <div className="h-[260px] w-full text-xs font-bold mt-2">
- {isMounted && analysisData.kmSavedPerDay > 0 ? (
- <ResponsiveContainer width="100%" height="100%">
- <AreaChart
- data={projectionData}
- margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
- >
- <defs>
- <linearGradient id="colorNormal" x1="0" y1="0" x2="0" y2="1">
- <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.2}/>
- <stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/>
- </linearGradient>
- <linearGradient id="colorOptimized" x1="0" y1="0" x2="0" y2="1">
- <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
- <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
- </linearGradient>
- </defs>
- <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
- <XAxis
- dataKey="label"
- tickLine={false}
- axisLine={false}
- stroke="#94a3b8"
- tickFormatter={(val, idx) => {
- if (projectionPeriod === "DAILY") {
- return (idx + 1) % 5 === 0 || idx === 0 ? val : "";
- }
- return val;
- }}
- tick={{ fontSize: 9 }}
- />
- <YAxis
- tickLine={false}
- axisLine={false}
- stroke="#94a3b8"
- tickFormatter={(value) => `${value >= 1000 ? `${(value/1000).toFixed(0)}k` : value} km`}
- tick={{ fontSize: 9 }}
- />
- <Tooltip
- contentStyle={{
- background: "#0f172a",
- border: "none",
- borderRadius: "8px",
- color: "#f8fafc",
- fontSize: "11px",
- }}
- itemStyle={{ color: "#f8fafc" }}
- />
- <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: "10px" }} />
- <Area
- type="monotone"
- name="Normal Route (Naive)"
- dataKey="normalKm"
- stroke="#94a3b8"
- strokeWidth={2}
- fillOpacity={1}
- fill="url(#colorNormal)"
- />
- <Area
- type="monotone"
- name="Optimized Route"
- dataKey="optimizedKm"
- stroke="#10b981"
- strokeWidth={2}
- fillOpacity={1}
- fill="url(#colorOptimized)"
- />
- </AreaChart>
- </ResponsiveContainer>
- ) : (
- <div className="h-full flex items-center justify-center text-[#9a9a9a] text-xs">
- {analysisData.kmSavedPerDay === 0 ? "No optimized distance metrics available yet" : "Loading visualization..."}
- </div>
- )}
- </div>
- </div>
- </div>
-
- {/* Visual separator divider line */}
+  </div>
+  </div>
+  {/* Visual separator divider line */}
  <div className="border-t border-[#e8e8e8]/60 my-6"></div>
 
  {/* Ledger & Map Split View */}

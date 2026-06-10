@@ -12,6 +12,8 @@ export async function DELETE() {
     await prisma.vehicleLocation.deleteMany();
     await prisma.routeDeviation.deleteMany();
     await prisma.violation.deleteMany();
+    await prisma.optimizedRouteSnapshot.deleteMany();
+    await prisma.baselineRoute.deleteMany();
     await prisma.routeStop.deleteMany();
     await prisma.route.deleteMany();
 
