@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client";
 import { verifySession } from "@/lib/dal";
 import { requireApiRole } from "@/lib/apiAuth";
 import { audit } from "@/lib/audit";
+import { assignZone } from "@/lib/zones";
 
 function textValue(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -94,6 +95,7 @@ export async function GET(req: NextRequest) {
       include: {
         shift: true,
         manager: { select: { id: true, name: true } },
+        pickupPoint: true,
       },
       orderBy: { name: "asc" },
     });
@@ -231,6 +233,7 @@ export async function POST(req: NextRequest) {
       coords = resolved;
     }
     const employeeEmail = email || `${employeeCode.toLowerCase()}@corporate.com`;
+    const zoneData = assignZone(coords.x, coords.y);
 
     const existingEmployee = await prisma.employee.findFirst({
       where: {
@@ -286,6 +289,10 @@ export async function POST(req: NextRequest) {
           x: coords.x,
           y: coords.y,
           placeId: coords.placeId || null,
+          zone: zoneData.zone,
+          subZone: zoneData.subZone,
+          distanceRing: zoneData.distanceRing,
+          distanceFromDepotKm: zoneData.distanceFromDepotKm,
           department,
           designation,
           managerId,
@@ -321,6 +328,7 @@ export async function PATCH(req: NextRequest) {
     const placeId = body.placeId;
     const autoLat = body.lat ? Number(body.lat) : null;
     const autoLon = body.lon ? Number(body.lon) : null;
+    const pickupPointIdInput = body.pickupPointId;
 
     if (!id) {
       return NextResponse.json({ error: "Employee ID is required" }, { status: 400 });
@@ -357,6 +365,36 @@ export async function PATCH(req: NextRequest) {
       coords = resolved;
     }
 
+    const coordsChanged =
+      coords.x !== currentEmp.x ||
+      coords.y !== currentEmp.y ||
+      (address !== undefined && address !== currentEmp.address);
+
+    const zoneData = coordsChanged || autoLat || autoLon
+      ? assignZone(coords.x, coords.y)
+      : {
+          zone: currentEmp.zone,
+          subZone: currentEmp.subZone,
+          distanceRing: currentEmp.distanceRing,
+          distanceFromDepotKm: currentEmp.distanceFromDepotKm,
+        };
+
+    let pickupPointId: string | null | undefined = undefined;
+    if (pickupPointIdInput !== undefined) {
+      if (pickupPointIdInput === null || pickupPointIdInput === "") {
+        pickupPointId = null;
+      } else {
+        const pp = await prisma.pickupPoint.findUnique({
+          where: { id: String(pickupPointIdInput) },
+          select: { id: true },
+        });
+        if (!pp) {
+          return NextResponse.json({ error: "Pickup point not found" }, { status: 404 });
+        }
+        pickupPointId = pp.id;
+      }
+    }
+
     const employee = await prisma.employee.update({
       where: { id },
       data: {
@@ -369,11 +407,21 @@ export async function PATCH(req: NextRequest) {
         x: coords.x,
         y: coords.y,
         placeId: coords.placeId !== undefined ? (coords.placeId || null) : undefined,
+        zone: zoneData.zone,
+        subZone: zoneData.subZone,
+        distanceRing: zoneData.distanceRing,
+        distanceFromDepotKm: zoneData.distanceFromDepotKm,
         department: department !== undefined ? department : undefined,
         designation: designation !== undefined ? designation : undefined,
         managerId: managerId !== undefined ? (managerId || null) : undefined,
         shiftId: shiftId !== undefined ? (shiftId || null) : undefined,
         status: status !== undefined ? status : undefined,
+        pickupPointId,
+      },
+      include: {
+        shift: true,
+        manager: { select: { id: true, name: true } },
+        pickupPoint: true,
       },
     });
 

@@ -53,8 +53,25 @@ model Cab {
   driverY       Float?
   placeId       String?
   formattedAddress String?
+  assignedZone    String?
+  assignedSubZone String?
   routes        Route[]
   shifts        Shift[]
+}
+
+model PickupPoint {
+  id           String     @id @default(uuid())
+  name         String
+  x            Float      // longitude
+  y            Float      // latitude
+  zone         String     // N/S/E/W
+  subZone      String     // NE/NW/SE/SW
+  distanceRing String     // NEAR/MID/FAR
+  address      String?
+  landmark     String?
+  employees    Employee[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model Employee {
@@ -71,6 +88,12 @@ model Employee {
   y            Float                 // coordinate Y
   placeId      String?
   formattedAddress String?
+  zone                  String?
+  subZone               String?
+  distanceRing          String?
+  distanceFromDepotKm   Float?
+  pickupPointId         String?
+  pickupPoint   PickupPoint?         @relation(fields: [pickupPointId], references: [id])
   department   String
   designation  String?               @default("Engineer") // Manager, Senior Manager, Lead, Engineer, Intern
   managerId    String?
@@ -103,6 +126,9 @@ model Route {
   lastLocationAt    DateTime?
   optimizationScore Float       
   optimizationMode  String      @default("FASTEST_TRAVEL") // MAXIMIZE_UTILIZATION, FASTEST_TRAVEL
+  zone              String?
+  subZone           String?
+  updatedAt         DateTime    @updatedAt
   stops             RouteStop[]
   violations        Violation[]
   hasEscort         Boolean     @default(false)
@@ -132,7 +158,7 @@ model Violation {
   id       String  @id @default(uuid())
   routeId  String
   route    Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  type     String  // FEMALE_FIRST_PICKUP, FEMALE_LAST_DROP, OVERCAPACITY, ISOLATED_FEMALE
+  type     String  // FEMALE_FIRST_PICKUP, FEMALE_LAST_DROP, OVERCAPACITY, ISOLATED_FEMALE, ISOLATED_FEMALE_NIGHT
   severity String  // HIGH, MEDIUM
   resolved Boolean @default(false)
   notes    String?

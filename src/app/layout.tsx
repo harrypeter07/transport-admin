@@ -37,10 +37,11 @@ export default function RootLayout({
  children: React.ReactNode;
 }>) {
  return (
- <html lang="en" className="h-full">
+ <html lang="en" className="h-full" suppressHydrationWarning>
  <body
  className={`${jakartaSans.variable} min-h-full flex flex-col bg-white text-[#1c1b1f] antialiased`}
  style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif" }}
+ suppressHydrationWarning
  >
  {children}
  </body>

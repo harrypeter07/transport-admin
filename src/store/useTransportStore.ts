@@ -95,6 +95,16 @@ export interface OptimizationPlans {
   capacityShortfall: number;
   totalCabCapacity: number;
   totalEmployees: number;
+  isolatedEmployees?: Array<{
+    employeeId: string;
+    name: string;
+    distanceFromCorridorKm: number;
+    nearestNeighborKm: number;
+    suggestedAction: string;
+  }>;
+  releasedCabs?: Array<{ cabId: string; vehicleNumber: string; reason: string }>;
+  usingFallback?: boolean;
+  zoneSummary?: Record<string, { employees: number; cabs: number }>;
 }
 
 const STORAGE_PLANS_KEY = "opencode-opt-plans";
@@ -122,6 +132,18 @@ function mergeStrategyPlan(plans: StrategyPlan[]): StrategyPlan {
 }
 
 function mergeOptimizationPlans(previews: OptimizationPlans[]): OptimizationPlans {
+  const isolatedMap = new Map<string, NonNullable<OptimizationPlans["isolatedEmployees"]>[number]>();
+  const releasedMap = new Map<string, NonNullable<OptimizationPlans["releasedCabs"]>[number]>();
+
+  for (const preview of previews) {
+    for (const iso of preview.isolatedEmployees || []) {
+      isolatedMap.set(iso.employeeId, iso);
+    }
+    for (const cab of preview.releasedCabs || []) {
+      releasedMap.set(cab.cabId, cab);
+    }
+  }
+
   return {
     MAXIMIZE_UTILIZATION: mergeStrategyPlan(previews.map((preview) => preview.MAXIMIZE_UTILIZATION)),
     MINIMIZE_TIME: mergeStrategyPlan(previews.map((preview) => preview.MINIMIZE_TIME)),
@@ -129,6 +151,20 @@ function mergeOptimizationPlans(previews: OptimizationPlans[]): OptimizationPlan
     capacityShortfall: previews.reduce((sum, preview) => sum + (preview.capacityShortfall || 0), 0),
     totalCabCapacity: previews.reduce((sum, preview) => sum + (preview.totalCabCapacity || 0), 0),
     totalEmployees: previews.reduce((sum, preview) => sum + (preview.totalEmployees || 0), 0),
+    isolatedEmployees: [...isolatedMap.values()],
+    releasedCabs: [...releasedMap.values()],
+    usingFallback: previews.some((p) => p.usingFallback),
+    zoneSummary: previews.reduce(
+      (merged, preview) => {
+        for (const [key, val] of Object.entries(preview.zoneSummary || {})) {
+          if (!merged[key]) merged[key] = { employees: 0, cabs: 0 };
+          merged[key].employees += val.employees;
+          merged[key].cabs += val.cabs;
+        }
+        return merged;
+      },
+      {} as Record<string, { employees: number; cabs: number }>
+    ),
   };
 }
 
@@ -159,9 +195,11 @@ interface TransportStore {
   selectedRouteId: string | null;
   loading: boolean;
   optimizationPlans: OptimizationPlans | null;
+  isolatedEmployeeIds: string[];
   previewing: boolean;
   manualRoutes: any[] | null;
   excelMetrics: any | null;
+  absentEmployeeCodes: string[];
   
   // Actions
   fetchInitialData: (opts?: { date?: string; shiftId?: string }) => Promise<void>;
@@ -174,6 +212,7 @@ interface TransportStore {
   clearOptimizationPreview: () => void;
   updateStopStatus: (routeId: string, stopId: string, status: "PENDING" | "REACHED" | "BOARDED" | "SKIPPED") => Promise<void>;
   reorderRouteStops: (routeId: string, stopId: string, direction: "up" | "down") => Promise<void>;
+  moveStopBetweenRoutes: (stopId: string, fromRouteId: string, toRouteId: string) => Promise<{ success: boolean; error?: string }>;
   overrideViolation: (violationId: string) => Promise<void>;
   addEmployee: (employee: any) => Promise<{ success: boolean; error?: string }>;
   updateEmployee: (id: string, employee: Partial<Employee>) => Promise<void>;
@@ -182,11 +221,12 @@ interface TransportStore {
   updateCab: (id: string, cab: any) => Promise<void>;
   deleteCab: (id: string) => Promise<void>;
   applyRouteSequence: (routeId: string, stopIds: string[], distance: number, duration: number) => Promise<void>;
-  swapRouteCab: (routeId: string, cabId: string) => Promise<void>;
+  swapRouteCab: (routeId: string, cabId: string, overrideDetourWarning?: boolean) => Promise<void>;
   assignShiftsToAllCabs: () => Promise<{ fixed: number; total: number }>;
   setRoutes: (routes: Route[]) => void;
   setManualRoutes: (routes: any[] | null) => void;
   setExcelMetrics: (metrics: any | null) => void;
+  setAbsentEmployeeCodes: (codes: string[]) => void;
 }
 
 function storeLog(...args: unknown[]) {
@@ -203,12 +243,15 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
   selectedRouteId: null,
   loading: false,
   optimizationPlans: null,
+  isolatedEmployeeIds: [],
   previewing: false,
   manualRoutes: null,
   excelMetrics: null,
+  absentEmployeeCodes: [],
 
   setManualRoutes: (routes) => set({ manualRoutes: routes }),
   setExcelMetrics: (metrics) => set({ excelMetrics: metrics }),
+  setAbsentEmployeeCodes: (codes) => set({ absentEmployeeCodes: codes }),
 
   // Helper: build the routes URL with the given (or stored) date and optional shiftId
   fetchInitialData: async (opts?: { date?: string; shiftId?: string }) => {
@@ -266,10 +309,17 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (apiKey) headers["x-google-maps-key"] = apiKey;
       const dateToFetch = get().selectedDate;
+      const absentEmployeeCodes = get().absentEmployeeCodes;
       const res = await fetch("/api/optimization", {
         method: "POST",
         headers,
-        body: JSON.stringify({ shiftId: get().activeShiftId, isPickup, date: dateToFetch, mode }),
+        body: JSON.stringify({
+          shiftId: get().activeShiftId,
+          isPickup,
+          date: dateToFetch,
+          mode,
+          absentEmployeeCodes,
+        }),
       });
 
       if (!res.ok) {
@@ -302,6 +352,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       const previews: OptimizationPlans[] = [];
       const hardErrors: string[] = [];
       const cabSequenceCounts: Record<string, number> = {};
+      const absentEmployeeCodes = state.absentEmployeeCodes;
 
       for (const shift of shiftsToOptimize) {
         const res = await fetch("/api/optimization", {
@@ -313,6 +364,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
             date: state.selectedDate,
             mode: "ALL",
             cabSequenceCounts,
+            absentEmployeeCodes,
           }),
         });
 
@@ -336,7 +388,18 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
           for (const cabId of assignedCabs) {
             cabSequenceCounts[cabId] = (cabSequenceCounts[cabId] || 0) + 1;
           }
-          previews.push(tagPreviewRoutes(data.preview, shift));
+          previews.push(
+            tagPreviewRoutes(
+              {
+                ...data.preview,
+                isolatedEmployees: data.isolatedEmployees || data.preview.isolatedEmployees,
+                releasedCabs: data.releasedCabs || data.preview.releasedCabs,
+                zoneSummary: data.zoneSummary || data.preview.zoneSummary,
+                usingFallback: data.preview.usingFallback,
+              },
+              shift
+            )
+          );
         }
       }
 
@@ -350,7 +413,8 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       }
 
       const mergedPlans = mergeOptimizationPlans(previews);
-      set({ optimizationPlans: mergedPlans, previewing: false });
+      const isolatedIds = (mergedPlans.isolatedEmployees || []).map((i) => i.employeeId);
+      set({ optimizationPlans: mergedPlans, isolatedEmployeeIds: isolatedIds, previewing: false });
       try { sessionStorage.setItem(STORAGE_PLANS_KEY, JSON.stringify(mergedPlans)); } catch {}
       storeLog("previewOptimization — OK", { shiftsCovered: previews.length });
       return { success: true };
@@ -436,7 +500,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 
   clearOptimizationPreview: () => {
     try { sessionStorage.removeItem(STORAGE_PLANS_KEY); } catch {}
-    set({ optimizationPlans: null });
+    set({ optimizationPlans: null, isolatedEmployeeIds: [] });
   },
 
   updateStopStatus: async (routeId, stopId, status) => {
@@ -488,6 +552,27 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     }
   },
 
+  moveStopBetweenRoutes: async (stopId, fromRouteId, toRouteId) => {
+    storeLog("moveStopBetweenRoutes", { stopId, fromRouteId, toRouteId });
+    try {
+      const res = await fetch("/api/routes/move-stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stopId, fromRouteId, toRouteId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { success: false, error: data.error || `Move failed (${res.status})` };
+      }
+      const dateToFetch = get().selectedDate;
+      const updatedRoutes = await (await fetch(`/api/optimization?date=${dateToFetch}`)).json();
+      set({ routes: updatedRoutes });
+      return { success: true };
+    } catch (e) {
+      console.error("[store] ❌ moveStopBetweenRoutes", e);
+      return { success: false, error: "Network error" };
+    }
+  },
 
 
   overrideViolation: async (violationId) => {
@@ -697,9 +782,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
     }
   },
 
-  swapRouteCab: async (routeId, cabId) => {
+  swapRouteCab: async (routeId, cabId, overrideDetourWarning = false) => {
     set({ loading: true });
-    storeLog("swapRouteCab", { routeId, cabId });
+    storeLog("swapRouteCab", { routeId, cabId, overrideDetourWarning });
     try {
       const res = await fetch(`/api/routes/${routeId}`, {
         method: "PATCH",
@@ -707,8 +792,23 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         body: JSON.stringify({
           action: "SWAP_CAB",
           cabId,
+          overrideDetourWarning,
         }),
       });
+      if (res.status === 409) {
+        const warn = await res.json();
+        set({ loading: false });
+        if (warn.warning === "DETOUR_INCREASE") {
+          const proceed = window.confirm(
+            `Detour increases by ${warn.percentIncrease}% (${warn.originalKm} km → ${warn.newKm} km). Proceed anyway?`
+          );
+          if (proceed) {
+            return get().swapRouteCab(routeId, cabId, true);
+          }
+          return;
+        }
+        throw new Error(warn.message || "Driver swap blocked");
+      }
       if (res.ok) {
         const shiftId = get().activeShiftId;
         const dateToFetch = get().selectedDate;

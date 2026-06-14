@@ -7,6 +7,9 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  // Prevent Next.js from bundling Prisma — it loads from node_modules at
+  // runtime so `prisma generate` takes effect immediately, no restart needed.
+  serverExternalPackages: ["@prisma/client", ".prisma/client"],
   outputFileTracingRoot: process.cwd(),
   outputFileTracingIncludes: {
     "/api/**/*": ["./prisma/dev.db", "./data/excel_routes.json"],

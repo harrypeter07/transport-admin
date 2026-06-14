@@ -9,9 +9,15 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "db:seed": "npx ts-node prisma/seed.ts",
-    "db:seed:test": "npx ts-node scripts/seedTestData.ts"
+    "db:seed:test": "npx ts-node scripts/seedTestData.ts",
+    "verify": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/verify-all.ts",
+    "seed:excel": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/seed-from-excel.ts",
+    "build:scenarios": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/build-test-scenarios.ts"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@googlemaps/js-api-loader": "^2.0.2",
     "@prisma/client": "^6.2.1",

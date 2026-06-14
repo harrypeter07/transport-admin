@@ -59,13 +59,22 @@ export async function GET(req: NextRequest) {
 }
 
 // Fetch employees + cabs and calculate dynamic start locations based on previous trips
-async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, depot: { x: number; y: number }, forceTripSequence?: number, cabSequenceCounts?: Record<string, number>) {
+async function fetchOptimizationInputs(
+  shiftId: string,
+  currentDateStr: string,
+  depot: { x: number; y: number },
+  forceTripSequence?: number,
+  cabSequenceCounts?: Record<string, number>,
+  extraAbsentEmployeeIds?: string[],
+  extraAbsentEmployeeCodes?: string[]
+) {
   const dbEmployees = await prisma.employee.findMany({
     where: {
       status: "ACTIVE",
       ...(shiftId ? { shiftId } : {}),
     },
     include: {
+      pickupPoint: true,
       user: {
         include: {
           leaves: {
@@ -80,7 +89,15 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, 
     },
   });
 
-  const availableEmployees = dbEmployees.filter(emp => (emp.user?.leaves || []).length === 0);
+  const absentIdSet = new Set(extraAbsentEmployeeIds || []);
+  const absentCodeSet = new Set((extraAbsentEmployeeCodes || []).map((c) => c.toLowerCase()));
+
+  const availableEmployees = dbEmployees.filter((emp) => {
+    if ((emp.user?.leaves || []).length > 0) return false;
+    if (absentIdSet.has(emp.id)) return false;
+    if (absentCodeSet.has(emp.employeeCode.toLowerCase())) return false;
+    return true;
+  });
   const fallbackShiftId = availableEmployees[0]?.shiftId || shiftId || "";
 
   // Load all shift start times for chronological comparison
@@ -106,16 +123,26 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, 
 
   const cabTripSequenceMap: Record<string, number> = {};
 
-  const optEmployees: OptimizeEmployee[] = availableEmployees.map(emp => ({
-    id: emp.id,
-    name: emp.name,
-    gender: emp.gender as "MALE" | "FEMALE",
-    x: emp.x,
-    y: emp.y,
-    address: emp.address,
-    department: emp.department,
-    phone: emp.phone,
-  }));
+  const optEmployees: OptimizeEmployee[] = availableEmployees.map(emp => {
+    const usePickup = emp.pickupPointId && emp.pickupPoint;
+    return {
+      id: emp.id,
+      name: emp.name,
+      gender: emp.gender as "MALE" | "FEMALE",
+      x: usePickup ? emp.pickupPoint!.x : emp.x,
+      y: usePickup ? emp.pickupPoint!.y : emp.y,
+      address: usePickup ? (emp.pickupPoint!.address || emp.pickupPoint!.name) : emp.address,
+      department: emp.department,
+      phone: emp.phone,
+      shiftId: emp.shiftId,
+      pickupPointId: emp.pickupPointId,
+      pickupPoint: emp.pickupPoint
+        ? { id: emp.pickupPoint.id, name: emp.pickupPoint.name, x: emp.pickupPoint.x, y: emp.pickupPoint.y }
+        : null,
+      zone: emp.zone,
+      subZone: emp.subZone,
+    };
+  });
 
   const optCabs: OptimizeCab[] = dbCabs.map(cab => {
     let startPoint = undefined;
@@ -163,7 +190,33 @@ async function fetchOptimizationInputs(shiftId: string, currentDateStr: string, 
     };
   });
 
-  return { optEmployees, optCabs, fallbackShiftId, cabTripSequenceMap };
+  const activeEmployeeCount = optEmployees.length;
+  const cabCapacity = optCabs[0]?.capacity ?? 6;
+  const minCabsNeeded = Math.ceil(activeEmployeeCount / cabCapacity);
+  const activeCabs = optCabs
+    .sort((a, b) => b.capacity - a.capacity)
+    .slice(0, Math.max(minCabsNeeded, 1));
+
+  console.log(`Fleet sized: ${activeCabs.length} of ${optCabs.length} cabs active for ${activeEmployeeCount} employees`);
+
+  const shiftStartTime = shiftStartTimes.get(fallbackShiftId) || "09:00";
+  const dbLeaveCount = dbEmployees.filter((emp) => (emp.user?.leaves || []).length > 0).length;
+  const overlayAbsentCount = dbEmployees.filter((emp) =>
+    absentIdSet.has(emp.id) || absentCodeSet.has(emp.employeeCode.toLowerCase())
+  ).length;
+
+  return {
+    optEmployees,
+    optCabs: activeCabs,
+    fallbackShiftId,
+    cabTripSequenceMap,
+    shiftStartTime,
+    activeEmployeeCount,
+    totalEmployeeCount: dbEmployees.length,
+    dbLeaveCount,
+    overlayAbsentCount,
+    minCabsNeeded,
+  };
 }
 
 // Persist OptimizedRoute[] to DB
@@ -204,7 +257,9 @@ async function persistRoutes(
           optimizationScore: optRoute.optimizationScore,
           optimizationMode: strategyLabel,
           tripSequence: cabTripSequenceMap[optRoute.cabId] || 1,
-          routeNumber: index + 1
+          routeNumber: index + 1,
+          zone: optRoute.zone ?? null,
+          subZone: optRoute.subZone ?? null,
         },
       });
 
@@ -236,7 +291,8 @@ async function persistRoutes(
     // Save to permanent OptimizedRouteSnapshot
     const stats = {
       routeCount: nonEmptyRoutes.length,
-      totalDistance: nonEmptyRoutes.reduce((s, r) => s + (r.totalDistance || 0), 0)
+      totalDistance: nonEmptyRoutes.reduce((s, r) => s + (r.totalDistance || 0), 0),
+      source: "OPTIMIZED",
     };
     await tx.optimizedRouteSnapshot.create({
       data: {
@@ -339,6 +395,8 @@ async function persistPreviewRoutes(
         optimizationMode: strategyLabel,
         tripSequence,
         routeNumber: index + 1,
+        zone: optRoute.zone ?? null,
+        subZone: optRoute.subZone ?? null,
       });
 
       for (const stop of optRoute.stops) {
@@ -396,7 +454,18 @@ export async function POST(req: NextRequest) {
     if (auth.response) return auth.response;
 
     const body = await req.json();
-    const { shiftId, isPickup, date, mode = "FASTEST_TRAVEL", selectedStrategy, previewRoutes, tripSequence: bodyTripSequence, cabSequenceCounts } = body;
+    const {
+      shiftId,
+      isPickup,
+      date,
+      mode = "FASTEST_TRAVEL",
+      selectedStrategy,
+      previewRoutes,
+      tripSequence: bodyTripSequence,
+      cabSequenceCounts,
+      absentEmployeeIds,
+      absentEmployeeCodes,
+    } = body;
     const currentDateStr = date || new Date().toISOString().split("T")[0];
 
     const PROTECTED_SHIFTS = ["shift-0800"];
@@ -427,7 +496,16 @@ export async function POST(req: NextRequest) {
     const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
 
     if (mode === "ALL") {
-      const { optEmployees, optCabs } = await fetchOptimizationInputs(shiftId, currentDateStr, depot, bodyTripSequence, cabSequenceCounts);
+      const inputs = await fetchOptimizationInputs(
+        shiftId,
+        currentDateStr,
+        depot,
+        bodyTripSequence,
+        cabSequenceCounts,
+        absentEmployeeIds,
+        absentEmployeeCodes
+      );
+      const { optEmployees, optCabs, shiftStartTime } = inputs;
 
       if (optEmployees.length === 0) {
         return NextResponse.json({ error: "No active employees found for this shift" }, { status: 400 });
@@ -436,8 +514,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "No available cabs found" }, { status: 400 });
       }
 
-      const plans = await optimizeAllStrategies(optEmployees, optCabs, isPickup ?? true, apiKey, depot, constraints);
-      return NextResponse.json({ preview: plans, constraints });
+      const plans = await optimizeAllStrategies(optEmployees, optCabs, isPickup ?? true, apiKey, depot, constraints, shiftStartTime);
+      return NextResponse.json({
+        preview: plans,
+        constraints,
+        isolatedEmployees: plans.isolatedEmployees,
+        releasedCabs: plans.releasedCabs,
+        zoneSummary: plans.zoneSummary,
+        fleetSizing: {
+          activeEmployees: inputs.activeEmployeeCount,
+          totalEmployees: inputs.totalEmployeeCount,
+          dbLeaveCount: inputs.dbLeaveCount,
+          overlayAbsentCount: inputs.overlayAbsentCount,
+          activeCabs: inputs.optCabs.length,
+          minCabsNeeded: inputs.minCabsNeeded,
+        },
+      });
     }
 
     if (mode === "APPLY" && selectedStrategy && Array.isArray(previewRoutes)) {
@@ -448,7 +540,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...result });
     }
 
-    const { optEmployees, optCabs, fallbackShiftId, cabTripSequenceMap } = await fetchOptimizationInputs(shiftId, currentDateStr, depot);
+    const inputs = await fetchOptimizationInputs(
+      shiftId,
+      currentDateStr,
+      depot,
+      bodyTripSequence,
+      cabSequenceCounts,
+      absentEmployeeIds,
+      absentEmployeeCodes
+    );
+    const { optEmployees, optCabs, fallbackShiftId, cabTripSequenceMap } = inputs;
 
     if (optEmployees.length === 0) {
       return NextResponse.json({ error: "No active employees found for this shift" }, { status: 400 });

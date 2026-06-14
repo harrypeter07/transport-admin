@@ -49,6 +49,8 @@ async function performReassignment(
     ? { x: settings.defaultDepotLng, y: settings.defaultDepotLat }
     : DEPOT;
 
+  const departingCab = await prisma.cab.findUnique({ where: { id: cabId } });
+
   const allAvailableCabs = await prisma.cab.findMany({
     where: { status: "AVAILABLE", id: { not: cabId } },
     include: {
@@ -106,11 +108,24 @@ async function performReassignment(
     const best = scored[0];
 
     const stopPoints = route.stops.map((s: any) => ({ x: s.employee.x, y: s.employee.y }));
+    const firstStop = stopPoints[0] || depot;
+    const originalStart =
+      route.tripSequence === 1 &&
+      departingCab &&
+      typeof departingCab.driverX === "number" &&
+      typeof departingCab.driverY === "number"
+        ? { x: departingCab.driverX, y: departingCab.driverY }
+        : depot;
+
     const { distance: newDistance, duration: newDuration } = await fetchGoogleRouteMetrics(
       [best.startPoint, ...stopPoints],
       route.isPickup,
       depot
     );
+
+    const originalKm = getDistance(originalStart, firstStop) + (route.totalDistance || 0);
+    const newKm = getDistance(best.startPoint, firstStop) + newDistance;
+    const percentIncrease = originalKm > 0 ? ((newKm - originalKm) / originalKm) * 100 : 0;
 
     await prisma.route.update({
       where: { id: route.id },
@@ -157,7 +172,17 @@ async function performReassignment(
       entity: "Route",
       entityId: route.id,
       before: { cabId, status: route.status },
-      after: { cabId: best.cab.id, tripSequence: best.newTripSeq, reason },
+      after: {
+        cabId: best.cab.id,
+        tripSequence: best.newTripSeq,
+        reason,
+        detourComparison: {
+          originalKm: Math.round(originalKm * 10) / 10,
+          newKm: Math.round(newKm * 10) / 10,
+          percentIncrease: Math.round(percentIncrease * 10) / 10,
+          warning: percentIncrease > 40,
+        },
+      },
       ip,
     });
   }

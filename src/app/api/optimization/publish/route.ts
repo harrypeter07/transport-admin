@@ -45,6 +45,35 @@ export async function POST(req: Request) {
 	return NextResponse.json({ error: "No pending or assigned routes found to publish for the selected date." }, { status: 400 });
 	}
 
+	const blockingViolations = await prisma.violation.findMany({
+	where: {
+	  routeId: { in: routeIds },
+	  resolved: false,
+	  OR: [
+	    { type: "ISOLATED_FEMALE_NIGHT" },
+	    { severity: "HIGH" },
+	  ],
+	},
+	select: {
+	  id: true,
+	  routeId: true,
+	  type: true,
+	  severity: true,
+	  notes: true,
+	},
+	});
+
+	if (blockingViolations.length > 0) {
+	return NextResponse.json(
+	  {
+	    error: "SAFETY_BLOCK",
+	    message: "Resolve all high-severity safety violations before publishing",
+	    violations: blockingViolations,
+	  },
+	  { status: 400 }
+	);
+	}
+
 	// Update Routes to ASSIGNED (safe to apply to already ASSIGNED ones)
 	await prisma.route.updateMany({
 	where: { id: { in: routeIds } },

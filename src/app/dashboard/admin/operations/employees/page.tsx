@@ -6,6 +6,7 @@ import { Search, Plus, Edit, Trash2, ChevronRight, X } from "lucide-react";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { useTransportStore } from "@/store/useTransportStore";
 import ConfirmModal from "@/components/ConfirmModal";
+import { ZONE_COLORS } from "@/lib/zones";
 
 type Shift = { id: string; name: string };
 
@@ -16,6 +17,13 @@ export default function EmployeesPage() {
  const [search, setSearch] = useState("");
  const [filterRole, setFilterRole] = useState("");
  const [filterShift, setFilterShift] = useState("");
+ const [filterZone, setFilterZone] = useState("");
+ const [filterSubZone, setFilterSubZone] = useState("");
+ const [filterDistanceRing, setFilterDistanceRing] = useState("");
+ const [filterHasPickup, setFilterHasPickup] = useState<"" | "yes" | "no">("");
+ const [filterIsolated, setFilterIsolated] = useState(false);
+ const [showZoneColumns, setShowZoneColumns] = useState(false);
+ const { optimizationPlans, isolatedEmployeeIds } = useTransportStore();
  const [sortBy, setSortBy] = useState("name");
  const [showModal, setShowModal] = useState(false);
  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
@@ -130,6 +138,24 @@ export default function EmployeesPage() {
  if (filterShift) {
  processedEmployees = processedEmployees.filter((emp) => emp.shiftId === filterShift);
  }
+ if (filterZone) {
+ processedEmployees = processedEmployees.filter((emp) => emp.zone === filterZone);
+ }
+ if (filterSubZone) {
+ processedEmployees = processedEmployees.filter((emp) => emp.subZone === filterSubZone);
+ }
+ if (filterDistanceRing) {
+ processedEmployees = processedEmployees.filter((emp) => emp.distanceRing === filterDistanceRing);
+ }
+ if (filterHasPickup === "yes") {
+ processedEmployees = processedEmployees.filter((emp) => !!emp.pickupPointId);
+ } else if (filterHasPickup === "no") {
+ processedEmployees = processedEmployees.filter((emp) => !emp.pickupPointId);
+ }
+ if (filterIsolated && optimizationPlans?.isolatedEmployees?.length) {
+ const isolatedIds = new Set(optimizationPlans.isolatedEmployees.map((i) => i.employeeId));
+ processedEmployees = processedEmployees.filter((emp) => isolatedIds.has(emp.id));
+ }
  processedEmployees.sort((a, b) => {
  if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
  if (sortBy === "role") return (a.designation || "").localeCompare(b.designation || "");
@@ -191,6 +217,39 @@ export default function EmployeesPage() {
  <option value="role">Sort: Role</option>
  <option value="shift">Sort: Shift</option>
  </select>
+ <select value={filterZone} onChange={e => setFilterZone(e.target.value)} className="border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all text-[#4a4a4a]">
+ <option value="">All Zones</option>
+ <option value="N">N</option>
+ <option value="S">S</option>
+ <option value="E">E</option>
+ <option value="W">W</option>
+ </select>
+ <select value={filterSubZone} onChange={e => setFilterSubZone(e.target.value)} className="border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all text-[#4a4a4a]">
+ <option value="">All Sub-zones</option>
+ <option value="NE">NE</option>
+ <option value="NW">NW</option>
+ <option value="SE">SE</option>
+ <option value="SW">SW</option>
+ </select>
+ <select value={filterDistanceRing} onChange={e => setFilterDistanceRing(e.target.value)} className="border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all text-[#4a4a4a]">
+ <option value="">All Rings</option>
+ <option value="NEAR">Near (0–5 km)</option>
+ <option value="MID">Mid (5–15 km)</option>
+ <option value="FAR">Far (15+ km)</option>
+ </select>
+ <select value={filterHasPickup} onChange={e => setFilterHasPickup(e.target.value as "" | "yes" | "no")} className="border border-[#e8e8e8] rounded-none px-3 py-2 text-xs bg-[#f7f7f7] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff4f00]/20 focus:border-slate-400 transition-all text-[#4a4a4a]">
+ <option value="">Pickup point: Any</option>
+ <option value="yes">Has pickup point</option>
+ <option value="no">Door pickup</option>
+ </select>
+ <label className="flex items-center gap-1.5 px-2 py-1 text-xs text-[#4a4a4a] border border-[#e8e8e8] bg-[#f7f7f7] cursor-pointer">
+ <input type="checkbox" checked={filterIsolated} onChange={e => setFilterIsolated(e.target.checked)} className="rounded-none" />
+ Isolated only
+ </label>
+ <label className="flex items-center gap-1.5 px-2 py-1 text-xs text-[#4a4a4a] border border-[#e8e8e8] bg-[#f7f7f7] cursor-pointer">
+ <input type="checkbox" checked={showZoneColumns} onChange={e => setShowZoneColumns(e.target.checked)} className="rounded-none" />
+ Zone cols
+ </label>
  </div>
  </div>
 
@@ -203,15 +262,24 @@ export default function EmployeesPage() {
                   <th className="px-5 py-3">Address</th>
                   <th className="px-5 py-3">Designation</th>
  <th className="px-5 py-3">Shift</th>
+ <th className="px-5 py-3">Pickup</th>
+ {showZoneColumns && (
+   <>
+     <th className="px-5 py-3">Zone</th>
+     <th className="px-5 py-3">Sub-zone</th>
+     <th className="px-5 py-3">Ring</th>
+     <th className="px-5 py-3">Dist km</th>
+   </>
+ )}
  <th className="px-5 py-3">Manager</th>
  <th className="px-5 py-3 text-right">Actions</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-slate-100 text-sm text-[#4a4a4a]">
  {loading ? (
-                  <tr><td colSpan={7} className="px-5 py-10 text-center text-[#9a9a9a] text-xs">Loading…</td></tr>
+                  <tr><td colSpan={showZoneColumns ? 12 : 8} className="px-5 py-10 text-center text-[#9a9a9a] text-xs">Loading…</td></tr>
                 ) : processedEmployees.length === 0 ? (
-                  <tr><td colSpan={7} className="px-5 py-12 text-center text-[#9a9a9a] text-xs">No employees match the filters.</td></tr>
+                  <tr><td colSpan={showZoneColumns ? 12 : 8} className="px-5 py-12 text-center text-[#9a9a9a] text-xs">No employees match the filters.</td></tr>
  ) : (
  processedEmployees.map((emp) => (
  <tr key={emp.id} className="hover:bg-[#f7f7f7] transition-colors">
@@ -241,6 +309,40 @@ export default function EmployeesPage() {
  <span className="text-[#9a9a9a] text-[11px]">Unassigned</span>
  )}
  </td>
+ <td className="px-5 py-3.5">
+   {emp.pickupPoint ? (
+     <span className="inline-flex px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+       {emp.pickupPoint.name}
+     </span>
+   ) : isolatedEmployeeIds.includes(emp.id) ? (
+     <span className="inline-flex px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+       Isolated ⚠
+     </span>
+   ) : (
+     <span className="text-[10px] text-[#9a9a9a]">Door pickup</span>
+   )}
+ </td>
+ {showZoneColumns && (
+   <>
+     <td className="px-5 py-3.5">
+       {emp.zone ? (
+         <span
+           className="inline-flex px-2 py-0.5 text-[10px] font-black uppercase text-white"
+           style={{ backgroundColor: ZONE_COLORS[emp.zone] || "#64748b" }}
+         >
+           {emp.zone}
+         </span>
+       ) : (
+         <span className="text-[#9a9a9a]">—</span>
+       )}
+     </td>
+     <td className="px-5 py-3.5 font-mono text-[11px]">{emp.subZone || "—"}</td>
+     <td className="px-5 py-3.5 font-mono text-[10px]">{emp.distanceRing || "—"}</td>
+     <td className="px-5 py-3.5 font-mono text-[11px]">
+       {emp.distanceFromDepotKm != null ? Number(emp.distanceFromDepotKm).toFixed(1) : "—"}
+     </td>
+   </>
+ )}
  <td className="px-5 py-3.5 font-medium text-[#4a4a4a]">
  {emp.manager?.name ?? <span className="text-[#9a9a9a] font-normal text-[11px]">None</span>}
  </td>

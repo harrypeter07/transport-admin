@@ -92,6 +92,7 @@ async function googleGeocode(name: string, options: GeocodeOptions = {}): Promis
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
+    console.log("[MAPS API] Geocoding API called", { timestamp: new Date().toISOString(), query: cleanName });
     const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`, {
       signal: controller.signal,
     });
@@ -163,6 +164,7 @@ async function googleAutocomplete(query: string, options: GeocodeOptions = {}): 
   const timeoutId = setTimeout(() => controller.abort(), 3000);
 
   try {
+    console.log("[MAPS API] Places Autocomplete (REST) called", { timestamp: new Date().toISOString(), query });
     const res = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`, {
       signal: controller.signal,
     });

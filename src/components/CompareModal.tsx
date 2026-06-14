@@ -3,8 +3,18 @@
 import React, { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { Route } from "@/store/useTransportStore";
-import { X, Truck, Users, Route as RouteIcon, Clock, BarChart3 } from "lucide-react";
+import { X, Truck, Users, Route as RouteIcon, Clock, BarChart3, ShieldAlert, Upload, FileSpreadsheet } from "lucide-react";
 import { formatDate } from "@/lib/dateFormat";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from "recharts";
 
 const GoogleMapView = dynamic(() => import("./GoogleMapView"), { ssr: false });
 
@@ -113,36 +123,93 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<any>(null);
   const [apiKey, setApiKey] = useState<string>("");
+  const [baselineSummary, setBaselineSummary] = useState<any>(null);
+  const [dbLeaveCount, setDbLeaveCount] = useState(0);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [sheetOptions, setSheetOptions] = useState<{ name: string; inferredDate: string | null; routePreviewCount: number }[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState("");
+  const [uploadDate, setUploadDate] = useState(date);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
+  const loadComparison = React.useCallback(() => {
     setLoading(true);
     setError(null);
-    setSelectedCurrentId(null);
-    setSelectedOptimizedId(null);
-
     Promise.all([
       fetch(`/api/optimization/excel-routes?date=${date}`).then((r) => r.json()),
       fetch("/api/settings").then((r) => r.json()),
       fetch("/api/maps-key").then((r) => r.json()),
     ])
       .then(([routesData, settingsData, keyData]) => {
-        if (routesData.error) {
+        if (routesData.error && !routesData.routes?.length) {
           setError(routesData.details ? `${routesData.error} — ${routesData.details}` : routesData.error);
           setCurrentRoutes([]);
           setFrozenOptimizedRoutes([]);
+          setBaselineSummary(null);
         } else {
-          setCurrentRoutes(normalizeRoutes(routesData.routes));
-          setFrozenOptimizedRoutes(normalizeRoutes(routesData.optimizedRoutes));
+          setCurrentRoutes(normalizeRoutes(routesData.routes || []));
+          setFrozenOptimizedRoutes(normalizeRoutes(routesData.optimizedRoutes || []));
+          setBaselineSummary(routesData.summary || null);
+          setDbLeaveCount(routesData.dbLeaveCount ?? 0);
+          if (routesData.error) setError(routesData.error);
         }
         setSettings(settingsData);
         setApiKey(keyData.key || "");
       })
-      .catch(() => {
-        setError("Failed to load comparison data");
-      })
+      .catch(() => setError("Failed to load comparison data"))
       .finally(() => setLoading(false));
-  }, [isOpen, date]);
+  }, [date]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSelectedCurrentId(null);
+    setSelectedOptimizedId(null);
+    setUploadDate(date);
+    loadComparison();
+  }, [isOpen, date, loadComparison]);
+
+  const handleInspectFile = async (file: File) => {
+    setUploadFile(file);
+    setUploadError(null);
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/optimization/excel-routes/inspect", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      setUploadError(data.error || "Failed to inspect workbook");
+      setSheetOptions([]);
+      return;
+    }
+    setSheetOptions(data.sheets || []);
+    const first = data.sheets?.[0];
+    if (first) {
+      setSelectedSheet(first.name);
+      setUploadDate(first.inferredDate || date);
+    }
+  };
+
+  const handleSaveBaseline = async () => {
+    if (!uploadFile || !selectedSheet) return;
+    setUploading(true);
+    setUploadError(null);
+    const formData = new FormData();
+    formData.append("file", uploadFile);
+    formData.append("sheetName", selectedSheet);
+    formData.append("date", uploadDate);
+    const res = await fetch("/api/optimization/excel-routes", { method: "POST", body: formData });
+    const data = await res.json();
+    setUploading(false);
+    if (!res.ok) {
+      setUploadError(data.details || data.error || "Upload failed");
+      return;
+    }
+    setBaselineSummary({
+      ...data,
+      source: "MANUAL_EXCEL",
+      sheetName: selectedSheet,
+    });
+    loadComparison();
+  };
 
   const handleSelectCurrent = (id: string | null) => {
     if (id === selectedCurrentId) {
@@ -266,13 +333,87 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     return Array.from(shiftMap.entries()).map(([id, name]) => ({ id, name }));
   }, [normalizedCurrent, optimizedRoutes]);
 
-  const currentStats = useMemo(() => ({
-    routeCount: 18, cabCount: 18, empCount: 73, totalDist: 680, avgTime: 38,
-  }), []);
+  function computeSideMetrics(routes: Route[]) {
+    const cabIds = new Set<string>();
+    let totalEmp = 0;
+    let totalDist = 0;
+    let violations = 0;
+    let underfilled = 0;
+    let sharedStops = 0;
 
-  const optimizedStats = useMemo(() => ({
-    routeCount: 16, cabCount: 16, empCount: 73, totalDist: 572, avgTime: 32,
-  }), []);
+    for (const r of routes) {
+      cabIds.add(r.cabId || r.id);
+      const stops = r.stops || [];
+      totalEmp += stops.length;
+      totalDist += r.totalDistance || 0;
+      violations += ((r as any).violations || []).filter((v: any) => !v.resolved).length;
+      if (stops.length > 0 && stops.length < 3) underfilled++;
+
+      const groups = new Map<string, number>();
+      for (const s of stops) {
+        const key = (s as any).pickupPoint || (s as any).sharedStopKey || "";
+        if (key) groups.set(key, (groups.get(key) || 0) + 1);
+      }
+      for (const count of groups.values()) {
+        if (count > 1) sharedStops++;
+      }
+    }
+
+    const cabCount = cabIds.size || routes.length;
+    return {
+      cabCount,
+      totalEmp,
+      totalDist: Math.round(totalDist * 10) / 10,
+      avgPaxPerCab: cabCount > 0 ? Math.round((totalEmp / cabCount) * 10) / 10 : 0,
+      violations,
+      underfilled,
+      sharedStops,
+    };
+  }
+
+  const currentMetrics = useMemo(() => computeSideMetrics(commonCurrentRoutes), [commonCurrentRoutes]);
+  const optimizedMetrics = useMemo(() => computeSideMetrics(commonOptimizedRoutes), [commonOptimizedRoutes]);
+
+  const chartData = useMemo(() => [
+    { metric: "Cabs", Excel: currentMetrics.cabCount, Optimized: optimizedMetrics.cabCount },
+    { metric: "Avg pax/cab", Excel: currentMetrics.avgPaxPerCab, Optimized: optimizedMetrics.avgPaxPerCab },
+    { metric: "Violations", Excel: currentMetrics.violations, Optimized: optimizedMetrics.violations },
+    { metric: "Underfilled", Excel: currentMetrics.underfilled, Optimized: optimizedMetrics.underfilled },
+    { metric: "Shared stops", Excel: currentMetrics.sharedStops, Optimized: optimizedMetrics.sharedStops },
+  ], [currentMetrics, optimizedMetrics]);
+
+  const comparisonDiffs = useMemo(() => {
+    const mergedUnderfilled: string[] = [];
+    const safetyFixed: string[] = [];
+    const employeesMoved: string[] = [];
+
+    if (currentMetrics.underfilled > optimizedMetrics.underfilled) {
+      mergedUnderfilled.push(
+        `System consolidated ${currentMetrics.underfilled - optimizedMetrics.underfilled} underfilled cab(s) (<3 pax)`
+      );
+    }
+
+    if (currentMetrics.violations > optimizedMetrics.violations) {
+      safetyFixed.push(
+        `System resolved ${currentMetrics.violations - optimizedMetrics.violations} safety violation(s)`
+      );
+    }
+
+    const excelEmpRoute = new Map<string, string>();
+    for (const r of commonCurrentRoutes) {
+      for (const s of r.stops) excelEmpRoute.set(s.employeeId, r.id);
+    }
+    for (const r of commonOptimizedRoutes) {
+      for (const s of r.stops) {
+        const prev = excelEmpRoute.get(s.employeeId);
+        if (prev && prev !== r.id) {
+          employeesMoved.push(`${s.employee?.name || s.employeeId} moved between routes`);
+        }
+      }
+    }
+
+    return { mergedUnderfilled, safetyFixed, employeesMoved: employeesMoved.slice(0, 20) };
+  }, [commonCurrentRoutes, commonOptimizedRoutes, currentMetrics, optimizedMetrics]);
 
   const selectedCurrent = useMemo(
     () => commonCurrentRoutes.find((r) => r.id === selectedCurrentId) || null,
@@ -329,6 +470,77 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
           </button>
         </div>
 
+        {/* Excel upload bar */}
+        <div className="px-6 py-3 border-b border-[#e8e8e8] bg-[#fafafa] flex flex-wrap items-center gap-3">
+          <FileSpreadsheet className="w-4 h-4 text-[#ff4f00]" />
+          <label className="text-[10px] font-bold uppercase tracking-wider text-[#6b6b6b]">
+            Manual baseline
+          </label>
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            className="text-xs"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleInspectFile(f);
+            }}
+          />
+          {sheetOptions.length > 0 && (
+            <>
+              <select
+                value={selectedSheet}
+                onChange={(e) => {
+                  setSelectedSheet(e.target.value);
+                  const sheet = sheetOptions.find((s) => s.name === e.target.value);
+                  if (sheet?.inferredDate) setUploadDate(sheet.inferredDate);
+                }}
+                className="text-xs border border-[#e8e8e8] px-2 py-1 bg-white"
+              >
+                {sheetOptions.map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.name} ({s.routePreviewCount} routes)
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={uploadDate}
+                onChange={(e) => setUploadDate(e.target.value)}
+                className="text-xs border border-[#e8e8e8] px-2 py-1"
+              />
+              <button
+                type="button"
+                onClick={handleSaveBaseline}
+                disabled={uploading}
+                className="text-xs font-bold bg-[#ff4f00] text-white px-3 py-1 disabled:opacity-50 flex items-center gap-1"
+              >
+                <Upload className="w-3 h-3" />
+                {uploading ? "Saving..." : "Save baseline"}
+              </button>
+            </>
+          )}
+          {baselineSummary && (
+            <div className="flex flex-wrap gap-2 text-[10px] font-mono text-[#6b6b6b]">
+              <span>employees: {baselineSummary.employeeCount ?? "—"}</span>
+              <span>| routes: {baselineSummary.routeCount}</span>
+              <span>| no-show: {baselineSummary.noShowCount ?? 0}</span>
+              <span>| DB leaves: {dbLeaveCount}</span>
+              {(baselineSummary.unmatchedEmployeeCodes?.length ?? 0) > 0 && (
+                <span className="text-red-600">
+                  | unmatched: {baselineSummary.unmatchedEmployeeCodes.length}
+                </span>
+              )}
+            </div>
+          )}
+          {uploadError && <span className="text-[10px] text-red-600">{uploadError}</span>}
+        </div>
+
+        {error && !loading && (
+          <div className="px-6 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-900">
+            {error}
+          </div>
+        )}
+
         {loading ? (
           <div className="flex-1 flex items-center justify-center text-xs font-bold text-[#9a9a9a]">
             Loading comparison data...
@@ -345,7 +557,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                     Current Baseline
                   </span>
                   <span className="text-[10px] text-[#9a9a9a] ml-auto font-mono">
-                    {currentStats.routeCount} routes
+                    {currentMetrics.cabCount} routes
                   </span>
                 </div>
                 <div className="h-[320px]">
@@ -377,7 +589,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                     Optimized Routes
                   </span>
                   <span className="text-[10px] text-[#9a9a9a] ml-auto font-mono">
-                    {optimizedStats.routeCount} routes
+                    {optimizedMetrics.cabCount} routes
                   </span>
                 </div>
                 <div className="h-[320px]">
@@ -488,40 +700,83 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
 
             {/* Stats Section — only when both sides have data */}
             {canCompare ? (
-              <div className="p-4">
+              <div className="p-4 space-y-4">
                 <div className="overflow-x-auto">
                   <table className="w-full text-[11px] font-mono">
                     <thead>
                       <tr className="border-b border-[#e8e8e8]">
                         <th className="text-left py-2 pr-4 text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">Metric</th>
-                        <th className="text-right py-2 px-4 text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">Current Baseline</th>
-                        <th className="text-right py-2 px-4 text-[9px] uppercase font-bold tracking-wider text-[#059669]">Optimized</th>
+                        <th className="text-right py-2 px-4 text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">Excel (Manual)</th>
+                        <th className="text-right py-2 px-4 text-[9px] uppercase font-bold tracking-wider text-[#059669]">System (Optimized)</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr className="border-b border-[#f0f0f0]">
-                        <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><Truck className="w-3 h-3" /> Routes / Cabs</td>
-                        <td className="text-right py-2 px-4">{currentStats.routeCount}</td>
-                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedStats.routeCount}</td>
+                        <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><Truck className="w-3 h-3" /> Cabs used</td>
+                        <td className="text-right py-2 px-4">{currentMetrics.cabCount}</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.cabCount}</td>
                       </tr>
                       <tr className="border-b border-[#f0f0f0]">
-                        <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><Users className="w-3 h-3" /> Employees</td>
-                        <td className="text-right py-2 px-4">{currentStats.empCount}</td>
-                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedStats.empCount}</td>
+                        <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><RouteIcon className="w-3 h-3" /> Total distance</td>
+                        <td className="text-right py-2 px-4 text-[#9a9a9a]">—</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.totalDist} km</td>
                       </tr>
                       <tr className="border-b border-[#f0f0f0]">
-                        <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><RouteIcon className="w-3 h-3" /> Total Distance</td>
-                        <td className="text-right py-2 px-4">{currentStats.totalDist} km</td>
-                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedStats.totalDist} km</td>
+                        <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><Users className="w-3 h-3" /> Avg passengers/cab</td>
+                        <td className="text-right py-2 px-4">{currentMetrics.avgPaxPerCab}</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.avgPaxPerCab}</td>
                       </tr>
                       <tr className="border-b border-[#f0f0f0]">
-                        <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><Clock className="w-3 h-3" /> Avg. Commute</td>
-                        <td className="text-right py-2 px-4">{currentStats.avgTime} min</td>
-                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedStats.avgTime} min</td>
+                        <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><ShieldAlert className="w-3 h-3" /> Safety violations</td>
+                        <td className="text-right py-2 px-4">{currentMetrics.violations}</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.violations}</td>
+                      </tr>
+                      <tr className="border-b border-[#f0f0f0]">
+                        <td className="py-2 pr-4 text-[#4a4a4a]">Underfilled routes (&lt;3 pax)</td>
+                        <td className="text-right py-2 px-4">{currentMetrics.underfilled}</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.underfilled}</td>
+                      </tr>
+                      <tr className="border-b border-[#f0f0f0]">
+                        <td className="py-2 pr-4 text-[#4a4a4a]">Shared stops used</td>
+                        <td className="text-right py-2 px-4">{currentMetrics.sharedStops}</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.sharedStops}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
+
+                <div className="h-48 border border-[#e8e8e8] p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="metric" tick={{ fontSize: 9 }} />
+                      <YAxis tick={{ fontSize: 9 }} />
+                      <Tooltip contentStyle={{ fontSize: 11 }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar dataKey="Excel" fill="#1c1b1f" name="Excel (Manual)" />
+                      <Bar dataKey="Optimized" fill="#059669" name="System (Optimized)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {(comparisonDiffs.mergedUnderfilled.length > 0 ||
+                  comparisonDiffs.safetyFixed.length > 0 ||
+                  comparisonDiffs.employeesMoved.length > 0) && (
+                  <div className="border border-[#e8e8e8] p-3 bg-[#fafafa]">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">Changes detected</div>
+                    <ul className="space-y-1 text-[11px] text-[#4a4a4a]">
+                      {comparisonDiffs.mergedUnderfilled.map((t, i) => (
+                        <li key={`m-${i}`}>• {t}</li>
+                      ))}
+                      {comparisonDiffs.safetyFixed.map((t, i) => (
+                        <li key={`s-${i}`}>• {t}</li>
+                      ))}
+                      {comparisonDiffs.employeesMoved.map((t, i) => (
+                        <li key={`e-${i}`}>• {t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-4">

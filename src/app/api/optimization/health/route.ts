@@ -1,8 +1,15 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/apiAuth";
+import { prisma } from "@/lib/db";
+import {
+  runPreflightChecks,
+  makeDepot,
+  type OptimizeEmployee,
+  type OptimizeCab,
+} from "@/lib/optimization";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const auth = await requireApiRole(["ADMIN"]);
     if (auth.response) return auth.response;
@@ -15,7 +22,7 @@ export async function GET() {
       { x: 79.0526, y: 21.0625 },
       { x: 79.0882, y: 21.1458 },
     ];
-    const coords = testPoints.map(p => `${p.x.toFixed(6)},${p.y.toFixed(6)}`).join(";");
+    const coords = testPoints.map((p) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`).join(";");
     const url = `${osrmBaseUrl}/table/v1/driving/${coords}?annotations=duration,distance`;
 
     const controller = new AbortController();
@@ -29,7 +36,7 @@ export async function GET() {
     try {
       const res = await fetch(url, {
         signal: controller.signal,
-        headers: { "Accept": "application/json" },
+        headers: { Accept: "application/json" },
       });
       if (res.ok) {
         const data = await res.json();
@@ -46,12 +53,72 @@ export async function GET() {
         errorMsg = `HTTP ${res.status}`;
       }
     } catch (err) {
-      errorMsg = err instanceof DOMException && err.name === "AbortError" ? "timeout (5s)" : err instanceof Error ? err.message : "Unknown error";
+      errorMsg =
+        err instanceof DOMException && err.name === "AbortError"
+          ? "timeout (5s)"
+          : err instanceof Error
+            ? err.message
+            : "Unknown error";
     } finally {
       clearTimeout(timeoutId);
     }
 
     const elapsedMs = Date.now() - startTime;
+
+    const { searchParams } = new URL(req.url);
+    const shiftId = searchParams.get("shiftId");
+    const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
+
+    let preflightWarnings: ReturnType<typeof runPreflightChecks> = [];
+
+    if (shiftId) {
+      const settings = await prisma.systemSettings.findUnique({ where: { id: "default" } });
+      const depot = settings
+        ? makeDepot(settings.defaultDepotLat, settings.defaultDepotLng)
+        : makeDepot(21.0625, 79.0526);
+
+      const dbEmployees = await prisma.employee.findMany({
+        where: { status: "ACTIVE", shiftId },
+        include: { pickupPoint: true },
+      });
+
+      const dbCabs = await prisma.cab.findMany({
+        where: { status: "AVAILABLE", shifts: { some: { id: shiftId } } },
+      });
+
+      const optEmployees: OptimizeEmployee[] = dbEmployees.map((emp) => {
+        const usePickup = emp.pickupPointId && emp.pickupPoint;
+        return {
+          id: emp.id,
+          name: emp.name,
+          gender: emp.gender as "MALE" | "FEMALE",
+          x: usePickup ? emp.pickupPoint!.x : emp.x,
+          y: usePickup ? emp.pickupPoint!.y : emp.y,
+          address: usePickup ? emp.pickupPoint!.address || emp.pickupPoint!.name : emp.address,
+          department: emp.department,
+          phone: emp.phone,
+          pickupPointId: emp.pickupPointId,
+          zone: emp.zone,
+          subZone: emp.subZone,
+        };
+      });
+
+      const optCabs: OptimizeCab[] = dbCabs.map((cab) => ({
+        id: cab.id,
+        vehicleNumber: cab.vehicleNumber,
+        capacity: cab.capacity,
+        vendor: cab.vendor,
+        driverName: cab.driverName || "Unassigned",
+        driverPhone: cab.driverPhone || "N/A",
+        startPoint:
+          typeof cab.driverX === "number" && typeof cab.driverY === "number"
+            ? { x: cab.driverX, y: cab.driverY }
+            : depot,
+        assignedZone: cab.assignedZone,
+      }));
+
+      preflightWarnings = runPreflightChecks(optEmployees, optCabs, depot);
+    }
 
     if (!osrmOk) {
       return NextResponse.json({
@@ -60,6 +127,8 @@ export async function GET() {
         elapsedMs,
         provider,
         googleMapsKeyConfigured: !!googleKey,
+        date,
+        preflightWarnings,
       });
     }
 
@@ -70,6 +139,8 @@ export async function GET() {
       provider,
       googleMapsKeyConfigured: !!googleKey,
       testResult,
+      date,
+      preflightWarnings,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";

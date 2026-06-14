@@ -111,8 +111,10 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [session, setSession] = useState<SessionUser | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     fetch("/api/auth/session")
       .then(r => r.json())
       .then(d => {
@@ -156,7 +158,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f7] flex flex-col text-[#1c1b1f] selection:bg-[#ff4f00] selection:text-white antialiased">
+    <div className="min-h-screen bg-[#f7f7f7] flex flex-col text-[#1c1b1f] selection:bg-[#ff4f00] selection:text-white antialiased" suppressHydrationWarning>
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-[#e8e8e8] bg-white">
         <div className="w-full px-4 sm:px-6 h-14 flex items-center justify-between">
@@ -183,7 +185,7 @@ export default function DashboardLayout({
             <NotificationBell />
             
             {/* User identity chip (desktop) */}
-            {session && (
+            {isMounted && session && (
               <div className="hidden md:flex items-center gap-2 px-2.5 py-1 bg-[#f7f7f7] border border-[#e8e8e8]">
                 <div className="w-5 h-5 rounded-full bg-[#1c1b1f] flex items-center justify-center text-white text-[9px] font-bold">
                   {session.name?.charAt(0)?.toUpperCase() || "U"}

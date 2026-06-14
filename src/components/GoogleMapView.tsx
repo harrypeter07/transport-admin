@@ -1,14 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
 import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 import { Route } from "@/store/useTransportStore";
+import { MIHAN, getZoneBounds, ZONE_COLORS } from "@/lib/zones";
 
 const STRATEGY_COLORS: Record<string, string> = {
   DISTANCE: "#ef4444",
-  TIME: "#3b82f6",
+  TIME:     "#3b82f6",
   BALANCED: "#8b5cf6",
-  NORMAL: "#64748b",
+  NORMAL:   "#64748b",
 };
 
 // Shift-color palette — distinct vivid colors
@@ -27,11 +29,12 @@ const SHIFT_PALETTE = [
   "#64748b", // slate
 ];
 
-// Module-level cache to ensure stable and unique colors across the session
+// Module-level cache — stable colors per shiftId across the session
 const shiftColorCache = new Map<string, string>();
 let nextColorIdx = 0;
+// Ensures setOptions is only called once across all GoogleMapView instances
+let loaderConfigured = false;
 
-/** Returns a stable shiftId → color map built from the routes currently rendered */
 function buildShiftColorMap(routes: Route[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const r of routes) {
@@ -47,26 +50,26 @@ function buildShiftColorMap(routes: Route[]): Map<string, string> {
 }
 
 const MAP_STYLES: google.maps.MapTypeStyle[] = [
-  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.attraction", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.medical", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.school", stylers: [{ visibility: "off" }] },
-  { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "landscape", stylers: [{ color: "#f2eee9" }] },
-  { featureType: "landscape.natural.landcover", stylers: [{ color: "#e8e0d5" }] },
-  { featureType: "landscape.natural.terrain", stylers: [{ color: "#e8e0d5" }] },
-  { featureType: "poi.park", stylers: [{ color: "#d4e5c8", visibility: "on" }] },
-  { featureType: "water", stylers: [{ color: "#c8e0f0" }] },
-  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#f7d9c4" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#e8c8b0" }] },
-  { featureType: "road.highway", elementType: "labels.text", stylers: [{ visibility: "on" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-  { featureType: "road.arterial", elementType: "labels.text", stylers: [{ visibility: "on" }] },
-  { featureType: "road.local", elementType: "geometry", stylers: [{ color: "#f5f3f0" }] },
-  { featureType: "road.local", elementType: "labels.text", stylers: [{ visibility: "on" }] },
-  { featureType: "administrative.locality", stylers: [{ visibility: "on" }] },
-  { featureType: "administrative.neighborhood", stylers: [{ visibility: "on" }] },
-  { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.business",                                   stylers: [{ visibility: "off" }] },
+  { featureType: "poi.attraction",                                  stylers: [{ visibility: "off" }] },
+  { featureType: "poi.medical",                                     stylers: [{ visibility: "off" }] },
+  { featureType: "poi.school",                                      stylers: [{ visibility: "off" }] },
+  { featureType: "transit",                                         stylers: [{ visibility: "off" }] },
+  { featureType: "landscape",                                       stylers: [{ color: "#f2eee9" }] },
+  { featureType: "landscape.natural.landcover",                     stylers: [{ color: "#e8e0d5" }] },
+  { featureType: "landscape.natural.terrain",                       stylers: [{ color: "#e8e0d5" }] },
+  { featureType: "poi.park",                                        stylers: [{ color: "#d4e5c8", visibility: "on" }] },
+  { featureType: "water",                                           stylers: [{ color: "#c8e0f0" }] },
+  { featureType: "road.highway",   elementType: "geometry.fill",   stylers: [{ color: "#f7d9c4" }] },
+  { featureType: "road.highway",   elementType: "geometry.stroke", stylers: [{ color: "#e8c8b0" }] },
+  { featureType: "road.highway",   elementType: "labels.text",     stylers: [{ visibility: "on" }] },
+  { featureType: "road.arterial",  elementType: "geometry",        stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.arterial",  elementType: "labels.text",     stylers: [{ visibility: "on" }] },
+  { featureType: "road.local",     elementType: "geometry",        stylers: [{ color: "#f5f3f0" }] },
+  { featureType: "road.local",     elementType: "labels.text",     stylers: [{ visibility: "on" }] },
+  { featureType: "administrative.locality",                         stylers: [{ visibility: "on" }] },
+  { featureType: "administrative.neighborhood",                     stylers: [{ visibility: "on" }] },
+  { featureType: "administrative.land_parcel",                      stylers: [{ visibility: "off" }] },
 ];
 
 function svgToUri(svg: string): string {
@@ -83,17 +86,27 @@ function depotSvg(size: number): string {
   `);
 }
 
-function employeeSvg(size: number, label: string, color: string, gender: string, isSelected: boolean, opacity = 1, isHighlighted = false): string {
-  const stroke = isSelected ? "#ffffff" : "transparent";
+function employeeSvg(
+  size: number,
+  label: string,
+  color: string,
+  gender: string,
+  isSelected: boolean,
+  opacity = 1,
+  isHighlighted = false,
+  isViolation = false,
+): string {
+  const stroke  = isSelected ? "#ffffff" : "transparent";
   const strokeW = isSelected ? "2" : "0";
   const isFemale = gender === "F";
-  const innerR = size / 2 - (isHighlighted ? 3 : 1);
-  const shape = isFemale
-    ? `<circle cx="${size / 2}" cy="${size / 2}" r="${innerR}" fill="${color}" stroke="${stroke}" stroke-width="${strokeW}"/>`
-    : `<rect x="${isHighlighted ? 3 : 0}" y="${isHighlighted ? 3 : 0}" width="${size - (isHighlighted ? 6 : 0)}" height="${size - (isHighlighted ? 6 : 0)}" rx="${(size - (isHighlighted ? 6 : 0)) * 0.2}" fill="${color}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
-  const ring = isHighlighted
+  const fillColor = isViolation ? "#f59e0b" : color;
+  const innerR  = size / 2 - (isHighlighted ? 3 : 1);
+  const shape   = isFemale
+    ? `<circle cx="${size / 2}" cy="${size / 2}" r="${innerR}" fill="${fillColor}" stroke="${stroke}" stroke-width="${strokeW}"/>`
+    : `<rect x="${isHighlighted ? 3 : 0}" y="${isHighlighted ? 3 : 0}" width="${size - (isHighlighted ? 6 : 0)}" height="${size - (isHighlighted ? 6 : 0)}" rx="${(size - (isHighlighted ? 6 : 0)) * 0.2}" fill="${fillColor}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
+  const ring    = isHighlighted
     ? `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 0.5}" fill="none" stroke="#ff4f00" stroke-width="2.5" opacity="0.9"/>`
-    : '';
+    : "";
   return svgToUri(`
     <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" opacity="${opacity}">
       ${ring}
@@ -126,6 +139,8 @@ interface GoogleMapViewProps {
   routeViewModes?: Record<string, "pickup" | "drop">;
   selectedEmployeeId?: string | null;
   onSelectEmployee?: (id: string | null) => void;
+  pickupPointMarkers?: { id: string; name: string; lat: number; lng: number; selected?: boolean }[];
+  showZoneOverlay?: boolean;
 }
 
 export default function GoogleMapView({
@@ -134,23 +149,27 @@ export default function GoogleMapView({
   onSelectRoute,
   mode = "OPTIMIZER",
   analysisData,
-  depotLat = 21.0625,
-  depotLng = 79.0526,
+  depotLat = MIHAN.lat,
+  depotLng = MIHAN.lng,
   depotName = "Depot",
   apiKey,
   routeViewModes,
   selectedEmployeeId,
-  onSelectEmployee,
+  pickupPointMarkers,
+  showZoneOverlay = false,
 }: GoogleMapViewProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const lastFitKeyRef = useRef<string>("");
-
-  const [mapReady, setMapReady] = useState(false);
+  const containerRef    = useRef<HTMLDivElement>(null);
+  const mapRef          = useRef<google.maps.Map | null>(null);
+  const lastFitKeyRef   = useRef<string>("");
+  // mapReady triggers the markers effect to re-run after the map is initialized
+  const [mapReady, setMapReady]         = useState(false);
   const [variationsData, setVariationsData] = useState<any[]>([]);
 
+  // ── helpers ────────────────────────────────────────────────────────────────
+
   const isWithinBounds = (lat: number, lng: number) =>
-    lat >= depotLat - 1.0 && lat <= depotLat + 1.0 && lng >= depotLng - 1.0 && lng <= depotLng + 1.0;
+    lat >= depotLat - 1.0 && lat <= depotLat + 1.0 &&
+    lng >= depotLng - 1.0 && lng <= depotLng + 1.0;
 
   const isDepotLatLng = (lat: number, lng: number) =>
     Math.abs(lat - depotLat) < 0.00001 && Math.abs(lng - depotLng) < 0.00001;
@@ -169,7 +188,7 @@ export default function GoogleMapView({
   };
 
   const hasPreciseDriverStart = (route: Route) => {
-    const cab = route.cab;
+    const cab     = route.cab;
     const address = cab?.driverAddress?.trim() ?? "";
     if ((route.tripSequence || 1) > 1 || !address) return false;
     if (typeof cab?.driverX !== "number" || typeof cab?.driverY !== "number") return false;
@@ -194,31 +213,40 @@ export default function GoogleMapView({
     return isPickup ? sorted : [...sorted].reverse();
   };
 
+  // ── effect: fetch route variations ────────────────────────────────────────
+
   useEffect(() => {
-    if (mode !== "OPTIMIZER" || !selectedRouteId) {
-      setVariationsData([]);
-      return;
-    }
+    let cancelled = false;
+
     const fetchVariations = async () => {
+      // All bail-outs go inside the async fn so setState is never synchronous
+      if (
+        mode !== "OPTIMIZER" ||
+        !selectedRouteId ||
+        selectedRouteId.startsWith("preview-") ||
+        selectedRouteId.startsWith("manual-") ||
+        !routes.find((r) => r.id === selectedRouteId)
+      ) {
+        if (!cancelled) setVariationsData([]);
+        return;
+      }
+
       try {
-        const route = routes.find((r) => r.id === selectedRouteId);
-        if (!route || selectedRouteId.startsWith("preview-")) {
-          setVariationsData([]);
-          return;
-        }
         const res = await fetch(`/api/routes/${selectedRouteId}/variations`);
-        if (!res.ok) {
-          setVariationsData([]);
-          return;
-        }
+        if (cancelled) return;
+        if (!res.ok) { setVariationsData([]); return; }
         const vars = await res.json();
-        setVariationsData(vars);
-      } catch (err) {
-        setVariationsData([]);
+        if (!cancelled) setVariationsData(vars);
+      } catch {
+        if (!cancelled) setVariationsData([]);
       }
     };
+
     fetchVariations();
+    return () => { cancelled = true; };
   }, [selectedRouteId, routes, mode]);
+
+  // ── effect: initialise Google Map ──────────────────────────────────────────
 
   useEffect(() => {
     if (!containerRef.current || !apiKey) return;
@@ -226,7 +254,10 @@ export default function GoogleMapView({
 
     let active = true;
     const init = async () => {
-      setOptions({ key: apiKey, v: "weekly" });
+      if (!loaderConfigured) {
+        setOptions({ key: apiKey, v: "weekly" });
+        loaderConfigured = true;
+      }
       const [{ Map }, { ControlPosition }] = await Promise.all([
         importLibrary("maps"),
         importLibrary("core"),
@@ -234,34 +265,36 @@ export default function GoogleMapView({
       if (!active || !containerRef.current) return;
 
       const map = new Map(containerRef.current, {
-        center: { lat: depotLat, lng: depotLng },
-        zoom: 13,
-        minZoom: 9,
-        maxZoom: 18,
+        center:   { lat: depotLat, lng: depotLng },
+        zoom:     13,
+        minZoom:  9,
+        maxZoom:  18,
         restriction: {
           latLngBounds: {
             north: depotLat + 1.0,
             south: depotLat - 1.0,
-            east: depotLng + 1.0,
-            west: depotLng - 1.0,
+            east:  depotLng + 1.0,
+            west:  depotLng - 1.0,
           },
           strictBounds: true,
         },
-        zoomControl: true,
+        zoomControl:      true,
         zoomControlOptions: { position: ControlPosition.BOTTOM_RIGHT },
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-        styles: MAP_STYLES,
-        backgroundColor: "#f0f0f0",
+        mapTypeControl:     false,
+        streetViewControl:  false,
+        fullscreenControl:  false,
+        styles:             MAP_STYLES,
+        backgroundColor:    "#f0f0f0",
       });
 
       mapRef.current = map;
-      setMapReady(true);
+      setMapReady(true); // signal markers effect to run now that map exists
     };
     init();
     return () => { active = false; };
   }, [apiKey, depotLat, depotLng]);
+
+  // ── effect: draw markers, polylines, zones ─────────────────────────────────
 
   useEffect(() => {
     const map = mapRef.current;
@@ -270,56 +303,111 @@ export default function GoogleMapView({
     const google = window.google;
     if (!google) return;
 
-    const overlays: (google.maps.Marker | null)[] = [];
+    const overlays: (google.maps.Marker | google.maps.Rectangle)[] = [];
+    const polylines: google.maps.Polyline[] = [];
     const infoWindows: google.maps.InfoWindow[] = [];
 
     const fitCoords: google.maps.LatLngLiteral[] = [{ lat: depotLat, lng: depotLng }];
 
+    // Zone overlay rectangles
+    if (showZoneOverlay) {
+      const ZONES = ["N", "S", "E", "W"];
+      ZONES.forEach((zone) => {
+        const bounds = getZoneBounds(zone);
+        const rect   = new google.maps.Rectangle({
+          map,
+          bounds: new google.maps.LatLngBounds(
+            { lat: bounds.south, lng: bounds.west },
+            { lat: bounds.north, lng: bounds.east },
+          ),
+          fillColor:   ZONE_COLORS[zone],
+          fillOpacity: 0.08,
+          strokeColor: ZONE_COLORS[zone],
+          strokeOpacity: 0.4,
+          strokeWeight:  1.5,
+          clickable:     false,
+        });
+        overlays.push(rect);
+
+        const centerLat  = (bounds.north + bounds.south) / 2;
+        const centerLng  = (bounds.east  + bounds.west)  / 2;
+        const labelMarker = new google.maps.Marker({
+          map,
+          position: { lat: centerLat, lng: centerLng },
+          icon:  { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
+          label: { text: zone, color: ZONE_COLORS[zone], fontSize: "20px", fontWeight: "bold" },
+          clickable: false,
+        });
+        overlays.push(labelMarker);
+      });
+    }
+
+    // Depot marker
     const depotMarker = new google.maps.Marker({
       position: { lat: depotLat, lng: depotLng },
       map,
-      icon: {
-        url: depotSvg(44),
-        anchor: new google.maps.Point(22, 22),
-      },
-      title: `${depotName} (Hub)`,
+      icon:   { url: depotSvg(44), anchor: new google.maps.Point(22, 22) },
+      title:  `${depotName} (Hub)`,
       zIndex: 1000,
     });
     overlays.push(depotMarker);
-
     const depotInfo = new google.maps.InfoWindow({
       content: `<div style="padding:6px 10px;border-left:4px solid #ff4f00;"><strong style="font-size:14px;">${depotName}</strong><div style="font-size:12px;color:#666;">Central Hub</div></div>`,
     });
     infoWindows.push(depotInfo);
-    depotMarker.addListener("click", () => {
-      depotInfo.open({ map, anchor: depotMarker });
+    depotMarker.addListener("click", () => depotInfo.open({ map, anchor: depotMarker }));
+
+    // Pickup point markers
+    (pickupPointMarkers || []).forEach((pp) => {
+      if (!isWithinBounds(pp.lat, pp.lng)) return;
+      fitCoords.push({ lat: pp.lat, lng: pp.lng });
+      const ppMarker = new google.maps.Marker({
+        position: { lat: pp.lat, lng: pp.lng },
+        map,
+        icon: {
+          path:         google.maps.SymbolPath.CIRCLE,
+          scale:        pp.selected ? 12 : 9,
+          fillColor:    pp.selected ? "#059669" : "#7c3aed",
+          fillOpacity:  1,
+          strokeColor:  "#ffffff",
+          strokeWeight: 2,
+        },
+        title:  pp.name,
+        zIndex: 500,
+      });
+      overlays.push(ppMarker);
+      const ppInfo = new google.maps.InfoWindow({
+        content: `<div style="padding:4px 8px;font-size:12px;font-weight:bold;">${pp.name}</div>`,
+      });
+      infoWindows.push(ppInfo);
+      ppMarker.addListener("click", () => ppInfo.open({ map, anchor: ppMarker }));
     });
 
     const overviewSeenCoords: Record<string, number> = {};
-
     const shiftColorMap = buildShiftColorMap(routes);
 
+    // Overview pass: all routes (or just selected)
     routes.forEach((route, idx) => {
       if (selectedRouteId && route.id !== selectedRouteId) return;
 
-      const overviewMode = routeViewModes?.[route.id]
+      const overviewMode  = routeViewModes?.[route.id]
         ? routeViewModes[route.id] === "pickup"
         : route.isPickup;
-      const sortedStops = getDisplayOrderedStops(route, overviewMode);
+      const sortedStops   = getDisplayOrderedStops(route, overviewMode);
       if (sortedStops.length === 0) return;
 
-      // Color by shift — all routes in the same shift share the same color
-      const routeColor = shiftColorMap.get(route.shiftId) ?? SHIFT_PALETTE[idx % SHIFT_PALETTE.length];
-      const isSelectedOverviewRoute = selectedRouteId === route.id;
-      const routeStart = getRouteStartLatLng(route);
+      const routeColor            = shiftColorMap.get(route.shiftId) ?? SHIFT_PALETTE[idx % SHIFT_PALETTE.length];
+      const isSelectedOverview    = selectedRouteId === route.id;
+      const routeStart            = getRouteStartLatLng(route);
 
+      // Employee dot markers (overview — dim, no label)
       sortedStops.forEach((stop) => {
         if (isWithinBounds(stop.employee.y, stop.employee.x)) {
           fitCoords.push({ lat: stop.employee.y, lng: stop.employee.x });
         }
-        if (isSelectedOverviewRoute) return;
+        if (isSelectedOverview) return; // selected route gets its own detailed markers below
 
-        const coordKey = `${stop.employee.y.toFixed(5)}_${stop.employee.x.toFixed(5)}`;
+        const coordKey    = `${stop.employee.y.toFixed(5)}_${stop.employee.x.toFixed(5)}`;
         const overlapCount = overviewSeenCoords[coordKey] || 0;
         overviewSeenCoords[coordKey] = overlapCount + 1;
 
@@ -327,7 +415,7 @@ export default function GoogleMapView({
         let markerX = stop.employee.x;
         if (overlapCount > 0) {
           const offsetDist = 0.0002;
-          const angle = overlapCount * (Math.PI / 3);
+          const angle      = overlapCount * (Math.PI / 3);
           markerY += Math.sin(angle) * offsetDist;
           markerX += Math.cos(angle) * offsetDist;
         }
@@ -336,96 +424,146 @@ export default function GoogleMapView({
           position: { lat: markerY, lng: markerX },
           map,
           icon: {
-            url: employeeSvg(20, "", routeColor, stop.employee.gender, false, 0.4),
+            url:    employeeSvg(20, "", routeColor, stop.employee.gender, false, 0.4),
             anchor: new google.maps.Point(10, 10),
           },
           zIndex: 10,
         });
         overlays.push(empMarker);
-
-        empMarker.addListener("click", () => {
-          onSelectRoute(route.id);
-        });
+        empMarker.addListener("click", () => onSelectRoute(route.id));
       });
 
-      if (!isSelectedOverviewRoute && !isDepotLatLng(routeStart.lat, routeStart.lng) && isWithinBounds(routeStart.lat, routeStart.lng)) {
+      // Overview polyline (thin, semi-transparent)
+      if (!isSelectedOverview) {
+        const overviewPath: google.maps.LatLngLiteral[] = [routeStart];
+        sortedStops.forEach((stop) => {
+          if (isWithinBounds(stop.employee.y, stop.employee.x)) {
+            overviewPath.push({ lat: stop.employee.y, lng: stop.employee.x });
+          }
+        });
+        overviewPath.push({ lat: depotLat, lng: depotLng });
+
+        if (overviewPath.length > 1) {
+          const overviewPoly = new google.maps.Polyline({
+            path:          overviewPath,
+            map,
+            strokeColor:   routeColor,
+            strokeOpacity: 0.35,
+            strokeWeight:  1.5,
+            zIndex:        2,
+            icons: [{
+              icon: {
+                path:         google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                scale:        2,
+                strokeColor:  routeColor,
+                strokeOpacity: 0.6,
+                fillColor:    routeColor,
+                fillOpacity:  0.6,
+              },
+              offset: "60%",
+            }],
+          });
+          overviewPoly.addListener("click", () => onSelectRoute(route.id));
+          polylines.push(overviewPoly);
+        }
+      }
+
+      // Overview driver-start marker (only when driver has real home coords)
+      if (!isSelectedOverview &&
+          !isDepotLatLng(routeStart.lat, routeStart.lng) &&
+          isWithinBounds(routeStart.lat, routeStart.lng)) {
         fitCoords.push(routeStart);
         const startMarker = new google.maps.Marker({
           position: routeStart,
           map,
-          icon: {
-            url: driverStartSvg(48, routeColor),
-            anchor: new google.maps.Point(24, 24),
-          },
+          icon:   { url: driverStartSvg(48, routeColor), anchor: new google.maps.Point(24, 24) },
           zIndex: 15,
         });
         overlays.push(startMarker);
-        startMarker.addListener("click", () => {
-          onSelectRoute(route.id);
-        });
+        startMarker.addListener("click", () => onSelectRoute(route.id));
       }
     });
 
+    // ── Selected route: detailed markers + bold polyline ──────────────────────
     if (selectedRouteId) {
       const selectedRoute = routes.find((r) => r.id === selectedRouteId);
       if (selectedRoute && selectedRoute.stops.length > 0) {
-        const selectedRouteIdx = routes.findIndex((r) => r.id === selectedRouteId);
+        const selectedRouteIdx   = routes.findIndex((r) => r.id === selectedRouteId);
         const selectedRouteColor = shiftColorMap.get(selectedRoute.shiftId) ?? SHIFT_PALETTE[selectedRouteIdx % SHIFT_PALETTE.length];
-        const stopsList = [...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder);
-        const effectiveIsPickup = routeViewModes?.[selectedRoute.id]
+        const stopsList          = [...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+        const effectiveIsPickup  = routeViewModes?.[selectedRoute.id]
           ? routeViewModes[selectedRoute.id] === "pickup"
           : true;
-        let orderedStops = effectiveIsPickup ? stopsList : [...stopsList].reverse();
-        
-        const routeStart = getRouteStartLatLng(selectedRoute);
+        const orderedStops       = effectiveIsPickup ? stopsList : [...stopsList].reverse();
+
+        const routeStart  = getRouteStartLatLng(selectedRoute);
         const seenCoords: Record<string, number> = {};
 
-        if (!isDepotLatLng(routeStart.lat, routeStart.lng) && isWithinBounds(routeStart.lat, routeStart.lng)) {
-          fitCoords.push(routeStart);
-          const startMarker = new google.maps.Marker({
-            position: routeStart,
-            map,
-            icon: {
-              url: driverStartSvg(48, selectedRouteColor),
-              anchor: new google.maps.Point(24, 24),
-            },
-            zIndex: 35,
-          });
-          overlays.push(startMarker);
+        // Driver start marker — always shown (offset near depot when no home coords)
+        const hasPrecise  = hasPreciseDriverStart(selectedRoute);
+        const driverPos   = hasPrecise
+          ? routeStart
+          : { lat: depotLat + 0.0006, lng: depotLng - 0.0006 };
 
-          const startInfo = new google.maps.InfoWindow({
-            content: `<strong style="font-size:14px;">${selectedRoute.cab.driverName || "Driver"}</strong><br/><span style="font-size:12px;color:#666;">${selectedRoute.cab.formattedAddress || selectedRoute.cab.driverAddress || "Starting Point"}</span>`,
-          });
-          infoWindows.push(startInfo);
-          startMarker.addListener("click", () => {
-            startInfo.open({ map, anchor: startMarker });
-          });
-        }
+        fitCoords.push(driverPos);
+        const startMarker = new google.maps.Marker({
+          position: driverPos,
+          map,
+          icon:   { url: driverStartSvg(48, selectedRouteColor), anchor: new google.maps.Point(24, 24) },
+          zIndex: 35,
+          title:  selectedRoute.cab.driverName || "Driver",
+        });
+        overlays.push(startMarker);
 
+        const startAddress = hasPrecise
+          ? (selectedRoute.cab.formattedAddress || selectedRoute.cab.driverAddress || "Driver Location")
+          : "Depot (Starting Point)";
+        const startInfo = new google.maps.InfoWindow({
+          content: [
+            `<div style="padding:6px 10px;border-left:4px solid ${selectedRouteColor};min-width:160px;">`,
+            `<div style="font-size:13px;font-weight:700;color:#1c1b1f;">${selectedRoute.cab.driverName || "Driver"}</div>`,
+            `<div style="font-size:11px;color:#6b6b6b;margin-top:2px;">${selectedRoute.cab.vehicleNumber || ""}</div>`,
+            selectedRoute.cab.driverPhone
+              ? `<div style="font-size:11px;color:#4a4a4a;margin-top:4px;">📞 ${selectedRoute.cab.driverPhone}</div>`
+              : "",
+            `<div style="font-size:11px;color:#6b6b6b;margin-top:4px;">📍 ${startAddress}</div>`,
+            `</div>`,
+          ].join(""),
+        });
+        infoWindows.push(startInfo);
+        startMarker.addListener("click", () => {
+          infoWindows.forEach((iw) => iw.close());
+          startInfo.open({ map, anchor: startMarker });
+        });
+        // Auto-open driver card when route is selected
+        startInfo.open({ map, anchor: startMarker });
+
+        // Stop markers with numbered labels
         orderedStops.forEach((stop, displayIdx) => {
           const isViolation = selectedRoute.violations.some(
             (v) =>
               !v.resolved &&
               ((v.type === "FEMALE_FIRST_PICKUP" && stop.stopOrder === 1) ||
-                (v.type === "FEMALE_LAST_DROP" && stop.stopOrder === selectedRoute.stops.length))
+               (v.type === "FEMALE_LAST_DROP"    && stop.stopOrder === selectedRoute.stops.length)),
           );
 
           if (isWithinBounds(stop.employee.y, stop.employee.x)) {
             fitCoords.push({ lat: stop.employee.y, lng: stop.employee.x });
           }
 
-          const empAddress = stop.employee.formattedAddress || stop.employee.address;
-          const parts = empAddress.split(" | ");
+          const empAddress = stop.employee.formattedAddress || stop.employee.address || "";
+          const parts      = empAddress.split(" | ");
           const pickupLabel = parts[0];
-          const homeLabel = parts[1] || parts[0];
-          const phoneParts = stop.employee.phone.split("/");
-          const primaryPhone = phoneParts[0].trim();
+          const homeLabel   = parts[1] || parts[0];
+          const phone       = stop.employee.phone || "N/A";
+          const phoneParts  = phone.split("/");
+          const primaryPhone   = phoneParts[0].trim();
           const secondaryPhone = phoneParts[1] ? phoneParts[1].trim() : null;
-          const phoneDisplay = secondaryPhone
+          const phoneDisplay   = secondaryPhone
             ? `<span title="Alt: ${secondaryPhone}">${primaryPhone} ℹ</span>`
             : primaryPhone;
 
-          const coordKey = `${stop.employee.y.toFixed(5)}_${stop.employee.x.toFixed(5)}`;
+          const coordKey     = `${stop.employee.y.toFixed(5)}_${stop.employee.x.toFixed(5)}`;
           const overlapCount = seenCoords[coordKey] || 0;
           seenCoords[coordKey] = overlapCount + 1;
 
@@ -433,7 +571,7 @@ export default function GoogleMapView({
           let markerX = stop.employee.x;
           if (overlapCount > 0) {
             const offsetDist = 0.0002;
-            const angle = overlapCount * (Math.PI / 3);
+            const angle      = overlapCount * (Math.PI / 3);
             markerY += Math.sin(angle) * offsetDist;
             markerX += Math.cos(angle) * offsetDist;
           }
@@ -444,7 +582,16 @@ export default function GoogleMapView({
             position: { lat: markerY, lng: markerX },
             map,
             icon: {
-              url: employeeSvg(isHighlighted ? 32 : 26, String(displayIdx + 1), selectedRouteColor, stop.employee.gender, true, 1, isHighlighted),
+              url:    employeeSvg(
+                isHighlighted ? 32 : 26,
+                String(displayIdx + 1),
+                selectedRouteColor,
+                stop.employee.gender,
+                true,
+                1,
+                isHighlighted,
+                isViolation,
+              ),
               anchor: new google.maps.Point(isHighlighted ? 16 : 13, isHighlighted ? 16 : 13),
             },
             zIndex: isHighlighted ? 40 : 30,
@@ -452,27 +599,64 @@ export default function GoogleMapView({
           overlays.push(empMarker);
 
           const empInfo = new google.maps.InfoWindow({
-            content: `<div style="padding:6px 10px;border-left:4px solid ${selectedRouteColor};"><span style="display:inline-block;background:${selectedRouteColor};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-right:6px;">r${selectedRouteIdx + 1}</span><strong style="font-size:14px;">${stop.employee.name}</strong><div style="margin:4px 0;font-size:11px;color:#666;">Stop #${displayIdx + 1} (${stop.etaMinutes} min)</div><div style="font-size:12px;">Pickup: ${pickupLabel}<br/>Home: ${homeLabel}<br/>Phone: ${phoneDisplay}</div></div>`,
+            content: [
+              `<div style="padding:6px 10px;border-left:4px solid ${isViolation ? "#f59e0b" : selectedRouteColor};">`,
+              `<span style="display:inline-block;background:${selectedRouteColor};color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-right:6px;">r${selectedRouteIdx + 1}</span>`,
+              `<strong style="font-size:14px;">${stop.employee.name}</strong>`,
+              isViolation ? `<span style="font-size:10px;color:#d97706;margin-left:6px;">⚠ Safety violation</span>` : "",
+              `<div style="margin:4px 0;font-size:11px;color:#666;">Stop #${displayIdx + 1} (${stop.etaMinutes} min)</div>`,
+              `<div style="font-size:12px;">Pickup: ${pickupLabel}<br/>Home: ${homeLabel}<br/>Phone: ${phoneDisplay}</div>`,
+              `</div>`,
+            ].join(""),
           });
           infoWindows.push(empInfo);
           empMarker.addListener("click", () => {
             infoWindows.forEach((iw) => iw.close());
             empInfo.open({ map, anchor: empMarker });
           });
-
-          if (isHighlighted) {
-            empInfo.open({ map, anchor: empMarker });
-          }
+          if (isHighlighted) empInfo.open({ map, anchor: empMarker });
         });
 
-        /* Polylines removed — the platform is a transport allocation system,
-           not a navigation system. Drivers know the roads. */
+        // Bold polyline for selected route
+        const polyPath: google.maps.LatLngLiteral[] = [routeStart];
+        orderedStops.forEach((stop) => {
+          if (isWithinBounds(stop.employee.y, stop.employee.x)) {
+            polyPath.push({ lat: stop.employee.y, lng: stop.employee.x });
+          }
+        });
+        polyPath.push({ lat: depotLat, lng: depotLng });
+
+        if (polyPath.length > 1) {
+          const poly = new google.maps.Polyline({
+            path:          polyPath,
+            map,
+            strokeColor:   selectedRouteColor,
+            strokeOpacity: 0.85,
+            strokeWeight:  3,
+            zIndex:        5,
+            icons: [{
+              icon: {
+                path:         google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                scale:        3,
+                strokeColor:  selectedRouteColor,
+                strokeWeight: 1.5,
+                fillColor:    selectedRouteColor,
+                fillOpacity:  1,
+              },
+              offset: "50%",
+              repeat: "120px",
+            }],
+          });
+          poly.addListener("click", () => onSelectRoute(selectedRouteId ? null : selectedRoute.id));
+          polylines.push(poly);
+        }
       }
     }
 
+    // Fit bounds to visible markers
     const fitKey = selectedRouteId
       ? `selected:${selectedRouteId}`
-      : `all:${routes.map((route) => `${route.id}:${route.stops.length}`).join("|")}`;
+      : `all:${routes.map((r) => `${r.id}:${r.stops.length}`).join("|")}`;
 
     if (lastFitKeyRef.current !== fitKey) {
       lastFitKeyRef.current = fitKey;
@@ -487,10 +671,25 @@ export default function GoogleMapView({
     }
 
     return () => {
-      overlays.forEach((o) => o?.setMap?.(null));
+      overlays.forEach((o) => o.setMap(null));
+      polylines.forEach((p) => p.setMap(null));
       infoWindows.forEach((iw) => iw.close());
     };
-  }, [routes, selectedRouteId, mode, routeViewModes, selectedEmployeeId]);
+  }, [
+    mapReady,
+    routes,
+    selectedRouteId,
+    mode,
+    routeViewModes,
+    selectedEmployeeId,
+    pickupPointMarkers,
+    depotLat,
+    depotLng,
+    depotName,
+    showZoneOverlay,
+  ]);
+
+  // ── render ─────────────────────────────────────────────────────────────────
 
   const shiftLegend = buildShiftColorMap(routes);
 
@@ -498,13 +697,15 @@ export default function GoogleMapView({
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full z-0 bg-[#f7f7f7]" />
 
-      {/* Shift color legend — top-left */}
+      {/* Shift color legend */}
       {shiftLegend.size > 1 && (
         <div className="absolute top-3 left-3 z-[1000] p-2.5 bg-white/95 backdrop-blur-xs border border-[#e8e8e8] shadow-none flex flex-col gap-1.5 text-[10px] animate-fadeIn">
-          <div className="font-bold text-[#1c1b1f] uppercase tracking-wider text-[9px] border-b border-slate-100 pb-1 mb-0.5">Shifts</div>
+          <div className="font-bold text-[#1c1b1f] uppercase tracking-wider text-[9px] border-b border-slate-100 pb-1 mb-0.5">
+            Shifts
+          </div>
           {Array.from(shiftLegend.entries()).map(([shiftId, color]) => {
-            const shiftRoute = routes.find(r => r.shiftId === shiftId);
-            const shiftName = shiftRoute?.shift?.startTime || shiftId;
+            const shiftRoute = routes.find((r) => r.shiftId === shiftId);
+            const shiftName  = shiftRoute?.shift?.startTime || shiftId;
             return (
               <div key={shiftId} className="flex items-center gap-1.5 font-semibold text-[#4a4a4a]">
                 <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
@@ -515,6 +716,7 @@ export default function GoogleMapView({
         </div>
       )}
 
+      {/* Route info panel (top-right) */}
       {selectedRouteId && (
         mode === "ANALYTICS" ? (
           <div className="absolute top-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-xs border border-[#e8e8e8] rounded-none shadow-none flex flex-col gap-2.5 text-xs text-left animate-fadeIn">
@@ -523,22 +725,26 @@ export default function GoogleMapView({
             </div>
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 font-semibold">
-                <span className="w-4 h-1.5 rounded-none bg-[#1c1b1f]"></span>
+                <span className="w-4 h-1.5 rounded-none bg-[#1c1b1f]" />
                 <span className="text-[#4a4a4a] w-24">Optimized Route</span>
                 <span className="text-[#6b6b6b] font-mono text-[10px] ml-auto font-bold text-[#1c1b1f]">
                   {(() => {
-                    const breakdown = analysisData?.routeBreakdowns?.find((rb: { routeId: string; optimizedKm: number; unoptimizedKm: number }) => rb.routeId === selectedRouteId);
-                    return breakdown ? `${breakdown.optimizedKm} km` : "";
+                    const bd = analysisData?.routeBreakdowns?.find(
+                      (rb: { routeId: string; optimizedKm: number }) => rb.routeId === selectedRouteId,
+                    );
+                    return bd ? `${bd.optimizedKm} km` : "";
                   })()}
                 </span>
               </div>
               <div className="flex items-center gap-2 font-semibold">
-                <span className="w-4 h-1.5 rounded-none bg-slate-400"></span>
+                <span className="w-4 h-1.5 rounded-none bg-slate-400" />
                 <span className="text-[#4a4a4a] w-24">Normal (Naive)</span>
                 <span className="text-[#6b6b6b] font-mono text-[10px] ml-auto font-bold text-[#6b6b6b]">
                   {(() => {
-                    const breakdown = analysisData?.routeBreakdowns?.find((rb: { routeId: string; optimizedKm: number; unoptimizedKm: number }) => rb.routeId === selectedRouteId);
-                    return breakdown ? `${breakdown.unoptimizedKm} km` : "";
+                    const bd = analysisData?.routeBreakdowns?.find(
+                      (rb: { routeId: string; unoptimizedKm: number }) => rb.routeId === selectedRouteId,
+                    );
+                    return bd ? `${bd.unoptimizedKm} km` : "";
                   })()}
                 </span>
               </div>
@@ -555,7 +761,7 @@ export default function GoogleMapView({
                   const color = STRATEGY_COLORS[v.strategy as keyof typeof STRATEGY_COLORS];
                   return (
                     <div key={v.strategy} className="flex items-center gap-2 font-semibold">
-                      <span className="w-4 h-1.5 rounded-none" style={{ backgroundColor: color }}></span>
+                      <span className="w-4 h-1.5 rounded-none" style={{ backgroundColor: color }} />
                       <span className="text-[#4a4a4a] capitalize w-16">{v.strategy.toLowerCase()}</span>
                       <span className="text-[#6b6b6b] font-mono text-[10px] ml-auto">
                         {v.totalDistance} km · {v.totalDuration}m

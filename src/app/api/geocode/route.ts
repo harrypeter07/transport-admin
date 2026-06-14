@@ -23,34 +23,49 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Google Maps API key not configured" }, { status: 500 });
     }
 
-    const res = await fetch(
-      `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&key=${apiKey}&region=in&components=country:IN`,
-      { headers: { "Accept-Language": "en" } }
-    );
+    const address = q.toLowerCase().includes("nagpur") ? q : `${q}, Nagpur, India`;
+    const params = new URLSearchParams({
+      address,
+      region: "in",
+      components: "country:IN",
+      key: apiKey,
+    });
+
+    console.log("[MAPS API] Geocoding API called", { timestamp: new Date().toISOString(), query: q });
+
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`, {
+      headers: { "Accept-Language": "en" },
+    });
 
     if (!res.ok) {
-      return NextResponse.json({ error: "Google Places API request failed" }, { status: res.status });
+      return NextResponse.json({ error: "Geocoding API request failed" }, { status: res.status });
     }
 
     const data = await res.json();
 
     if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-      return NextResponse.json({ error: `Google Places API error: ${data.status}` }, { status: 500 });
+      return NextResponse.json({ error: `Geocoding API error: ${data.status}` }, { status: 500 });
     }
 
-    const results = (data.results || []).slice(0, 5).map((place: any) => {
+    const results = (data.results || []).slice(0, 5).map((place: {
+      place_id?: string;
+      formatted_address?: string;
+      geometry?: { location?: { lat?: number; lng?: number }; location_type?: string };
+      address_components?: { types: string[]; long_name: string; short_name: string }[];
+    }) => {
       const components = place.address_components || [];
       return {
-        place_id: place.place_id,
-        display_name: place.formatted_address || place.name || "",
+        place_id: place.place_id || "",
+        display_name: place.formatted_address || q,
         lat: String(place.geometry?.location?.lat ?? ""),
         lon: String(place.geometry?.location?.lng ?? ""),
         location_type: place.geometry?.location_type || "",
         address: {
-          city: extractAddressComponent(components, "locality") ||
-                extractAddressComponent(components, "sublocality") ||
-                extractAddressComponent(components, "administrative_area_level_3") ||
-                extractAddressComponent(components, "administrative_area_level_2"),
+          city:
+            extractAddressComponent(components, "locality") ||
+            extractAddressComponent(components, "sublocality") ||
+            extractAddressComponent(components, "administrative_area_level_3") ||
+            extractAddressComponent(components, "administrative_area_level_2"),
           town: extractAddressComponent(components, "locality"),
           village: extractAddressComponent(components, "sublocality"),
           state: extractAddressComponent(components, "administrative_area_level_1"),
@@ -63,8 +78,9 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json(results);
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
     console.error("[api] ❌ GET /geocode", { ip }, e);
-    return NextResponse.json({ error: "Internal Server Error", details: e.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error", details: message }, { status: 500 });
   }
 }

@@ -18,6 +18,9 @@ import { useRouter } from "next/navigation";
 import RouteVisualizer from "@/components/RouteVisualizer";
 import CompareModal from "@/components/CompareModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import AssignPickupPointModal from "@/components/AssignPickupPointModal";
+import ManifestRouteDnD from "@/components/ManifestRouteDnD";
+import { ZONE_COLORS } from "@/lib/zones";
 
 import {
  Compass,
@@ -70,9 +73,11 @@ export default function TransitAdminSPA() {
  applyOptimizationPlan,
  clearOptimizationPreview,
  optimizationPlans,
+ isolatedEmployeeIds,
  previewing,
  updateStopStatus,
  reorderRouteStops,
+ moveStopBetweenRoutes,
  overrideViolation,
  addEmployee,
  updateEmployee,
@@ -87,6 +92,7 @@ export default function TransitAdminSPA() {
    setManualRoutes,
    excelMetrics,
    setExcelMetrics,
+   setAbsentEmployeeCodes,
   } = useTransportStore();
 
  const router = useRouter();
@@ -96,6 +102,10 @@ export default function TransitAdminSPA() {
   const [publishingManual, setPublishingManual] = useState(false);
   const [publishManualSuccess, setPublishManualSuccess] = useState(false);
   const [excelError, setExcelError] = useState<string | null>(null);
+  const [pendingExcelFile, setPendingExcelFile] = useState<File | null>(null);
+  const [excelSheetOptions, setExcelSheetOptions] = useState<{ name: string; inferredDate: string | null; routePreviewCount: number }[]>([]);
+  const [selectedExcelSheet, setSelectedExcelSheet] = useState("");
+  const [excelUploadDate, setExcelUploadDate] = useState(selectedDate);
  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [addressChanged, setAddressChanged] = useState(false);
   const [applySuccess, setApplySuccess] = useState(false);
@@ -238,6 +248,15 @@ export default function TransitAdminSPA() {
  // Shift UI filters and states
  const [compareShiftFilter, setCompareShiftFilter] = useState<string>("ALL");
  const [mapShiftFilter, setMapShiftFilter] = useState<string>("ALL");
+ const [showZones, setShowZones] = useState(false);
+ const [assigningEmployee, setAssigningEmployee] = useState<{
+   id: string;
+   name: string;
+   address: string;
+   x: number;
+   y: number;
+   shiftId?: string | null;
+ } | null>(null);
  const [expandedShifts, setExpandedShifts] = useState<Record<string, boolean>>({});
 
  // Local variations caching for Google Maps preview
@@ -265,6 +284,15 @@ export default function TransitAdminSPA() {
  const [dispatchResult, setDispatchResult] = useState<any>(null);
  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
  const [temporaryReplacements, setTemporaryReplacements] = useState<Record<string, string>>({});
+ const [preflightWarnings, setPreflightWarnings] = useState<any[]>([]);
+
+ useEffect(() => {
+   if (!activeShiftId || !selectedDate) return;
+   fetch(`/api/optimization/health?shiftId=${activeShiftId}&date=${selectedDate}`)
+     .then((r) => r.json())
+     .then((data) => setPreflightWarnings(data.preflightWarnings || []))
+     .catch(() => setPreflightWarnings([]));
+ }, [activeShiftId, selectedDate]);
  const [dispatchReplacementCabId, setDispatchReplacementCabId] = useState<string>("");
 
  // Sidebar attendance checklist toggle
@@ -880,20 +908,33 @@ export default function TransitAdminSPA() {
  <div className="h-4 w-px bg-slate-200"></div>
 
   {optimizationPlans ? (
-  <div className="flex items-center gap-1.5 px-2 py-1 bg-white border border-[#e8e8e8] rounded-none shadow-2xs">
-  <span className="text-xs font-bold text-[#6b6b6b]">Preview:</span>
-  <select
-  value={previewedStrategy || "BALANCED"}
-   onChange={(e) => {
-   setPreviewedStrategy(e.target.value as any);
-   try { sessionStorage.setItem("opencode-opt-strategy", e.target.value); } catch {}
-   }}
-  className="bg-transparent border-none text-xs font-bold text-[#1c1b1f] outline-none cursor-pointer focus:ring-0"
-  >
-  <option value="MAXIMIZE_UTILIZATION">Maximize Utilization</option>
-  <option value="MINIMIZE_TIME">Minimize Commute</option>
-  <option value="BALANCED">Balanced</option>
-  </select>
+  <div className="flex items-center gap-1.5 flex-wrap">
+    {/* Re-Optimize: always available even when plans exist */}
+    <button
+    onClick={handleGeneratePlans}
+    disabled={optimizing || previewing || loading}
+    className="flex items-center gap-1.5 bg-slate-700 text-white px-3 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
+    title="Run a fresh optimization — replaces the current preview"
+    >
+    <RotateCw className={`w-3.5 h-3.5 ${optimizing || previewing ? "animate-spin-fast" : ""}`} />
+    {optimizing || previewing ? "Solving..." : "Re-Optimize"}
+    </button>
+    <div className="h-4 w-px bg-slate-200" />
+    <div className="flex items-center gap-1.5 px-2 py-1 bg-white border border-[#e8e8e8] rounded-none shadow-2xs">
+    <span className="text-xs font-bold text-[#6b6b6b]">Preview:</span>
+    <select
+    value={previewedStrategy || "BALANCED"}
+     onChange={(e) => {
+     setPreviewedStrategy(e.target.value as any);
+     try { sessionStorage.setItem("opencode-opt-strategy", e.target.value); } catch {}
+     }}
+    className="bg-transparent border-none text-xs font-bold text-[#1c1b1f] outline-none cursor-pointer focus:ring-0"
+    >
+    <option value="MAXIMIZE_UTILIZATION">Maximize Utilization</option>
+    <option value="MINIMIZE_TIME">Minimize Commute</option>
+    <option value="BALANCED">Balanced</option>
+    </select>
+    </div>
   </div>
   ) : (
   <div className="flex items-center gap-2">
@@ -914,6 +955,7 @@ export default function TransitAdminSPA() {
    )}
   </div>
   )}
+
 
   {optimizationPlans && (
   <div className="flex flex-wrap items-center gap-2">
@@ -1098,6 +1140,23 @@ export default function TransitAdminSPA() {
  </div>
  )}
 
+ {!optimizationPlans && preflightWarnings.length > 0 && (
+ <div className="p-4 bg-amber-50 border border-amber-200 rounded-none animate-fadeIn">
+ <div className="text-[10px] font-black uppercase tracking-wider text-amber-800 mb-2 flex items-center gap-1.5">
+   <AlertTriangle className="w-3.5 h-3.5" /> Preflight warnings — review before optimizing
+ </div>
+ <ul className="space-y-1.5 text-[11px] text-amber-900">
+   {preflightWarnings.map((w, i) => (
+     <li key={i} className="font-mono">
+       {w.type === "DRIVERLESS_ZONE" && `${w.zone}: ${w.employeeCount} employees, nearest driver ${w.nearestDriverKm} km away`}
+       {w.type === "OVERLOADED_ZONE" && `${w.zone}: ${w.employeeCount} employees vs ${w.availableSeats} available seats`}
+       {w.type === "DRIVER_OVERLAP" && `${w.zone}: drivers ${w.driverIds?.join(", ")} within ${w.distanceKm} km — ${w.suggestion}`}
+     </li>
+   ))}
+ </ul>
+ </div>
+ )}
+
  {/* ── Active Preview Stats Banner ─────────────────────────── */}
  {optimizationPlans && previewedStrategy && (
  <div className="bg-white border border-[#e8e8e8] rounded-none p-4 shadow-none flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fadeIn">
@@ -1137,6 +1196,107 @@ export default function TransitAdminSPA() {
    </div>
    </div>
   )}
+
+ {optimizationPlans?.zoneSummary && previewedStrategy && (
+ <div className="bg-white border border-[#e8e8e8] rounded-none p-3 shadow-none animate-fadeIn">
+ <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">Zone distribution</div>
+ <div className="flex flex-wrap gap-2">
+   {(["N", "S", "E", "W"] as const).map((primaryZone) => {
+     // Sub-zones that belong to this primary zone
+     const subZoneKeys: Record<string, string[]> = {
+       N: ["NE", "NW"], S: ["SE", "SW"], E: ["NE", "SE"], W: ["NW", "SW"],
+     };
+     const subs = subZoneKeys[primaryZone];
+     // Aggregate employees + cabs from all sub-zone keys for this primary
+     const allKeys = [primaryZone, ...subs];
+     let totalEmp = 0, totalCabs = 0;
+     const subBreakdown: { key: string; emp: number }[] = [];
+     allKeys.forEach((k) => {
+       const d = optimizationPlans.zoneSummary?.[k];
+       if (d) { totalEmp += d.employees; totalCabs += d.cabs; }
+     });
+     subs.forEach((k) => {
+       const d = optimizationPlans.zoneSummary?.[k];
+       if (d?.employees) subBreakdown.push({ key: k, emp: d.employees });
+     });
+     if (totalEmp === 0) return null;
+     return (
+       <span
+         key={primaryZone}
+         className="inline-flex flex-col px-2 py-1 text-[10px] font-bold border border-[#e8e8e8] bg-[#f7f7f7]"
+         style={{ borderLeftColor: ZONE_COLORS[primaryZone], borderLeftWidth: 3 }}
+       >
+         <span className="flex items-center gap-1.5">
+           <span style={{ color: ZONE_COLORS[primaryZone] }}>{primaryZone}</span>
+           <span className="text-[#6b6b6b] font-normal">
+             {totalEmp} emp · {totalCabs} cab{totalCabs !== 1 ? "s" : ""}
+           </span>
+         </span>
+         {subBreakdown.length > 0 && (
+           <span className="text-[8px] text-[#9a9a9a] font-normal mt-0.5">
+             {subBreakdown.map(s => `${s.key}: ${s.emp}`).join("  ")}
+           </span>
+         )}
+       </span>
+     );
+   })}
+ </div>
+ </div>
+ )}
+
+
+ {optimizationPlans?.isolatedEmployees && optimizationPlans.isolatedEmployees.length > 0 && (
+ <div className="bg-amber-50 border border-amber-200 rounded-none p-4 animate-fadeIn">
+ <div className="text-[10px] font-black uppercase tracking-wider text-amber-800 mb-3">Isolated employees — corridor check</div>
+ <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+   {optimizationPlans.isolatedEmployees.map((iso) => {
+     const emp = employees.find((e) => e.id === iso.employeeId);
+     return (
+     <div key={iso.employeeId} className="bg-white border border-amber-100 p-3 text-xs">
+       <div className="font-bold text-[#1c1b1f]">{iso.name}</div>
+       <div className="text-[10px] text-[#6b6b6b] mt-1 font-mono">
+         {iso.distanceFromCorridorKm} km from corridor · neighbor {iso.nearestNeighborKm >= 0 ? `${iso.nearestNeighborKm} km` : "none"}
+       </div>
+       <div className="mt-2 flex flex-wrap gap-2">
+         <div className="inline-flex px-2 py-0.5 bg-amber-100 text-amber-900 text-[9px] font-bold uppercase">
+           {iso.suggestedAction.replace(/_/g, " ")}
+         </div>
+         {iso.suggestedAction === "ASSIGN_PICKUP_POINT" && emp && (
+           <button
+             type="button"
+             onClick={() =>
+               setAssigningEmployee({
+                 id: emp.id,
+                 name: emp.name,
+                 address: emp.address,
+                 x: emp.x,
+                 y: emp.y,
+                 shiftId: emp.shiftId,
+               })
+             }
+             className="px-2 py-0.5 bg-[#1c1b1f] text-white text-[9px] font-bold uppercase"
+           >
+             Assign Pickup Point
+           </button>
+         )}
+       </div>
+     </div>
+     );
+   })}
+ </div>
+ </div>
+ )}
+
+ {optimizationPlans?.releasedCabs && optimizationPlans.releasedCabs.length > 0 && (
+ <div className="bg-emerald-50 border border-emerald-200 rounded-none p-4 animate-fadeIn">
+ <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800 mb-2">Cabs you can release today</div>
+ <ul className="space-y-1 text-[11px] text-emerald-900 font-mono">
+   {optimizationPlans.releasedCabs.map((cab) => (
+     <li key={cab.cabId}>• {cab.vehicleNumber} — {cab.reason}</li>
+   ))}
+ </ul>
+ </div>
+ )}
 
   {/* ── Strategy Comparison Table ─────────────────────────── */}
   {displayOptimizationPlans && previewedStrategy && (
@@ -1333,7 +1493,20 @@ export default function TransitAdminSPA() {
  ${showAttendanceChecklist ? "lg:col-span-5" : "lg:col-span-8"}
  `}>
  <div className="flex justify-between items-center bg-white border border-[#e8e8e8] rounded-none px-3 py-2 shadow-xs">
-    <div className="text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">Map View</div>
+    <div className="flex items-center gap-3">
+      <div className="text-xs font-bold text-[#1c1b1f] uppercase tracking-wider">Map View</div>
+      <button
+        type="button"
+        onClick={() => setShowZones((z) => !z)}
+        className={`text-[10px] font-bold uppercase px-2 py-1 border transition ${
+          showZones
+            ? "bg-[#1c1b1f] text-white border-[#1c1b1f]"
+            : "bg-[#f7f7f7] text-[#6b6b6b] border-[#e8e8e8] hover:text-[#1c1b1f]"
+        }`}
+      >
+        {showZones ? "Hide Zones" : "Show Zones"}
+      </button>
+    </div>
     <select
       value={mapShiftFilter}
       onChange={(e) => setMapShiftFilter(e.target.value)}
@@ -1352,6 +1525,7 @@ export default function TransitAdminSPA() {
   routeViewModes={routeViewModes}
   selectedEmployeeId={selectedEmployeeId}
   onSelectEmployee={setSelectedEmployeeId}
+  showZoneOverlay={showZones}
   />
  </div>
 
@@ -1724,6 +1898,8 @@ export default function TransitAdminSPA() {
  </button>
  </div>
  </div>
+
+ <ManifestRouteDnD routes={activeRoutes} onMoveStop={moveStopBetweenRoutes} />
 
  {manifestRoutes.length === 0 ? (
  <div className="p-8 text-center text-[#9a9a9a] bg-[#f7f7f7]/20 border border-dashed border-slate-250 rounded-none">
@@ -2706,6 +2882,73 @@ export default function TransitAdminSPA() {
   </div>
 
   <div className={`flex flex-col gap-6 text-left ${activeDesk === "MANUAL_ROUTING" ? "" : "hidden"}`}>
+    {/* Manual Routes Map — shown once routes are parsed */}
+    {manualRoutes && manualRoutes.length > 0 && isMounted && (() => {
+      // Normalize manualRoutes → Route[] shape that GoogleMapView expects
+      const manualRoutesMapped = (manualRoutes as any[]).map((r: any, idx: number) => ({
+        id: `manual-${r.cabId || idx}-${idx}`,
+        cabId: r.cabId || `manual_${idx}`,
+        cab: {
+          id: r.cabId || `manual_${idx}`,
+          vehicleNumber: r.vehicleNumber || `CAB-${idx + 1}`,
+          driverName: r.driverName || "Driver",
+          driverPhone: r.driverPhone || "",
+          driverAddress: r.driverAddress || "",
+          driverX: typeof r.driverX === "number" ? r.driverX : undefined,
+          driverY: typeof r.driverY === "number" ? r.driverY : undefined,
+          formattedAddress: r.driverAddress || "",
+        },
+        shiftId: r.shiftId || activeShiftId || "",
+        shift: r.shift || shifts.find((s: any) => s.id === (r.shiftId || activeShiftId)),
+        isPickup: true,
+        totalDistance: r.totalDistance || 0,
+        totalDuration: r.totalDuration || 0,
+        optimizationScore: r.optimizationScore || 0,
+        tripSequence: r.tripSequence || 1,
+        routeNumber: idx + 1,
+        status: "PLANNED" as const,
+        zone: null,
+        updatedAt: new Date(),
+        hasEscort: false,
+        stops: (r.stops || []).map((stop: any, sIdx: number) => ({
+          id: `manual-stop-${idx}-${sIdx}`,
+          routeId: `manual-${r.cabId || idx}-${idx}`,
+          employeeId: stop.employeeId || `excel_${sIdx}`,
+          stopOrder: stop.stopOrder || sIdx + 1,
+          etaMinutes: stop.etaMinutes || 0,
+          status: "PENDING" as const,
+          employee: {
+            id: stop.employeeId || `excel_${sIdx}`,
+            name: stop.employee?.name || stop.employeeName || "Unknown",
+            gender: stop.employee?.gender || stop.gender || "MALE",
+            x: stop.employee?.x ?? stop.x ?? 79.0526,
+            y: stop.employee?.y ?? stop.y ?? 21.0625,
+            address: stop.employee?.address || stop.address || "",
+            formattedAddress: stop.employee?.formattedAddress || stop.employee?.address || stop.address || "",
+            phone: stop.employee?.phone || "N/A",
+            email: "",
+            employeeCode: stop.employee?.employeeCode || "",
+            department: stop.employee?.department || "",
+          },
+        })),
+        violations: [],
+      }));
+
+      const manualSelectedId = selectedRouteId && manualRoutesMapped.some((r: any) => r.id === selectedRouteId)
+        ? selectedRouteId
+        : null;
+
+      return (
+        <div className="h-[480px] border border-[#e8e8e8] shadow-xs overflow-hidden">
+          <RouteVisualizer
+            routes={manualRoutesMapped as any}
+            selectedRouteId={manualSelectedId}
+            onSelectRoute={setSelectedRouteId}
+          />
+        </div>
+      );
+    })()}
+
     <div className="bg-white p-6 border border-[#e8e8e8] rounded-none shadow-xs mt-8">
       <h2 className="text-sm font-bold text-[#1c1b1f] uppercase tracking-wider mb-2 flex items-center gap-2">
         <FileSpreadsheet className="w-4 h-4 text-[#ff4f00]" />
@@ -2715,7 +2958,7 @@ export default function TransitAdminSPA() {
         Upload your existing Excel roster to visualize the human-planned routes on the map. This will NOT overwrite the production database or active optimizations. It is purely an in-browser sandbox for visual comparison and auditing.
       </p>
 
-      {!manualRoutes ? (
+      {!manualRoutes && !pendingExcelFile ? (
         <div className="border-2 border-dashed border-[#e8e8e8] hover:border-[#ff4f00] bg-[#f7f7f7] transition-colors p-8 flex flex-col items-center justify-center relative group">
           <input
             type="file"
@@ -2726,42 +2969,113 @@ export default function TransitAdminSPA() {
               if (!file) return;
               setUploadingExcel(true);
               setExcelError(null);
-              
               const formData = new FormData();
               formData.append("file", file);
-
               try {
-                const res = await fetch("/api/optimization/excel-routes", {
-                  method: "POST",
-                  body: formData
-                });
+                const res = await fetch("/api/optimization/excel-routes/inspect", { method: "POST", body: formData });
                 const data = await res.json();
                 if (res.ok) {
-                  const totalCabs = data.routes.length;
-                  const totalStops = data.routes.reduce((acc: number, r: any) => acc + (r.stops?.length || 0), 0);
-                  
-                  setManualRoutes(data.routes);
-                  setExcelMetrics({ totalCabs, totalStops, skipped: data.skippedRows });
-                  
-                  // Clear file input
-                  e.target.value = "";
+                  setPendingExcelFile(file);
+                  setExcelSheetOptions(data.sheets || []);
+                  const first = data.sheets?.[0];
+                  if (first) {
+                    setSelectedExcelSheet(first.name);
+                    setExcelUploadDate(first.inferredDate || selectedDate);
+                  }
                 } else {
-                  setExcelError(data.error || "Failed to parse Excel");
+                  setExcelError(data.error || "Failed to inspect workbook");
                 }
-              } catch (err) {
+              } catch {
                 setExcelError("Network error uploading file");
               } finally {
                 setUploadingExcel(false);
+                e.target.value = "";
               }
             }}
             disabled={uploadingExcel}
           />
           <Upload className={`w-8 h-8 mb-3 transition-colors ${uploadingExcel ? "text-[#ff4f00] animate-bounce" : "text-[#9a9a9a] group-hover:text-[#ff4f00]"}`} />
           <div className="text-sm font-bold text-[#1c1b1f] mb-1">
-            {uploadingExcel ? "Parsing Excel File..." : "Click or drag roster.xlsx here"}
+            {uploadingExcel ? "Reading workbook..." : "Click or drag roster.xlsx here"}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-[#9a9a9a] font-bold">
-            Supports .xlsx formats with standard columns
+            Multi-sheet workbooks supported — pick date sheet after upload
+          </div>
+        </div>
+      ) : !manualRoutes && pendingExcelFile ? (
+        <div className="border border-[#e8e8e8] p-6 bg-[#fafafa] flex flex-col gap-4">
+          <div className="text-xs font-bold text-[#1c1b1f]">Select sheet and date</div>
+          <div className="flex flex-wrap gap-3 items-center">
+            <select
+              value={selectedExcelSheet}
+              onChange={(e) => {
+                setSelectedExcelSheet(e.target.value);
+                const sheet = excelSheetOptions.find((s) => s.name === e.target.value);
+                if (sheet?.inferredDate) setExcelUploadDate(sheet.inferredDate);
+              }}
+              className="text-xs border border-[#e8e8e8] px-2 py-1.5 bg-white"
+            >
+              {excelSheetOptions.map((s) => (
+                <option key={s.name} value={s.name}>
+                  {s.name} ({s.routePreviewCount} routes)
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={excelUploadDate}
+              onChange={(e) => setExcelUploadDate(e.target.value)}
+              className="text-xs border border-[#e8e8e8] px-2 py-1.5"
+            />
+            <button
+              type="button"
+              disabled={uploadingExcel || !selectedExcelSheet}
+              onClick={async () => {
+                if (!pendingExcelFile) return;
+                setUploadingExcel(true);
+                setExcelError(null);
+                const formData = new FormData();
+                formData.append("file", pendingExcelFile);
+                formData.append("sheetName", selectedExcelSheet);
+                formData.append("date", excelUploadDate);
+                try {
+                  const res = await fetch("/api/optimization/excel-routes", { method: "POST", body: formData });
+                  const data = await res.json();
+                  if (res.ok) {
+                    const totalCabs = data.routes.length;
+                    const totalStops = data.routes.reduce((acc: number, r: any) => acc + (r.stops?.length || 0), 0);
+                    setManualRoutes(data.routes);
+                    setExcelMetrics({
+                      totalCabs,
+                      totalStops,
+                      noShowCount: data.noShowCount,
+                      unmatched: data.unmatchedEmployeeCodes?.length ?? 0,
+                    });
+                    setAbsentEmployeeCodes(data.absentEmployeeCodes || []);
+                    setPendingExcelFile(null);
+                  } else {
+                    setExcelError(data.details || data.error || "Failed to parse Excel");
+                  }
+                } catch {
+                  setExcelError("Network error uploading file");
+                } finally {
+                  setUploadingExcel(false);
+                }
+              }}
+              className="text-xs font-bold bg-[#ff4f00] text-white px-4 py-1.5 disabled:opacity-50"
+            >
+              {uploadingExcel ? "Parsing..." : "Load routes"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPendingExcelFile(null);
+                setExcelSheetOptions([]);
+              }}
+              className="text-xs text-[#6b6b6b] underline"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       ) : (
@@ -2812,14 +3126,15 @@ export default function TransitAdminSPA() {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
                     {shiftRoutes.map((route: any, i: number) => {
-                      const isActive = selectedRouteId === route.cabId;
+                      const routeId = `manual-${route.cabId || i}-${i}`;
+                      const isActive = selectedRouteId === routeId;
                       return (
                         <div
                           key={`${route.cabId}-${i}`}
                           className={`border transition-all cursor-pointer bg-white ${
                             isActive ? "border-[#1c1b1f] shadow-md scale-[1.02]" : "border-[#e8e8e8] hover:border-[#b0b0b0]"
                           }`}
-                          onClick={() => setSelectedRouteId(isActive ? null : route.cabId)}
+                          onClick={() => setSelectedRouteId(isActive ? null : routeId)}
                         >
                           <div className="p-3 bg-[#f7f7f7] border-b border-[#e8e8e8] flex justify-between items-center">
                             <div className="flex flex-col">
@@ -3407,6 +3722,18 @@ export default function TransitAdminSPA() {
         message="Are you sure you want to publish these manual routes? This will overwrite existing active routes for the selected date and shift."
         confirmText="Publish Routes"
       />
+
+      {assigningEmployee && (
+        <AssignPickupPointModal
+          employee={assigningEmployee}
+          onClose={() => setAssigningEmployee(null)}
+          onAssigned={async () => {
+            setAssigningEmployee(null);
+            await fetchInitialData();
+            await handleGeneratePlans();
+          }}
+        />
+      )}
     </div>
   );
 }

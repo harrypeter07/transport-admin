@@ -16,6 +16,8 @@ interface RouteVisualizerProps {
   routeViewModes?: Record<string, "pickup" | "drop">;
   selectedEmployeeId?: string | null;
   onSelectEmployee?: (id: string | null) => void;
+  showZoneOverlay?: boolean;
+  pickupPointMarkers?: { id: string; name: string; lat: number; lng: number; selected?: boolean }[];
 }
 
 const GoogleMapView = dynamic(() => import("./GoogleMapView"), {
@@ -39,6 +41,8 @@ export default function RouteVisualizer({
   routeViewModes,
   selectedEmployeeId,
   onSelectEmployee,
+  showZoneOverlay,
+  pickupPointMarkers,
 }: RouteVisualizerProps) {
  const [settings, setSettings] = useState<any>(null);
  const [apiKey, setApiKey] = useState<string>("");
@@ -82,6 +86,8 @@ export default function RouteVisualizer({
     routeViewModes={routeViewModes}
     selectedEmployeeId={selectedEmployeeId}
     onSelectEmployee={onSelectEmployee}
+    showZoneOverlay={showZoneOverlay}
+    pickupPointMarkers={pickupPointMarkers}
     />
   </div>
   </div>

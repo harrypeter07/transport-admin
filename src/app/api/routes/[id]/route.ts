@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { checkSafetyViolations, DEPOT, fetchGoogleRouteMetrics, fetchGoogleMapsMatrix } from "@/lib/optimization";
+import { checkSafetyViolations, DEPOT, fetchGoogleRouteMetrics, fetchGoogleMapsMatrix, getDistance } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
 import { audit } from "@/lib/audit";
 
@@ -24,6 +24,7 @@ export async function PATCH(
  const route = await prisma.route.findUnique({
  where: { id: routeId },
  include: {
+ cab: true,
  stops: {
  include: { employee: true },
  orderBy: { stopOrder: "asc" },
@@ -32,13 +33,11 @@ export async function PATCH(
  },
  });
 
- require("fs").writeFileSync("debug_route.log", `Received routeId: ${routeId}. Found: ${!!route}`);
+ if (!route) {
+ return NextResponse.json({ error: "Route not found" }, { status: 404 });
+ }
 
-	if (!route) {
-	return NextResponse.json({ error: "Route not found" }, { status: 404 });
-	}
-
-	const beforeRoute = { ...route };
+ const beforeRoute = { ...route };
 
 	if (action === "UPDATE_STATUS") {
  const { stopId, status } = body;
@@ -269,7 +268,7 @@ export async function PATCH(
 	}
 
 	if (action === "SWAP_CAB") {
- const { cabId } = body;
+ const { cabId, overrideDetourWarning } = body;
  if (!cabId) {
  return NextResponse.json({ error: "cabId is required" }, { status: 400 });
  }
@@ -288,11 +287,9 @@ export async function PATCH(
  return NextResponse.json({ error: "Cab not found" }, { status: 404 });
  }
 
- // Determine the new cab's trip sequence for today
  const existingRoutesForCab = targetCab.routes.filter(r => r.id !== routeId);
  const newTripSequence = existingRoutesForCab.length + 1;
 
- // Resolve the correct start point for the new cab
  const settings = await prisma.systemSettings.findUnique({ where: { id: "default" } });
  const depot = settings
    ? { x: settings.defaultDepotLng, y: settings.defaultDepotLat }
@@ -305,8 +302,28 @@ export async function PATCH(
    newStartPoint = depot;
  }
 
- // Recompute route distance/duration from the new start point
  const stopPoints = route.stops.map(s => ({ x: s.employee.x, y: s.employee.y }));
+ const firstStop = stopPoints[0] || depot;
+
+ let originalStart = depot;
+ if (route.tripSequence === 1 && route.cab && typeof route.cab.driverX === "number" && typeof route.cab.driverY === "number") {
+   originalStart = { x: route.cab.driverX, y: route.cab.driverY };
+ }
+
+ const originalKm = getDistance(originalStart, firstStop) + (route.totalDistance || 0);
+ const newKm = getDistance(newStartPoint, firstStop) + (route.totalDistance || 0);
+ const percentIncrease = originalKm > 0 ? ((newKm - originalKm) / originalKm) * 100 : 0;
+
+ if (percentIncrease > 40 && !overrideDetourWarning) {
+   return NextResponse.json({
+     warning: "DETOUR_INCREASE",
+     originalKm: Math.round(originalKm * 10) / 10,
+     newKm: Math.round(newKm * 10) / 10,
+     percentIncrease: Math.round(percentIncrease * 10) / 10,
+     message: "New driver corridor increases detour by more than 40%. Pass overrideDetourWarning: true to proceed.",
+   }, { status: 409 });
+ }
+
  const metricsPoints = route.isPickup
    ? [newStartPoint, ...stopPoints]
    : [...stopPoints, newStartPoint];
@@ -327,9 +344,28 @@ export async function PATCH(
  },
  });
 
-	await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Route", entityId: routeId, before: beforeRoute, after: { action, cabId, newTripSequence }, ip });
-	console.info("[api] ✅ PATCH /api/routes/[id] SWAP_CAB", { routeId, newCabId: cabId, newTripSequence, userId: auth.session.userId, ip });
-	return NextResponse.json({ success: true, newTripSequence, newDistance, newDuration });
+	await audit({
+   userId: auth.session.userId,
+   role: auth.session.role,
+   action: "UPDATE",
+   entity: "Route",
+   entityId: routeId,
+   before: beforeRoute,
+   after: {
+     action,
+     cabId,
+     newTripSequence,
+     detourComparison: {
+       originalKm: Math.round(originalKm * 10) / 10,
+       newKm: Math.round(newKm * 10) / 10,
+       percentIncrease: Math.round(percentIncrease * 10) / 10,
+       overridden: !!overrideDetourWarning,
+     },
+   },
+   ip,
+ });
+	console.info("[api] ✅ PATCH /api/routes/[id] SWAP_CAB", { routeId, newCabId: cabId, newTripSequence, originalKm, newKm, percentIncrease, userId: auth.session.userId, ip });
+	return NextResponse.json({ success: true, newTripSequence, newDistance, newDuration, detourComparison: { originalKm, newKm, percentIncrease } });
 	}
 
 	return NextResponse.json({ error: "Invalid action" }, { status: 400 });

@@ -87,11 +87,12 @@ export async function computeGoogleRoute(
       destination: pointToWaypoint(points[points.length - 1]),
       intermediates: points.slice(1, -1).map(pointToWaypoint),
       travelMode: "DRIVE",
-      routingPreference: "TRAFFIC_AWARE",
-      polylineQuality: "HIGH_QUALITY",
+      routingPreference: "TRAFFIC_UNAWARE",
       polylineEncoding: "ENCODED_POLYLINE",
       units: "METRIC",
     };
+
+    console.log("[MAPS API] computeRoutes called", { timestamp: new Date().toISOString(), waypointCount: points.length });
 
     const res = await fetch(`${GOOGLE_ROUTES_BASE_URL}/directions/v2:computeRoutes`, {
       method: "POST",

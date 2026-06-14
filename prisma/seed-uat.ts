@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { assignZone } from "../src/lib/zones";
 
 const prisma = new PrismaClient();
 
@@ -34,6 +35,7 @@ async function main() {
   await prisma.route.deleteMany();
   await prisma.timingChangeRequest.deleteMany();
   await prisma.leaveRequest.deleteMany();
+  await prisma.pickupPoint.deleteMany();
   await prisma.employee.deleteMany();
   await prisma.cab.deleteMany();
   await prisma.shift.deleteMany();
@@ -76,7 +78,39 @@ async function main() {
     },
   });
 
+  const pickupPointSeeds = [
+    { name: "Majestic Manor Gate", x: 79.09, y: 21.14, zone: "N", subZone: "NE" },
+    { name: "Apollo Pharmacy Wardha", x: 79.12, y: 21.08, zone: "E", subZone: "NE" },
+    { name: "Gittikhadan Bus Stop", x: 79.02, y: 21.15, zone: "N", subZone: "NW" },
+    { name: "Kalamna Market", x: 78.95, y: 21.08, zone: "W", subZone: "NW" },
+    { name: "Hingna T-Point", x: 78.99, y: 21.02, zone: "S", subZone: "SW" },
+    { name: "Besa Main Square", x: 79.13, y: 21.10, zone: "E", subZone: "NE" },
+    { name: "Manish Nagar Square", x: 79.08, y: 21.16, zone: "N", subZone: "NE" },
+    { name: "Koradi Naka", x: 78.92, y: 21.09, zone: "W", subZone: "NW" },
+    { name: "Wadi Railway Gate", x: 79.10, y: 21.05, zone: "E", subZone: "SE" },
+    { name: "Amravati Road Naka", x: 78.89, y: 21.05, zone: "W", subZone: "SW" },
+  ];
+
+  for (const pp of pickupPointSeeds) {
+    const zoneData = assignZone(pp.x, pp.y);
+    const existing = await prisma.pickupPoint.findFirst({ where: { name: pp.name } });
+    if (!existing) {
+      await prisma.pickupPoint.create({
+        data: {
+          name: pp.name,
+          x: pp.x,
+          y: pp.y,
+          zone: pp.zone,
+          subZone: pp.subZone,
+          distanceRing: zoneData.distanceRing,
+          address: `${pp.name}, Nagpur`,
+        },
+      });
+    }
+  }
+
   // 4. Create Manager Employee Record
+  const managerZone = assignZone(79.0583, 21.1042);
   const managerEmployee = await prisma.employee.create({
     data: {
       userId: managerUser.id,
@@ -88,6 +122,10 @@ async function main() {
       address: "Manish Nagar",
       x: 79.0583,
       y: 21.1042,
+      zone: managerZone.zone,
+      subZone: managerZone.subZone,
+      distanceRing: managerZone.distanceRing,
+      distanceFromDepotKm: managerZone.distanceFromDepotKm,
       department: "Operations",
       designation: "Senior Manager",
       status: "ACTIVE",
@@ -115,6 +153,7 @@ async function main() {
   for (let i = 0; i < employeeData.length; i++) {
     const data = employeeData[i];
     const locCoords = LOCATIONS.find(l => l.name === data.loc) || LOCATIONS[0];
+    const zoneData = assignZone(locCoords.lng, locCoords.lat);
     
     const user = await prisma.user.create({
       data: {
@@ -138,6 +177,10 @@ async function main() {
         address: data.loc,
         x: locCoords.lng,
         y: locCoords.lat,
+        zone: zoneData.zone,
+        subZone: zoneData.subZone,
+        distanceRing: zoneData.distanceRing,
+        distanceFromDepotKm: zoneData.distanceFromDepotKm,
         department: "Engineering",
         designation: data.desig,
         status: "ACTIVE",
