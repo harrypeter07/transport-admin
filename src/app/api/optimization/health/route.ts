@@ -2,12 +2,47 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/apiAuth";
 import { prisma } from "@/lib/db";
+import { getExcelFilterForDate } from "@/lib/excelFilter";
 import {
   runPreflightChecks,
   makeDepot,
   type OptimizeEmployee,
   type OptimizeCab,
+  type PreflightWarning,
 } from "@/lib/optimization";
+
+function summarizePreflightWarnings(warnings: PreflightWarning[]): PreflightWarning[] {
+  const overlapByZone = new Map<string, Extract<PreflightWarning, { type: "DRIVER_OVERLAP" }> & { pairCount: number }>();
+  const summarized: PreflightWarning[] = [];
+
+  for (const w of warnings) {
+    if (w.type !== "DRIVER_OVERLAP") {
+      summarized.push(w);
+      continue;
+    }
+    const existing = overlapByZone.get(w.zone);
+    if (!existing) {
+      overlapByZone.set(w.zone, { ...w, pairCount: 1 });
+    } else {
+      existing.pairCount += 1;
+    }
+  }
+
+  for (const w of overlapByZone.values()) {
+    const vehicles = w.vehicleNumbers?.filter(Boolean).join(", ") || w.driverIds.slice(0, 2).join(", ");
+    const extra = w.pairCount > 1 ? ` (+${w.pairCount - 1} more pairs)` : "";
+    summarized.push({
+      type: "DRIVER_OVERLAP",
+      driverIds: w.driverIds,
+      vehicleNumbers: w.vehicleNumbers,
+      zone: w.zone,
+      distanceKm: w.distanceKm,
+      suggestion: `${w.suggestion}${extra} — cabs: ${vehicles}`,
+    });
+  }
+
+  return summarized.slice(0, 12);
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -77,14 +112,39 @@ export async function GET(req: NextRequest) {
         ? makeDepot(settings.defaultDepotLat, settings.defaultDepotLng)
         : makeDepot(21.0625, 79.0526);
 
-      const dbEmployees = await prisma.employee.findMany({
+      let dbEmployees = await prisma.employee.findMany({
         where: { status: "ACTIVE", shiftId },
         include: { pickupPoint: true },
       });
 
-      const dbCabs = await prisma.cab.findMany({
+      let dbCabs = await prisma.cab.findMany({
         where: { status: "AVAILABLE", shifts: { some: { id: shiftId } } },
       });
+
+      const excelFilter = getExcelFilterForDate(date);
+      if (excelFilter) {
+        const VARIATION_MAP: Record<string, string> = {
+          "devalla kumar": "devalla sudheer kumar",
+          "devalla sudheer kumar": "devalla sudheer kumar",
+          "meghana u": "meghana b u",
+          "meghana b u": "meghana b u",
+          "prashanth pathlavath": "prashant pathlavat",
+          "prashant pathlavat": "prashant pathlavat",
+          "vajja prakash": "vajja bhanu prakash",
+          "vajja bhanu prakash": "vajja bhanu prakash"
+        };
+        const normalizeName = (name: string) => {
+          const lower = name.trim().toLowerCase();
+          return VARIATION_MAP[lower] || lower;
+        };
+        dbEmployees = dbEmployees.filter(emp => {
+          const normDb = normalizeName(emp.name);
+          return excelFilter.employeeNames.has(normDb);
+        });
+        dbCabs = dbCabs.filter(cab => {
+          return excelFilter.cabVehicleNumbers.has(cab.vehicleNumber.trim().toUpperCase());
+        });
+      }
 
       const optEmployees: OptimizeEmployee[] = dbEmployees.map((emp) => {
         const usePickup = emp.pickupPointId && emp.pickupPoint;
@@ -117,7 +177,7 @@ export async function GET(req: NextRequest) {
         assignedZone: cab.assignedZone,
       }));
 
-      preflightWarnings = runPreflightChecks(optEmployees, optCabs, depot);
+      preflightWarnings = summarizePreflightWarnings(runPreflightChecks(optEmployees, optCabs, depot));
     }
 
     if (!osrmOk) {

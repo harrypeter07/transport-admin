@@ -356,9 +356,9 @@ export default function AdminDashboardPage() {
     <li key={route.id} className="p-5 hover:bg-[#f7f7f7] transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
     <div>
      <p className="font-bold text-[#1c1b1f] text-sm flex items-center gap-2">
-     {route.cab.vehicleNumber}
+     {route.cab?.vehicleNumber || "No Vehicle"}
      <span className="text-[#9a9a9a] font-normal text-xs">·</span>
-     <span className="text-[#6b6b6b] font-semibold text-xs">{route.cab.driverName || "N/A"}</span>
+     <span className="text-[#6b6b6b] font-semibold text-xs">{route.cab?.driverName || "N/A"}</span>
      </p>
      <div className="mt-1.5 flex items-center gap-3">
      <div className="flex-1 bg-[#f7f7f7] rounded-none h-1.5 w-32">

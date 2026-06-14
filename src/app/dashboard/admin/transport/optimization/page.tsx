@@ -20,6 +20,8 @@ import CompareModal from "@/components/CompareModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import AssignPickupPointModal from "@/components/AssignPickupPointModal";
 import ManifestRouteDnD from "@/components/ManifestRouteDnD";
+import EmployeeSearchInput from "@/components/EmployeeSearchInput";
+import { routeMatchesEmployeeSearch, stopMatchesEmployeeSearch } from "@/lib/employeeSearch";
 import { ZONE_COLORS } from "@/lib/zones";
 
 import {
@@ -53,6 +55,105 @@ import {
 } from "lucide-react";
 
 import { formatDate } from "@/lib/dateFormat";
+
+function classifyShiftLocal(startTime: string) {
+  if (!startTime) return { requiresEscort: false };
+  const [hStr] = startTime.split(":");
+  const hour = parseInt(hStr, 10);
+  const isNight = hour >= 20 || hour < 6;
+  const isEarlyMorning = hour >= 4 && hour < 7;
+  return { requiresEscort: isNight || isEarlyMorning };
+}
+
+function checkSafetyPreviewLocal(
+  stops: { gender: "MALE" | "FEMALE"; name: string; status?: string }[],
+  isPickup: boolean,
+  shiftStartTime: string,
+  hasEscort: boolean
+): string[] {
+  const violations: string[] = [];
+  const activeStops = stops.filter((s) => s.status !== "SKIPPED");
+  if (activeStops.length === 0) return [];
+
+  const shiftClass = classifyShiftLocal(shiftStartTime);
+  const hasFemale = activeStops.some((s) => s.gender === "FEMALE");
+  const requiresEscort = hasFemale && shiftClass.requiresEscort;
+
+  if (requiresEscort && !hasEscort) {
+    violations.push(`Route has female passenger(s) on night/early-morning shift. Escort required.`);
+  }
+
+  if (hasEscort) return violations;
+
+  // 1. Check if she is the sole active passenger
+  if (activeStops.length === 1 && activeStops[0].gender === "FEMALE") {
+    violations.push(`${activeStops[0].name} is the sole active passenger and is female. Escort required.`);
+    return violations;
+  }
+
+  const hasMale = activeStops.some((s) => s.gender === "MALE");
+  const allFemale = activeStops.every((s) => s.gender === "FEMALE");
+
+  let ordered = [...activeStops];
+
+  if (hasMale && !allFemale) {
+    if (isPickup) {
+      if (ordered[0].gender === "FEMALE") {
+        const firstMaleIndex = ordered.findIndex((s) => s.gender === "MALE");
+        if (firstMaleIndex !== -1) {
+          const temp = ordered[0];
+          ordered[0] = ordered[firstMaleIndex];
+          ordered[firstMaleIndex] = temp;
+        }
+      }
+    } else {
+      if (ordered[ordered.length - 1].gender === "FEMALE") {
+        const firstMaleIndex = ordered.findIndex((s) => s.gender === "MALE");
+        if (firstMaleIndex !== -1) {
+          const temp = ordered[ordered.length - 1];
+          ordered[ordered.length - 1] = ordered[firstMaleIndex];
+          ordered[firstMaleIndex] = temp;
+        }
+      }
+    }
+  }
+
+  if (isPickup) {
+    if (ordered[0].gender === "FEMALE" && !allFemale) {
+      violations.push(`${ordered[0].name} (female) is scheduled as the first active pickup (alone in the cab).`);
+    }
+  } else {
+    if (ordered[ordered.length - 1].gender === "FEMALE" && !allFemale) {
+      violations.push(`${ordered[ordered.length - 1].name} (female) is scheduled as the last active drop (alone in the cab).`);
+    }
+  }
+
+  if (isPickup) {
+    for (let j = 0; j < ordered.length; j++) {
+      const inCab = ordered.slice(0, j + 1);
+      const females = inCab.filter((p) => p.gender === "FEMALE");
+      const males = inCab.filter((p) => p.gender === "MALE");
+      if (females.length === 1 && males.length === 0) {
+        if (j > 0) {
+          violations.push(`${females[0].name} (female) is left alone in the cab mid-route.`);
+        }
+      }
+    }
+  } else {
+    for (let j = 0; j < ordered.length; j++) {
+      const inCab = ordered.slice(j);
+      const females = inCab.filter((p) => p.gender === "FEMALE");
+      const males = inCab.filter((p) => p.gender === "MALE");
+      if (females.length === 1 && males.length === 0) {
+        if (j < ordered.length - 1) {
+          violations.push(`${females[0].name} (female) is left alone in the cab mid-route.`);
+        }
+      }
+    }
+  }
+
+  return violations;
+}
 
 export default function TransitAdminSPA() {
  const {
@@ -114,6 +215,7 @@ export default function TransitAdminSPA() {
   const [confirmPublishDraft, setConfirmPublishDraft] = useState(false);
   const [confirmPublishExisting, setConfirmPublishExisting] = useState(false);
   const [isPublishManualModalOpen, setIsPublishManualModalOpen] = useState(false);
+  const [dragOverRouteId, setDragOverRouteId] = useState<string | null>(null);
 
   const handlePublishManualRoutes = async () => {
     setPublishingManual(true);
@@ -238,6 +340,7 @@ export default function TransitAdminSPA() {
   const [routeViewModes, setRouteViewModes] = useState<Record<string, "pickup" | "drop">>({});
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [manifestSearchQuery, setManifestSearchQuery] = useState("");
 
  // Settings/Diagnostics states
  const [showSettings, setShowSettings] = useState(false);
@@ -344,12 +447,14 @@ export default function TransitAdminSPA() {
           setHasOptimized(true);
         }
 
-        // Restore last previewed strategy
+        // Restore last previewed strategy (default BALANCED when plans exist)
         try {
           const savedStrategy = sessionStorage.getItem("opencode-opt-strategy") as
             | "MAXIMIZE_UTILIZATION" | "MINIMIZE_TIME" | "BALANCED" | null;
           if (savedStrategy && ["MAXIMIZE_UTILIZATION", "MINIMIZE_TIME", "BALANCED"].includes(savedStrategy)) {
             setPreviewedStrategy(savedStrategy);
+          } else if (useTransportStore.getState().optimizationPlans) {
+            setPreviewedStrategy("BALANCED");
           }
         } catch {}
       }
@@ -555,13 +660,17 @@ export default function TransitAdminSPA() {
  
  // If previewing a generated plan, show the generated routes for every optimized shift.
  const previewRoutes = (optimizationPlans && previewedStrategy)
- ? optimizationPlans[previewedStrategy].routes.map((r: any, idx: number) => {
- const routeShiftId = r.shiftId || activeShiftId;
- const routeShift = r.shift || shifts.find((shift) => shift.id === routeShiftId);
+ ? (() => {
+   const shiftCounters: Record<string, number> = {};
+   return optimizationPlans[previewedStrategy].routes.map((r: any, idx: number) => {
+   const routeShiftId = r.shiftId || activeShiftId;
+   const routeNum = (shiftCounters[routeShiftId] = (shiftCounters[routeShiftId] || 0) + 1);
+   const routeShift = r.shift || shifts.find((shift) => shift.id === routeShiftId);
 
  return ({
  ...r,
- id: `preview-${routeShiftId || "shift"}-${idx}`,
+ id: `preview-${routeShiftId}-r${routeNum}-${idx}`,
+ routeNumber: routeNum,
  shiftId: routeShiftId,
  shift: routeShift,
  cab: {
@@ -574,7 +683,7 @@ export default function TransitAdminSPA() {
  },
  stops: r.stops.map((s: any) => ({
  ...s,
- id: `preview-stop-${routeShiftId || "shift"}-${s.employeeId}`,
+ id: `preview-stop-${routeShiftId}-r${routeNum}-${s.employeeId}`,
  employee: {
  id: s.employeeId,
  name: s.employeeName,
@@ -586,7 +695,8 @@ export default function TransitAdminSPA() {
  }
  }))
  });
- })
+   });
+ })()
  : null;
  const activeRoutesRaw = (hasOptimized || previewRoutes)
  ? (previewRoutes
@@ -670,6 +780,22 @@ export default function TransitAdminSPA() {
    }
    shiftGroups[shiftGroups.findIndex(g => g.shiftId === sid)].routes.push(route);
   }
+
+  const filteredShiftGroups =
+    mapShiftFilter === "ALL"
+      ? shiftGroups
+      : shiftGroups.filter((g) => g.shiftId === mapShiftFilter);
+
+  const searchedShiftGroups = useMemo(() => {
+    const q = manifestSearchQuery.trim();
+    if (!q) return filteredShiftGroups;
+    return filteredShiftGroups
+      .map((g) => ({
+        ...g,
+        routes: g.routes.filter((r) => routeMatchesEmployeeSearch(r, q)),
+      }))
+      .filter((g) => g.routes.length > 0);
+  }, [filteredShiftGroups, manifestSearchQuery]);
 
   // Apply known canonical sequences to specific routes
   useEffect(() => {
@@ -1140,7 +1266,7 @@ export default function TransitAdminSPA() {
  </div>
  )}
 
- {!optimizationPlans && preflightWarnings.length > 0 && (
+ {!optimizationPlans && !optimizing && !previewing && preflightWarnings.length > 0 && (
  <div className="p-4 bg-amber-50 border border-amber-200 rounded-none animate-fadeIn">
  <div className="text-[10px] font-black uppercase tracking-wider text-amber-800 mb-2 flex items-center gap-1.5">
    <AlertTriangle className="w-3.5 h-3.5" /> Preflight warnings — review before optimizing
@@ -1150,7 +1276,7 @@ export default function TransitAdminSPA() {
      <li key={i} className="font-mono">
        {w.type === "DRIVERLESS_ZONE" && `${w.zone}: ${w.employeeCount} employees, nearest driver ${w.nearestDriverKm} km away`}
        {w.type === "OVERLOADED_ZONE" && `${w.zone}: ${w.employeeCount} employees vs ${w.availableSeats} available seats`}
-       {w.type === "DRIVER_OVERLAP" && `${w.zone}: drivers ${w.driverIds?.join(", ")} within ${w.distanceKm} km — ${w.suggestion}`}
+       {w.type === "DRIVER_OVERLAP" && `${w.zone}: cabs ${(w as any).vehicleNumbers?.join(" & ") || w.driverIds?.slice(0, 2).join(", ")} within ${w.distanceKm} km — ${w.suggestion}`}
      </li>
    ))}
  </ul>
@@ -1512,14 +1638,21 @@ export default function TransitAdminSPA() {
       onChange={(e) => setMapShiftFilter(e.target.value)}
       className="bg-[#f7f7f7] border border-[#e8e8e8] text-xs font-bold text-[#1c1b1f] outline-none cursor-pointer focus:ring-0 px-2 py-1 rounded-none uppercase"
     >
-      <option value="ALL">All Shifts</option>
-      {shifts.map((shift) => (
-        <option key={shift.id} value={shift.id}>{shift.name}{["shift-0800"].includes(shift.id) ? " 🔒" : ""}</option>
-      ))}
+      <option value="ALL">All Shifts ({manifestRoutes.length} routes)</option>
+      {shifts.map((shift) => {
+        const count = manifestRoutes.filter((r) => r.shiftId === shift.id).length;
+        return (
+        <option key={shift.id} value={shift.id}>{shift.name} ({count}){["shift-0800"].includes(shift.id) ? " 🔒" : ""}</option>
+        );
+      })}
     </select>
   </div>
   <RouteVisualizer
-  routes={mapShiftFilter === "ALL" ? activeRoutes : activeRoutes.filter(r => (r as any).shiftId === mapShiftFilter)}
+  routes={(() => {
+    const shiftFiltered = mapShiftFilter === "ALL" ? activeRoutes : activeRoutes.filter(r => (r as any).shiftId === mapShiftFilter);
+    if (!manifestSearchQuery.trim()) return shiftFiltered;
+    return shiftFiltered.filter((r) => routeMatchesEmployeeSearch(r, manifestSearchQuery));
+  })()}
   selectedRouteId={selectedRouteId}
   onSelectRoute={setSelectedRouteId}
   routeViewModes={routeViewModes}
@@ -1739,7 +1872,9 @@ export default function TransitAdminSPA() {
   </div>
 
  {/* Stops */}
-  {getDisplayStops([...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder), selectedRoute.id, getEffectiveMode(selectedRoute) === "pickup").map((stop, idx) => {
+  {getDisplayStops([...selectedRoute.stops].sort((a, b) => a.stopOrder - b.stopOrder), selectedRoute.id, getEffectiveMode(selectedRoute) === "pickup")
+    .filter((stop) => stopMatchesEmployeeSearch(stop, manifestSearchQuery))
+    .map((stop, idx) => {
   const isFirst = idx === 0;
   const isLast = idx === selectedRoute.stops.length - 1;
  const isFemale = stop.employee.gender === "FEMALE";
@@ -1901,19 +2036,35 @@ export default function TransitAdminSPA() {
 
  <ManifestRouteDnD routes={activeRoutes} onMoveStop={moveStopBetweenRoutes} />
 
+ <div className="print:hidden max-w-md">
+   <EmployeeSearchInput
+     value={manifestSearchQuery}
+     onChange={setManifestSearchQuery}
+     placeholder="Search manifest — employee, code, address, driver…"
+   />
+ </div>
+
  {manifestRoutes.length === 0 ? (
  <div className="p-8 text-center text-[#9a9a9a] bg-[#f7f7f7]/20 border border-dashed border-slate-250 rounded-none">
  No manifest generated yet. Click Optimize Routing to generate route cards for the selected date.
  </div>
  ) : (
  <div className="flex flex-col gap-10">
-  {shiftGroups.map(group => {
+  {searchedShiftGroups.length === 0 && manifestSearchQuery.trim() ? (
+    <div className="p-6 text-center text-[#9a9a9a] border border-dashed border-[#e8e8e8] text-xs">
+      No routes match &quot;{manifestSearchQuery.trim()}&quot;
+    </div>
+  ) : null}
+  {searchedShiftGroups.map(group => {
     
     return (
       <div key={group.shiftId} className="flex flex-col gap-4">
         <div 
           className="flex items-center gap-3 border-b border-slate-200 pb-2 cursor-pointer select-none"
-          onClick={() => setExpandedShifts(prev => ({ ...prev, [group.shiftId]: !prev[group.shiftId] }))}
+          onClick={() => {
+            setExpandedShifts(prev => ({ ...prev, [group.shiftId]: !prev[group.shiftId] }));
+            setMapShiftFilter(prev => prev === group.shiftId ? "ALL" : group.shiftId);
+          }}
         >
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-6 bg-[#1c1b1f] block" />
@@ -1947,14 +2098,98 @@ export default function TransitAdminSPA() {
           
             {group.routes
               .slice()
-              .sort((a, b) => (a.cab.driverName || "").localeCompare(b.cab.driverName || ""))
+              .sort((a, b) => (a.cab?.driverName || "").localeCompare(b.cab?.driverName || ""))
               .map((route, index) => {
                 const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
                 const tableOrderedStops = getDisplayStops(sortedStops, route.id, getEffectiveMode(route) === "pickup");
                 const isSelected = selectedRouteId === route.id;
 
                 return (
-                  <tbody key={route.id} className="divide-y divide-slate-100 font-semibold text-[#4a4a4a] border-b-[4px] border-[#d1d5db]">
+                  <tbody
+                    key={route.id}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (dragOverRouteId !== route.id) {
+                        setDragOverRouteId(route.id);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      setDragOverRouteId(null);
+                    }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      setDragOverRouteId(null);
+                      try {
+                        const dataStr = e.dataTransfer.getData("text/plain");
+                        if (!dataStr) return;
+                        const { employeeId, fromRouteId, gender, name, shiftId } = JSON.parse(dataStr);
+
+                        if (fromRouteId === route.id) return;
+
+                        if (route.shiftId && shiftId && route.shiftId !== shiftId) {
+                          alert(`Cannot move passenger to a route with a different shift (Passenger Shift: ${shiftId}, Route Shift: ${route.shiftId}).`);
+                          return;
+                        }
+
+                        const currentActiveStops = route.stops.filter(s => s.status !== "SKIPPED").length;
+                        const capacity = route.cab?.capacity ?? 6;
+                        if (currentActiveStops >= capacity) {
+                          alert(`Target cab capacity exceeded (${currentActiveStops}/${capacity}).`);
+                          return;
+                        }
+
+                        const targetStopsSimulated = [
+                          ...route.stops.map(s => ({ gender: s.employee.gender, name: s.employee.name, status: s.status })),
+                          { gender, name, status: "PENDING" }
+                        ];
+
+                        const isPickup = route.isPickup ?? true;
+                        const shiftStartTime = route.shift?.startTime || "";
+                        const hasEscort = !!route.hasEscort;
+
+                        const violations = checkSafetyPreviewLocal(targetStopsSimulated, isPickup, shiftStartTime, hasEscort);
+
+                        if (violations.length > 0) {
+                          const confirmMsg = `Moving ${name} to Route r${route.routeNumber || index + 1} will introduce the following safety violations:\n\n` +
+                            violations.map((v, i) => `${i + 1}. ${v}`).join("\n") +
+                            `\n\nAre you sure you want to proceed anyway?`;
+                          if (!window.confirm(confirmMsg)) {
+                            return;
+                          }
+                        } else {
+                          const confirmMsg = `Are you sure you want to move ${name} to Route r${route.routeNumber || index + 1}?`;
+                          if (!window.confirm(confirmMsg)) {
+                            return;
+                          }
+                        }
+
+                        const response = await fetch("/api/routes/move-employee", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ employeeId, fromRouteId, toRouteId: route.id })
+                        });
+
+                        const result = await response.json();
+                        if (result.success) {
+                          const dateToFetch = selectedDate;
+                          const resOpt = await fetch(`/api/optimization?date=${dateToFetch}`);
+                          if (resOpt.ok) {
+                            const updatedRoutes = await resOpt.json();
+                            useTransportStore.setState({ routes: updatedRoutes });
+                          }
+                          alert(`Successfully reassigned ${name} to Route r${route.routeNumber || index + 1}.`);
+                        } else {
+                          alert(`Failed to move employee: ${result.error || "Unknown error"}`);
+                        }
+                      } catch (err) {
+                        console.error(err);
+                        alert("An error occurred during drag & drop.");
+                      }
+                    }}
+                    className={`divide-y divide-slate-100 font-semibold text-[#4a4a4a] border-b-[4px] border-[#d1d5db] transition-all duration-200 ${
+                      dragOverRouteId === route.id ? "bg-blue-50/50 ring-2 ring-blue-500 ring-inset" : ""
+                    }`}
+                  >
                     <tr className="bg-slate-100/50 border-b border-slate-200">
                       <td colSpan={5} className="p-2.5 px-3 text-left">
                         <div className="flex items-center gap-3">
@@ -1962,7 +2197,7 @@ export default function TransitAdminSPA() {
                             Route r{route.routeNumber || index + 1}
                           </span>
                           <span className="text-[10px] text-[#4a4a4a] font-bold flex items-center gap-1.5">
-                            Driver: {route.cab.driverName || "No Driver"}
+                            Driver: {route.cab?.driverName || "No Driver"}
                             {route.cabId && (
                               <span className="font-mono text-[8px] bg-[#e8e8e8] text-[#4a4a4a] px-1 py-0.5 rounded-sm">
                                 {getDriverTripCount(route.cabId)} Trip{getDriverTripCount(route.cabId) !== 1 ? 's' : ''}
@@ -1972,12 +2207,24 @@ export default function TransitAdminSPA() {
                         </div>
                       </td>
                     </tr>
-                    {tableOrderedStops.map((stop, stopIndex) => {
+                    {tableOrderedStops
+                      .filter((stop) => stopMatchesEmployeeSearch(stop, manifestSearchQuery))
+                      .map((stop, stopIndex) => {
                       return (
                         <tr
                           key={stop.id}
                           onClick={() => { setSelectedRouteId(isSelected ? null : route.id); setSelectedEmployeeId(stop.employee.id); }}
-                          className={`cursor-pointer transition-all duration-150
+                          draggable={true}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("text/plain", JSON.stringify({
+                              employeeId: stop.employee.id,
+                              fromRouteId: route.id,
+                              gender: stop.employee.gender,
+                              name: stop.employee.name,
+                              shiftId: stop.employee.shiftId || route.shiftId
+                            }));
+                          }}
+                          className={`cursor-grab active:cursor-grabbing transition-all duration-150
                           ${
                             isSelected && selectedEmployeeId === stop.employee.id
                               ? "bg-[#f7f7f7]/70 border-l-[3px] border-[#ff4f00] hover:bg-[#f7f7f7]"
@@ -2044,7 +2291,7 @@ export default function TransitAdminSPA() {
           <div className="flex justify-between items-start border-b border-slate-100 pb-3">
           <div className="flex flex-col gap-0.5 text-left">
             <h3 className="text-lg font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
-            {route.cab.driverName || "Unknown Driver"}
+            {route.cab?.driverName || "Unknown Driver"}
             {route.cabId && (
               <span className="font-mono text-[9px] font-bold bg-[#e8e8e8] text-[#4a4a4a] px-1.5 py-0.5 rounded-none ml-1">
                 {getDriverTripCount(route.cabId)} Trip{getDriverTripCount(route.cabId) !== 1 ? 's' : ''}
@@ -2054,10 +2301,10 @@ export default function TransitAdminSPA() {
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-xs font-semibold text-[#6b6b6b] flex items-center gap-1">
                 <Truck className="w-3.5 h-3.5 text-[#9a9a9a]" />
-                {route.cab.vehicleNumber}
+                {route.cab?.vehicleNumber || "No Vehicle"}
               </span>
               <span className="text-[10px] text-[#9a9a9a] font-mono font-medium">
-                {route.cab.driverPhone || "N/A"}
+                {route.cab?.driverPhone || "N/A"}
               </span>
             </div>
             
@@ -2069,7 +2316,7 @@ export default function TransitAdminSPA() {
                 Shift: {route.shift?.startTime || (route as any).shiftTime || "N/A"}
               </span>
               <span className="text-[10px] text-[#6b6b6b] font-semibold uppercase tracking-wider">
-                {route.stops.length} / {route.cab.capacity} passengers
+                {route.stops.length} / {(route.cab?.capacity ?? 6)} passengers
               </span>
               {route.status && (
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 border ml-auto ${
@@ -2162,7 +2409,12 @@ export default function TransitAdminSPA() {
           </div>
 
           {/* Variations Selector */}
-          <div className="flex flex-col gap-2.5 print:hidden">
+          {(!route.id.startsWith("preview-") &&
+            !route.id.startsWith("manual-") &&
+            !route.id.startsWith("assign_") &&
+            !route.id.startsWith("baseline_") &&
+            !route.id.startsWith("excel-")) && (
+            <div className="flex flex-col gap-2.5 print:hidden">
           <div className="flex justify-between items-center">
           <span className="text-[9px] uppercase font-bold tracking-wider text-[#9a9a9a]">
           Real-Road Commute Variations
@@ -2258,6 +2510,7 @@ export default function TransitAdminSPA() {
           </div>
           )}
           </div>
+          )}
 
           {/* Itinerary timeline stops list */}
           <div className="flex flex-col gap-3">
@@ -3712,6 +3965,8 @@ export default function TransitAdminSPA() {
     date={selectedDate}
     optimizationPlans={optimizationPlans}
     fallbackRoutes={activeRoutes}
+    onDateChange={setSelectedDate}
+    onAbsentCodesChange={setAbsentEmployeeCodes}
   />
 
       <ConfirmModal

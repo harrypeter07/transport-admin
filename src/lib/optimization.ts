@@ -44,7 +44,7 @@ export interface ReleasedCab {
 export type PreflightWarning =
   | { type: "DRIVERLESS_ZONE"; zone: string; employeeCount: number; nearestDriverKm: number }
   | { type: "OVERLOADED_ZONE"; zone: string; employeeCount: number; availableSeats: number }
-  | { type: "DRIVER_OVERLAP"; driverIds: string[]; zone: string; distanceKm: number; suggestion: string };
+  | { type: "DRIVER_OVERLAP"; driverIds: string[]; vehicleNumbers?: string[]; zone: string; distanceKm: number; suggestion: string };
 
 export interface OptimizeCab {
   id: string;
@@ -83,8 +83,8 @@ export interface OptimizedRoute {
   totalDuration: number;
   optimizationScore: number;
   violations: {
-    type: "FEMALE_FIRST_PICKUP" | "FEMALE_LAST_DROP" | "OVERCAPACITY" | "ISOLATED_FEMALE" | "ISOLATED_FEMALE_NIGHT" | "ESCORT_REQUIRED";
-    severity: "HIGH" | "MEDIUM";
+    type: "FEMALE_FIRST_PICKUP" | "FEMALE_LAST_DROP" | "OVERCAPACITY" | "ISOLATED_FEMALE" | "ISOLATED_FEMALE_NIGHT" | "ESCORT_REQUIRED" | "UNAVOIDABLE_FEMALE_FIRST";
+    severity: "HIGH" | "MEDIUM" | "LOW";
     notes: string;
   }[];
   hasEscort: boolean;
@@ -544,6 +544,8 @@ function isPermutationSafe(route: OptimizeEmployee[], isPickup: boolean): boolea
   if (route.length === 0) return true;
   const hasFemales = route.some((e) => e.gender === "FEMALE");
   if (!hasFemales) return true;
+  const hasMales = route.some((e) => e.gender === "MALE");
+  if (!hasMales) return true; // all-female exception
 
   if (isPickup) {
     return route[0].gender === "MALE";
@@ -612,6 +614,85 @@ function pickMaleSeedIndex(
     }
   }
   return bestIdx;
+}
+
+export function reorderWithMaleFirst(
+  stops: OptimizeEmployee[],
+  males: OptimizeEmployee[],
+  females: OptimizeEmployee[]
+): OptimizeEmployee[] {
+  const result: OptimizeEmployee[] = [];
+  const remaining = [...stops];
+
+  const firstMale = males[0];
+  result.push(firstMale);
+  remaining.splice(remaining.indexOf(firstMale), 1);
+
+  while (remaining.length > 0) {
+    const last = result[result.length - 1];
+    const next = remaining.reduce((nearest, s) => {
+      const d1 = haversineKm(last.y, last.x, s.y, s.x);
+      const d2 = haversineKm(last.y, last.x, nearest.y, nearest.x);
+      return d1 < d2 ? s : nearest;
+    });
+    result.push(next);
+    remaining.splice(remaining.indexOf(next), 1);
+  }
+
+  if (result[result.length - 1].gender === 'FEMALE' && males.length > 1) {
+    const lastMaleInResult = [...result].reverse()
+      .find(s => s.gender === 'MALE');
+    if (lastMaleInResult) {
+      const lastMaleIdx = result.lastIndexOf(lastMaleInResult);
+      const last = result.length - 1;
+      [result[lastMaleIdx], result[last]] = [result[last], result[lastMaleIdx]];
+    }
+  }
+
+  return result;
+}
+
+export function reorderWithMaleLast(stops: OptimizeEmployee[]): OptimizeEmployee[] {
+  const result = [...stops];
+  const lastIdx = result.length - 1;
+  let maleIdx = -1;
+  for (let i = lastIdx; i >= 0; i--) {
+    if (result[i].gender === 'MALE') {
+      maleIdx = i;
+      break;
+    }
+  }
+  if (maleIdx >= 0 && maleIdx !== lastIdx) {
+    const temp = result[lastIdx];
+    result[lastIdx] = result[maleIdx];
+    result[maleIdx] = temp;
+  }
+  return result;
+}
+
+export function enforceFemaleNotFirst(
+  stops: OptimizeEmployee[],
+  hasEscort: boolean,
+  isPickup: boolean
+): OptimizeEmployee[] {
+  if (hasEscort || stops.length <= 1) return stops;
+
+  const hasMale = stops.some((s) => s.gender === 'MALE');
+  if (!hasMale) return stops; // all-female route is allowed as exception
+
+  if (isPickup) {
+    if (stops[0].gender === 'FEMALE') {
+      const males = stops.filter((s) => s.gender === 'MALE');
+      const females = stops.filter((s) => s.gender === 'FEMALE');
+      return reorderWithMaleFirst(stops, males, females);
+    }
+  } else {
+    if (stops[stops.length - 1].gender === 'FEMALE') {
+      return reorderWithMaleLast(stops);
+    }
+  }
+
+  return stops;
 }
 
 /**
@@ -797,7 +878,7 @@ export function checkSafetyViolations(
   isPickup: boolean,
   hasEscort: boolean,
   shift?: { startTime: string; endTime?: string }
-): { type: "FEMALE_FIRST_PICKUP" | "FEMALE_LAST_DROP" | "ISOLATED_FEMALE" | "ISOLATED_FEMALE_NIGHT" | "ESCORT_REQUIRED"; severity: "HIGH" | "MEDIUM"; notes: string }[] {
+): { type: "FEMALE_FIRST_PICKUP" | "FEMALE_LAST_DROP" | "ISOLATED_FEMALE" | "ISOLATED_FEMALE_NIGHT" | "ESCORT_REQUIRED" | "UNAVOIDABLE_FEMALE_FIRST"; severity: "HIGH" | "MEDIUM" | "LOW"; notes: string }[] {
   if (stops.length === 0) return [];
   const violations: ReturnType<typeof checkSafetyViolations> = [];
 
@@ -836,6 +917,8 @@ export function checkSafetyViolations(
     return violations;
   }
 
+  const allFemale = activeStops.every((s) => s.gender === "FEMALE");
+
   // 2. Mid-route segment checks
   if (isPickup) {
     for (let j = 0; j < activeStops.length; j++) {
@@ -846,11 +929,19 @@ export function checkSafetyViolations(
       if (females.length === 1 && males.length === 0) {
         const nextStopName = j === activeStops.length - 1 ? "MIHAN Depot" : activeStops[j + 1].name;
         if (j === 0) {
-          violations.push({
-            type: "FEMALE_FIRST_PICKUP",
-            severity: "HIGH",
-            notes: `${females[0].name} (female) is scheduled as the first active pickup. No escort is present, making her alone in the cab.`,
-          });
+          if (allFemale) {
+            violations.push({
+              type: "UNAVOIDABLE_FEMALE_FIRST",
+              severity: "LOW",
+              notes: `All-female route: first pickup must be female (unavoidable).`,
+            });
+          } else {
+            violations.push({
+              type: "FEMALE_FIRST_PICKUP",
+              severity: "HIGH",
+              notes: `${females[0].name} (female) is scheduled as the first active pickup. No escort is present, making her alone in the cab.`,
+            });
+          }
         } else {
           violations.push({
             type: "ISOLATED_FEMALE",
@@ -870,11 +961,19 @@ export function checkSafetyViolations(
       if (females.length === 1 && males.length === 0) {
         const prevStopName = j === -1 ? "MIHAN Depot" : activeStops[j].name;
         if (j === activeStops.length - 2) {
-          violations.push({
-            type: "FEMALE_LAST_DROP",
-            severity: "HIGH",
-            notes: `${females[0].name} (female) is scheduled as the last active drop. No escort is present, leaving her alone with driver.`,
-          });
+          if (allFemale) {
+            violations.push({
+              type: "UNAVOIDABLE_FEMALE_FIRST",
+              severity: "LOW",
+              notes: `All-female route: last drop must be female (unavoidable).`,
+            });
+          } else {
+            violations.push({
+              type: "FEMALE_LAST_DROP",
+              severity: "HIGH",
+              notes: `${females[0].name} (female) is scheduled as the last active drop. No escort is present, leaving her alone with driver.`,
+            });
+          }
         } else {
           violations.push({
             type: "ISOLATED_FEMALE",
@@ -913,62 +1012,12 @@ export function enforceSafetyRules(
     return { route, resolved: true };
   }
 
-  const mockStops = route.map((r) => ({ name: r.name, gender: r.gender }));
+  const corrected = enforceFemaleNotFirst(route, hasEscort, isPickup);
+  const mockStops = corrected.map((r) => ({ name: r.name, gender: r.gender }));
   const violations = checkSafetyViolations(mockStops, isPickup, hasEscort);
-  if (violations.length === 0) {
-    return { route, resolved: true };
-  }
+  const hasHighViolation = violations.some((v) => v.severity === "HIGH");
 
-  if (isPickup && route.some((e) => e.gender === "FEMALE") && route.some((e) => e.gender === "MALE")) {
-    const reordered = reorderWithNearestMaleFirst(route, true, DEPOT, distanceFn);
-    const newMockStops = reordered.map((r) => ({ name: r.name, gender: r.gender }));
-    if (checkSafetyViolations(newMockStops, isPickup, hasEscort).length === 0) {
-      return { route: reordered, resolved: true };
-    }
-  }
-
-  const updatedRoute = [...route];
-
-  if (isPickup) {
-    const maleIdx = updatedRoute.findIndex((emp) => emp.gender === "MALE");
-    if (maleIdx !== -1) {
-      const temp = updatedRoute[0];
-      updatedRoute[0] = updatedRoute[maleIdx];
-      updatedRoute[maleIdx] = temp;
-
-      const newMockStops = updatedRoute.map((r) => ({ name: r.name, gender: r.gender }));
-      if (checkSafetyViolations(newMockStops, isPickup, hasEscort).length === 0) {
-        return { route: updatedRoute, resolved: true };
-      }
-    }
-  } else {
-    // FEMALE_LAST_DROP violation
-    // Find the last male employee in the route and swap with the last stop
-    const lastIdx = updatedRoute.length - 1;
-    let maleIdx = -1;
-    for (let i = lastIdx; i >= 0; i--) {
-      if (updatedRoute[i].gender === "MALE") {
-        maleIdx = i;
-        break;
-      }
-    }
-
-    if (maleIdx !== -1) {
-      // Swap last stop with male stop
-      const temp = updatedRoute[lastIdx];
-      updatedRoute[lastIdx] = updatedRoute[maleIdx];
-      updatedRoute[maleIdx] = temp;
-
-      // Re-verify
-      const newMockStops = updatedRoute.map((r) => ({ name: r.name, gender: r.gender }));
-      if (checkSafetyViolations(newMockStops, isPickup, hasEscort).length === 0) {
-        return { route: updatedRoute, resolved: true };
-      }
-    }
-  }
-
-  // If we could not resolve (e.g. no male employees in cab), return original and resolved=false
-  return { route, resolved: false };
+  return { route: corrected, resolved: !hasHighViolation };
 }
 /**
  * 5. Full Route Generation Pipeline
@@ -2070,8 +2119,8 @@ export interface RouteVariation {
   totalDuration: number;
   optimizationScore: number;
   violations: {
-    type: "FEMALE_FIRST_PICKUP" | "FEMALE_LAST_DROP" | "ISOLATED_FEMALE" | "ISOLATED_FEMALE_NIGHT" | "OVERCAPACITY" | "ESCORT_REQUIRED";
-    severity: "HIGH" | "MEDIUM";
+    type: "FEMALE_FIRST_PICKUP" | "FEMALE_LAST_DROP" | "ISOLATED_FEMALE" | "ISOLATED_FEMALE_NIGHT" | "OVERCAPACITY" | "ESCORT_REQUIRED" | "UNAVOIDABLE_FEMALE_FIRST";
+    severity: "HIGH" | "MEDIUM" | "LOW";
     notes: string;
   }[];
   hasEscort: boolean;
@@ -2501,10 +2550,13 @@ export function runPreflightChecks(
       const b = driverHomes[j];
       if (a.zone !== b.zone) continue;
       const distanceKm = getDistance(a.point, b.point);
+      if (distanceKm <= 0.15) continue;
+      if (isSamePoint(a.point, b.point)) continue;
       if (distanceKm <= 2) {
         warnings.push({
           type: "DRIVER_OVERLAP",
           driverIds: [a.cabId, b.cabId],
+          vehicleNumbers: [a.vehicleNumber, b.vehicleNumber],
           zone: a.zone,
           distanceKm: Math.round(distanceKm * 10) / 10,
           suggestion: "Merge their clusters — one driver covers the other's zone too",
@@ -2637,14 +2689,15 @@ function clusterMaxUtilization(
   reassignOutliers(assignments);
   annotateClusterZones(assignments);
   const matched = matchCabsToClusters(assignments);
-  const { assignments: consolidated, releasedCabs } = consolidateUnderfilled(matched);
+  const { assignments: consolidated, releasedCabs: preReleased } = consolidateUnderfilled(matched);
   annotateClusterZones(consolidated);
   const { assignments: maxAbsorbed, stillUnassigned: _maxStillUnassigned } = absorbOverflowEmployees(consolidated, remaining);
-  annotateClusterZones(maxAbsorbed);
+  const { assignments: finalConsolidated, releasedCabs: postReleased } = consolidateUnderfilled(maxAbsorbed);
+  annotateClusterZones(finalConsolidated);
   return {
-    assignments: maxAbsorbed,
-    isolatedEmployees: flagIsolatedEmployees(maxAbsorbed, employees, depot, corridorThresholdKm),
-    releasedCabs,
+    assignments: finalConsolidated,
+    isolatedEmployees: flagIsolatedEmployees(finalConsolidated, employees, depot, corridorThresholdKm),
+    releasedCabs: [...preReleased, ...postReleased],
   };
 }
 /**
@@ -2704,14 +2757,15 @@ function clusterMinTime(
   reassignOutliers(assignments);
   annotateClusterZones(assignments);
   const matched = matchCabsToClusters(assignments);
-  const { assignments: consolidated, releasedCabs } = consolidateUnderfilled(matched);
+  const { assignments: consolidated, releasedCabs: preReleased } = consolidateUnderfilled(matched);
   annotateClusterZones(consolidated);
   const { assignments: minAbsorbed, stillUnassigned: _minStillUnassigned } = absorbOverflowEmployees(consolidated, remaining);
-  annotateClusterZones(minAbsorbed);
+  const { assignments: finalConsolidated, releasedCabs: postReleased } = consolidateUnderfilled(minAbsorbed);
+  annotateClusterZones(finalConsolidated);
   return {
-    assignments: minAbsorbed,
-    isolatedEmployees: flagIsolatedEmployees(minAbsorbed, employees, depot, corridorThresholdKm),
-    releasedCabs,
+    assignments: finalConsolidated,
+    isolatedEmployees: flagIsolatedEmployees(finalConsolidated, employees, depot, corridorThresholdKm),
+    releasedCabs: [...preReleased, ...postReleased],
   };
 }
 /**
@@ -2773,14 +2827,15 @@ function clusterBalanced(
   reassignOutliers(assignments);
   annotateClusterZones(assignments);
   const matched = matchCabsToClusters(assignments);
-  const { assignments: consolidated, releasedCabs } = consolidateUnderfilled(matched);
+  const { assignments: consolidated, releasedCabs: preReleased } = consolidateUnderfilled(matched);
   annotateClusterZones(consolidated);
   const { assignments: balAbsorbed, stillUnassigned: _balStillUnassigned } = absorbOverflowEmployees(consolidated, remaining);
-  annotateClusterZones(balAbsorbed);
+  const { assignments: finalConsolidated, releasedCabs: postReleased } = consolidateUnderfilled(balAbsorbed);
+  annotateClusterZones(finalConsolidated);
   return {
-    assignments: balAbsorbed,
-    isolatedEmployees: flagIsolatedEmployees(balAbsorbed, employees, depot, corridorThresholdKm),
-    releasedCabs,
+    assignments: finalConsolidated,
+    isolatedEmployees: flagIsolatedEmployees(finalConsolidated, employees, depot, corridorThresholdKm),
+    releasedCabs: [...preReleased, ...postReleased],
   };
 }
 

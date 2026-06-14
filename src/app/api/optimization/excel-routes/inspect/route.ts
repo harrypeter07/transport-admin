@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/apiAuth";
-import { listExcelSheets } from "@/lib/excelParser";
+import { listGtlpSheets } from "@/lib/gtplParser";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const sheets = listExcelSheets(buffer);
+    const sheets = listGtlpSheets(buffer);
 
     return NextResponse.json({ sheets });
   } catch (e: unknown) {

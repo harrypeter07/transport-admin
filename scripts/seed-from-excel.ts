@@ -10,7 +10,9 @@ import { assignZone } from "../src/lib/zones";
 
 const prisma = new PrismaClient();
 
-const ROSTER_PATH = path.join(process.cwd(), "data", "test-rosters", "roster.xlsx");
+const ROSTER_PATH_1 = path.join(process.cwd(), "data", "test-roasters", "GTPL Cab Sheet June 26  (2).xlsx");
+const ROSTER_PATH_2 = path.join(process.cwd(), "data", "test-rosters", "roster.xlsx");
+const ROSTER_PATH = fs.existsSync(ROSTER_PATH_1) ? ROSTER_PATH_1 : ROSTER_PATH_2;
 const JSON_PATH = path.join(process.cwd(), "data", "excel_routes.json");
 
 type SeedEmployee = {
@@ -85,39 +87,55 @@ function extractFromExcel(sheetName?: string): { employees: SeedEmployee[]; cabs
 
   const empMap = new Map<string, SeedEmployee>();
   const cabMap = new Map<string, SeedCab>();
-  let currentRoute = "";
-  let shiftTime = "05:00";
-  let vehicle = "";
-  let driverName = "Driver";
-  let driverPhone = "9999999999";
 
+  // Group rows by Route No (row[0])
+  const routeGroups = new Map<string, unknown[][]>();
   for (const row of rows) {
     if (!row || row.length === 0) continue;
     const col0 = row[0] ? String(row[0]).trim() : "";
-    if (col0.toLowerCase() === "rout no") continue;
+    if (!col0 || col0.toLowerCase() === "rout no" || col0 === "-") continue;
+    if (!routeGroups.has(col0)) {
+      routeGroups.set(col0, []);
+    }
+    routeGroups.get(col0)!.push(row);
+  }
 
-    if (col0) {
-      currentRoute = col0;
+  for (const [routeNo, rRows] of routeGroups) {
+    // Extract driver and vehicle info
+    let vehicle = "";
+    let driverName = "Driver";
+    let driverPhone = "9999999999";
+    let shiftTime = "05:00";
+
+    for (const row of rRows) {
+      // Shift time
       const t = row[8];
       if (typeof t === "number") {
         const mins = Math.round(t * 24 * 60);
         shiftTime = `${String(Math.floor(mins / 60) % 24).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+      } else if (typeof t === "string" && /^\d{1,2}:\d{2}$/.test(t.trim())) {
+        shiftTime = t.trim();
+      }
+
+      // Driver details in column 12
+      const d = row[12] ? String(row[12]).trim() : "";
+      if (!d) continue;
+      if (/^MH/i.test(d)) {
+        vehicle = d;
+      } else if (/^(MOB|mob|Mob)-?/.test(d)) {
+        driverPhone = d.replace(/^(MOB|mob|Mob)-?/i, "");
+      } else if (/^\d{10}$/.test(d.replace(/[- ]/g, ""))) {
+        driverPhone = d.replace(/[- ]/g, "");
+      } else {
+        driverName = d;
       }
     }
 
-    const dCol = row[12] ? String(row[12]).trim() : "";
-    if (/^MH/i.test(dCol)) vehicle = dCol;
-    else if (/^\d{10}$/.test(dCol.replace(/[- ]/g, ""))) driverPhone = dCol.replace(/[- ]/g, "");
-    else if (dCol && !/^(MOB|mob)/i.test(dCol) && dCol.length > 3 && !row[3]) driverName = dCol;
+    if (!vehicle) {
+      vehicle = `DUMMY-${routeNo}`;
+    }
 
-    const code = row[3] ? String(row[3]).trim() : "";
-    const name = row[4] ? String(row[4]).trim() : "";
-    if (!code || !name || name.toLowerCase() === "escort") continue;
-
-    const status = row[11] ? String(row[11]).trim().toUpperCase() : "";
-    if (status.includes("NO SHOW") || status === "ABSENT") continue;
-
-    if (vehicle && !cabMap.has(vehicle)) {
+    if (!cabMap.has(vehicle)) {
       cabMap.set(vehicle, {
         vehicleNumber: vehicle,
         driverName,
@@ -127,19 +145,29 @@ function extractFromExcel(sheetName?: string): { employees: SeedEmployee[]; cabs
       });
     }
 
-    if (!empMap.has(code)) {
-      empMap.set(code, {
-        employeeCode: code,
-        name,
-        gender: row[13] === "F" ? "FEMALE" : "MALE",
-        email: `${code.toLowerCase().replace(/[^a-z0-9]/g, ".")}@globallogic.com`,
-        phone: "9999999999",
-        address: row[7] ? String(row[7]) : "Nagpur, Maharashtra",
-        x: 79.05,
-        y: 21.06,
-        shiftStartTime: shiftTime,
-        pickupPoint: row[9] ? String(row[9]).trim() : undefined,
-      });
+    // Parse passenger employees
+    for (const row of rRows) {
+      const code = row[3] ? String(row[3]).trim() : "";
+      const name = row[4] ? String(row[4]).trim() : "";
+      if (!code || !name || name.toLowerCase() === "escort" || name.toLowerCase() === "employee name" || name.toLowerCase() === "name") continue;
+
+      const status = row[11] ? String(row[11]).trim().toUpperCase() : "";
+      if (status.includes("NO SHOW") || status === "ABSENT") continue;
+
+      if (!empMap.has(code)) {
+        empMap.set(code, {
+          employeeCode: code,
+          name,
+          gender: row[13] === "F" ? "FEMALE" : "MALE",
+          email: `${code.toLowerCase().replace(/[^a-z0-9]/g, ".")}@globallogic.com`,
+          phone: "9999999999",
+          address: row[7] ? String(row[7]).trim() : "Nagpur, Maharashtra",
+          x: 79.05,
+          y: 21.06,
+          shiftStartTime: shiftTime,
+          pickupPoint: row[9] ? String(row[9]).trim() : undefined,
+        });
+      }
     }
   }
 
@@ -211,47 +239,92 @@ async function main() {
     }
   }
 
+  // Fetch existing employee coordinates to avoid overwriting them
+  const existingEmployees = await prisma.employee.findMany({
+    select: { id: true, employeeCode: true, name: true, x: true, y: true, address: true }
+  });
+  const existingByCode = new Map<string, typeof existingEmployees[0]>();
+  const existingByName = new Map<string, typeof existingEmployees[0]>();
+  for (const emp of existingEmployees) {
+    existingByCode.set(emp.employeeCode.toLowerCase(), emp);
+    existingByName.set(emp.name.toLowerCase(), emp);
+  }
+
   let upserted = 0;
   for (const emp of employees) {
     const shiftId = shiftCache.get(emp.shiftStartTime)!;
-    const zoneInfo = assignZone(emp.y, emp.x);
+    
+    const existing = existingByCode.get(emp.employeeCode.toLowerCase()) || existingByName.get(emp.name.toLowerCase());
+    let finalX = emp.x;
+    let finalY = emp.y;
+    let finalAddress = emp.address;
+
+    if (existing && existing.x != null && existing.y != null) {
+      finalX = existing.x;
+      finalY = existing.y;
+      if (existing.address && (!emp.address || emp.address === "Nagpur, Maharashtra")) {
+        finalAddress = existing.address;
+      }
+    } else {
+      if (emp.address && emp.address !== "Nagpur, Maharashtra") {
+        try {
+          const { geocodePlace } = await import("../src/lib/optimization");
+          const geo = await geocodePlace(emp.address, "Nagpur", "India", { x: 79.0526, y: 21.0625 }, 70);
+          if (geo) {
+            finalX = geo.x;
+            finalY = geo.y;
+            console.log(`Geocoded new employee ${emp.name} to (${finalX}, ${finalY})`);
+          }
+        } catch (e: any) {
+          console.warn(`Geocoding failed for ${emp.name} (${emp.address}): ${e.message}`);
+        }
+      }
+    }
+
+    const zoneInfo = assignZone(finalY, finalX);
     const pickupPointId = emp.pickupPoint ? pickupPoints.get(emp.pickupPoint) : undefined;
 
-    await prisma.employee.upsert({
-      where: { employeeCode: emp.employeeCode },
-      update: {
-        name: emp.name,
-        gender: emp.gender,
-        address: emp.address,
-        x: emp.x,
-        y: emp.y,
-        shiftId,
-        status: "ACTIVE",
-        zone: zoneInfo.zone,
-        subZone: zoneInfo.subZone,
-        distanceRing: zoneInfo.distanceRing,
-        distanceFromDepotKm: zoneInfo.distanceFromDepotKm,
-        pickupPointId,
-      },
-      create: {
-        employeeCode: emp.employeeCode,
-        name: emp.name,
-        gender: emp.gender,
-        phone: emp.phone,
-        email: emp.email,
-        address: emp.address,
-        x: emp.x,
-        y: emp.y,
-        department: "Engineering",
-        shiftId,
-        status: "ACTIVE",
-        zone: zoneInfo.zone,
-        subZone: zoneInfo.subZone,
-        distanceRing: zoneInfo.distanceRing,
-        distanceFromDepotKm: zoneInfo.distanceFromDepotKm,
-        pickupPointId,
-      },
-    });
+    if (existing) {
+      await prisma.employee.update({
+        where: { id: existing.id },
+        data: {
+          employeeCode: emp.employeeCode,
+          name: emp.name,
+          gender: emp.gender,
+          address: finalAddress,
+          x: finalX,
+          y: finalY,
+          shiftId,
+          status: "ACTIVE",
+          zone: zoneInfo.zone,
+          subZone: zoneInfo.subZone,
+          distanceRing: zoneInfo.distanceRing,
+          distanceFromDepotKm: zoneInfo.distanceFromDepotKm,
+          pickupPointId,
+        },
+      });
+    } else {
+      await prisma.employee.create({
+        data: {
+          employeeCode: emp.employeeCode,
+          name: emp.name,
+          gender: emp.gender,
+          phone: emp.phone,
+          email: emp.email,
+          address: finalAddress,
+          x: finalX,
+          y: finalY,
+          department: "Engineering",
+          shiftId,
+          status: "ACTIVE",
+          zone: zoneInfo.zone,
+          subZone: zoneInfo.subZone,
+          distanceRing: zoneInfo.distanceRing,
+          distanceFromDepotKm: zoneInfo.distanceFromDepotKm,
+          pickupPointId,
+        },
+      });
+    }
     upserted++;
   }
 

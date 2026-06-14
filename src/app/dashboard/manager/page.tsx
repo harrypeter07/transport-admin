@@ -167,8 +167,8 @@ export default function ManagerDashboardPage() {
    {metrics.delayedEmployees.map((stop: any) => (
     <div key={stop.id} className="bg-white p-4 rounded-none border border-red-150 flex items-center justify-between">
     <div>
-     <p className="font-bold text-[#1c1b1f] text-sm">{stop.employee.name}</p>
-     <p className="text-xs text-[#6b6b6b] mt-0.5">Cab {stop.route.cab.vehicleNumber} • Driver: {stop.route.cab.driver?.name || "N/A"}</p>
+     <p className="font-bold text-[#1c1b1f] text-sm">{stop.employee?.name}</p>
+     <p className="text-xs text-[#6b6b6b] mt-0.5">Cab {stop.route?.cab?.vehicleNumber} • Driver: {stop.route?.cab?.driverName || "N/A"}</p>
     </div>
     <div className="text-right">
      <span className="text-red-650 font-bold text-xs uppercase tracking-wide">
@@ -191,8 +191,8 @@ export default function ManagerDashboardPage() {
     <div key={route.id} className="bg-[#f7f7f7] border border-[#e8e8e8] rounded-none p-4">
     <div className="flex justify-between items-start mb-3">
      <div>
-     <p className="font-bold text-[#1c1b1f] text-sm">Cab {route.cab.vehicleNumber}</p>
-     <p className="text-xs text-[#6b6b6b] mt-0.5">Driver: {route.cab.driver?.name || "N/A"} • 📞 {route.cab.driver?.phone || "N/A"}</p>
+     <p className="font-bold text-[#1c1b1f] text-sm">Cab {route.cab?.vehicleNumber}</p>
+     <p className="text-xs text-[#6b6b6b] mt-0.5">Driver: {route.cab?.driverName || "N/A"} • 📞 {route.cab?.driverPhone || "N/A"}</p>
      </div>
      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase bg-[#f7f7f7] text-[#1c1b1f] tracking-wider">
      {route.status}
@@ -201,7 +201,7 @@ export default function ManagerDashboardPage() {
     <div className="divide-y divide-slate-150 bg-white border border-[#e8e8e8] rounded-none overflow-hidden">
      {route.stops.map((stop: any) => (
      <div key={stop.id} className="p-3 flex justify-between items-center text-xs">
-      <span className="font-bold text-[#4a4a4a]">{stop.employee.name}</span>
+      <span className="font-bold text-[#4a4a4a]">{stop.employee?.name}</span>
       <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
       stop.status === 'BOARDED' ? 'bg-[#f7f7f7] text-[#1c1b1f]' :
       stop.status === 'REACHED' ? 'bg-[#f7f7f7] text-[#1c1b1f]' :

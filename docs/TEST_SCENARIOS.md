@@ -1,106 +1,145 @@
-# ETMS Test Scenarios — Excel Comparison & Manifest
+# ETMS Test Guide — Excel Files & Scenarios
 
-Test workbooks live in [`data/test-rosters/`](../data/test-rosters/). Generate or refresh them with:
+All test workbooks live in [`data/test-rosters/`](../data/test-rosters/).
 
 ```bash
-npm run build:scenarios
-npm run seed:excel
+npm run generate:test:excels   # refresh scenario files from GTPL master
+npm run seed:12june            # seed DB from GTPL 12-June sheet
+npm run test:scenarios         # automated smoke checks (no UI)
+npm run verify                 # 72 unit/regression tests
 ```
 
-Coordinates: **x = longitude**, **y = latitude**. Depot: **21.0625, 79.0526** (MIHAN Nagpur).
+Master source: `data/test-roasters/GTPL Cab Sheet June 26  (2).xlsx`
 
 ---
 
-## Scenario A — Baseline parity (`2026-06-01`)
+## Quick reference — which file for what?
 
-**Workbook:** `scenario-2026-06-01-baseline.xlsx` (sheet `2026-06-01`)
+| File | Sheet name | Set app date | What it tests |
+|------|------------|--------------|---------------|
+| **gtpl-12-6-26-baseline.xlsx** | `12-6-26` | **2026-06-12** | Primary GTPL baseline — 17 routes, 64 present, 6 absent |
+| **test-scenario-A.xlsx** | `14-6-26` | **2026-06-14** | Same roster as 12-June (baseline parity on different date) |
+| **test-scenario-B.xlsx** | `14-6-26` | **2026-06-14** | **15 NO SHOW** — high absence, fewer cabs expected |
+| **test-scenario-C.xlsx** | `16-6-26` | **2026-06-16** | Female-first manual violations — app should fix |
+| scenario-2026-06-01-baseline.xlsx | `2026-06-01` | 2026-06-01 | Legacy synthetic (older pipeline) |
+| scenario-2026-06-02-high-absence.xlsx | `2026-06-02` | 2026-06-02 | Legacy 12 absent names |
+| scenario-2026-06-03-female-first.xlsx | `2026-06-03` | 2026-06-03 | Legacy female-first stress |
 
-### Steps
-
-1. Run `npm run seed:excel` to sync employees and cabs from roster/JSON.
-2. Admin → Transport → Optimization → set date **2026-06-01**.
-3. Run **Preview** (pickup, BALANCED strategy).
-4. Open **Compare** → upload workbook → select sheet **2026-06-01** → **Save baseline**.
-
-### Expected
-
-| Metric | Expected |
-|--------|----------|
-| Unmatched employee codes | **0** after seed |
-| Active employees (app) | ~**53–65** (depends on shift filter) |
-| Manual routes (Excel) | ~**12** pickup routes in generated scenario file |
-| App cab count | `ceil(active / 6)` ≈ **9–11** |
-| App `FEMALE_FIRST_PICKUP` violations | **0** |
-| Distance vs manual | Within ~**15%** (OSRM vs haversine Excel) |
-| Per-route employee overlap | Flag routes with **<50%** same employees as manual |
+**Recommended path:** Use **2026-06-12** + `gtpl-12-6-26-baseline.xlsx` for the main demo.
 
 ---
 
-## Scenario B — High absence (`2026-06-02`)
+## Scenario 1 — GTPL baseline (2026-06-12)
 
-**Workbook:** `scenario-2026-06-02-high-absence.xlsx` (sheet `2026-06-02`)
-
-**Setup:** 12 employees marked **NO SHOW** in Excel:
-
-`CHEPARTHI-VASANTHI`, `ANIMA-DIXIT`, `MEGHANA-U`, `AKANSHA-KHODE`, `PULIPATI-KRISHNA`, `PRABHAT-PRIYDARSHI`, `2577398`, `Shubhankar-Das`, `2577282`, `2576690`, `SEJAL-SHAHARE`, `GEETA-RAJPUT`
+**File:** `gtpl-12-6-26-baseline.xlsx` → sheet **`12-6-26`**
 
 ### Steps
 
-1. In app: create **approved leave requests** for the same 12 employees on **2026-06-02** (optional but recommended for DB parity).
-2. Upload scenario B in Manual Routing desk → note absent codes applied to optimizer via `absentEmployeeCodes`.
-3. Run optimization preview for **2026-06-02**.
-4. CompareModal: upload same sheet, save baseline, compare.
+1. `npm run seed:12june`
+2. Admin → Transport → Optimization → date **2026-06-12**
+3. Click **Optimize Routing** → wait for preview (no 400 errors in terminal)
+4. Map filter **All Shifts (N routes)** — all route paths visible
+5. Click a shift header in manifest → map filters to that shift
+6. **Compare** → upload same file → sheet `12-6-26` → **Save baseline**
 
 ### Expected
 
-| Metric | Expected |
-|--------|----------|
-| Excel no-show count | **12** |
-| Optimizer active count | Total − 12 (minus any DB leaves) |
-| Active cabs | `ceil(active / 6)` — roughly **7** if ~41 active (vs ~9 full day) |
-| CompareModal chips | Excel absent ≈ DB leaves when both configured |
-| `capacityShortfall` | **0** |
+| Metric | Value |
+|--------|-------|
+| GTPL routes | 17 |
+| Present (manifest YES) | ~131 rows / ~64 unique |
+| DB absent leaves | 6 |
+| App violations | 0 (female-first enforced) |
+| Excel violations in Compare | 7 |
+| Map routes (all shifts) | ~11–15 optimized routes across 5 shifts |
 
 ---
 
-## Scenario C — Female-first pickup (`2026-06-03`)
+## Scenario 2 — High absence (2026-06-14)
 
-**Workbook:** `scenario-2026-06-03-female-first.xlsx` (sheet `2026-06-03`)
-
-Manual sheet lists a **female first** on a mixed-gender cab (route P1).
+**File:** `test-scenario-B.xlsx` → sheet **`14-6-26`**
 
 ### Steps
 
-1. Run app optimization for **2026-06-03** (same employee set).
-2. Upload manual sheet → Compare.
-3. Inspect first pickup stop gender on manual vs app for route P1.
+1. Set date **2026-06-14**
+2. Upload `test-scenario-B.xlsx` in Compare or Manual Routing → **Save baseline**
+3. Absent codes flow to optimizer automatically
+4. Run **Optimize Routing**
+5. Compare: Excel no-show ≈ 15, cabs reduced vs Scenario A
 
 ### Expected
 
-| Side | Expected |
-|------|----------|
-| Manual (Excel) | May show **FEMALE_FIRST_PICKUP** on affected route |
-| App | First pickup = **nearest male** to depot; **no** `FEMALE_FIRST_PICKUP` |
-| Stop order | Distance-based after male-first constraint |
+- Fewer active employees than baseline
+- Fewer cabs in preview banner
+- `absentEmployeeCodes` applied from parse response
 
 ---
 
-## Scenario D — Manifest drag-and-drop
+## Scenario 3 — Baseline copy on 14-June (2026-06-14)
 
-### Steps
+**File:** `test-scenario-A.xlsx` → sheet **`14-6-26`**
 
-1. Publish or preview routes with **≥2 cabs** at partial capacity.
-2. In manifest panel, use **Drag employees between routes**.
-3. Drag employee from Cab A (e.g. 4/6) to Cab B at **6/6** → should **block** (409).
-4. Drag to Cab C (e.g. 3/6) → should **succeed**; stops re-ordered by distance.
+Same roster as 12-June but dated 14-June. Use to verify date inference (`14-6-26` → 2026-06-14) and Excel filter without re-seeding.
 
-### Expected
+---
 
-| Action | HTTP / UI |
-|--------|-----------|
-| Capacity exceed | **409** + toast message |
-| Safety violation (isolated female) | **422** + snap back |
-| Valid move | Both routes persist; map updates |
+## Scenario 4 — Female-first stress (2026-06-16)
+
+**File:** `test-scenario-C.xlsx` → sheet **`16-6-26`**
+
+Upload → optimize → Compare first pickup gender: Excel may violate, app must not.
+
+---
+
+## Marking absent via API (edge cases)
+
+### Single employee leave (DB)
+
+```http
+POST /api/leaves
+Content-Type: application/json
+
+{
+  "startDate": "2026-06-12",
+  "endDate": "2026-06-12",
+  "comments": "Test absence"
+}
+```
+
+Then approve via `PATCH /api/leaves/{id}` with `{ "status": "APPROVED" }`.
+
+### Excel overlay (no DB leave)
+
+Upload scenario B in Compare → **Save baseline** — `absentEmployeeCodes` syncs to the store and is sent on every optimize call.
+
+### Heavy absence (≥5 on one route)
+
+Use `test-scenario-B.xlsx`. Parse API returns `routesWithHeavyAbsence` for routes with 5+ NO SHOW. Optimizer runs `consolidateUnderfilled()` to release empty cabs.
+
+---
+
+## Map & filter checklist
+
+After **Optimize Routing**:
+
+- [ ] Manifest table shows routes grouped by shift (05:00, 07:00, …)
+- [ ] Map dropdown shows **All Shifts (N routes)** with correct N
+- [ ] Clicking shift header filters map + manifest together
+- [ ] Clicking a route path on map shows manifest sidebar (not "No Path Selected")
+- [ ] Compare modal: both maps show all routes for selected shift filter
+- [ ] Compare manifest lists: click route → highlights on map
+
+---
+
+## Terminal — what is normal vs a bug
+
+| Log | Normal? |
+|-----|---------|
+| `Excel Filter for 2026-06-12 (12-6-26): Found 64 names, 8 cab plates` | ✅ Yes — only 8 MH plates in sheet; fleet tops up from DB |
+| `shift skipped / no_employees` | ✅ Yes — empty shifts (e.g. 08:00 protected) skip quietly |
+| `Fleet sized: N of M cabs` with N > 0 | ✅ Optimization succeeded for that shift |
+| `POST /api/optimization 400` | ❌ Should not happen in preview mode anymore |
+| `POST /api/optimization 403` | ✅ Only for protected shift-0800 |
 
 ---
 
@@ -109,17 +148,16 @@ Manual sheet lists a **female first** on a mixed-gender cab (route P1).
 ```bash
 npx tsc --noEmit
 npm run verify
+npm run test:scenarios
+npm run seed:12june
 ```
-
-Manual checklist after each scenario: record actual cab count, active employees, and CompareModal metrics in this file under **Actual results** when testing.
 
 ---
 
 ## Actual results (fill when testing)
 
-| Scenario | Date tested | Active employees | Cabs | Notes |
-|----------|-------------|------------------|------|-------|
-| A | | | | |
-| B | | | | |
-| C | | | | |
-| D | | | | |
+| Scenario | Date | Routes | Cabs | Notes |
+|----------|------|--------|------|-------|
+| GTPL baseline | 2026-06-12 | | | |
+| High absence B | 2026-06-14 | | | |
+| Female-first C | 2026-06-16 | | | |

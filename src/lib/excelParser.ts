@@ -63,8 +63,10 @@ export type ExcelSheetInfo = {
   routePreviewCount: number;
 };
 
-export function inferDateFromSheetName(name: string): string | null {
-  const trimmed = name.trim();
+export function inferDateFromSheetName(name: unknown): string | null {
+  if (name == null) return null;
+  const trimmed = String(name).trim();
+  if (!trimmed) return null;
 
   const iso = trimmed.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;

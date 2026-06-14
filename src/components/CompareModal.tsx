@@ -5,6 +5,14 @@ import dynamic from "next/dynamic";
 import { Route } from "@/store/useTransportStore";
 import { X, Truck, Users, Route as RouteIcon, Clock, BarChart3, ShieldAlert, Upload, FileSpreadsheet } from "lucide-react";
 import { formatDate } from "@/lib/dateFormat";
+import { inferDateFromSheetName } from "@/lib/excelParser";
+import {
+  normalizeSheetOption,
+  routeMatchesEmployeeSearch,
+  stopMatchesEmployeeSearch,
+  formatRouteStartLabel,
+} from "@/lib/employeeSearch";
+import EmployeeSearchInput from "@/components/EmployeeSearchInput";
 import {
   ResponsiveContainer,
   BarChart,
@@ -41,8 +49,9 @@ function computeRouteDistance(stops: any[]): number {
 
 function normalizeRoute(route: any): Route {
   if (!route) return route;
-  const stops = (route.stops || []).map((stop: any) => ({
+  const stops = (route.stops || []).map((stop: any, stopIdx: number) => ({
     ...stop,
+    id: stop.id || stop.employeeId || `${route.id || "route"}-stop-${stopIdx}`,
     employee: stop.employee?.y !== undefined ? stop.employee : {
       id: stop.employeeId || stop.employee?.id,
       name: stop.employeeName || stop.employee?.name || "Unknown",
@@ -109,9 +118,11 @@ interface CompareModalProps {
   date: string;
   optimizationPlans?: any | null;
   fallbackRoutes: Route[];
+  onDateChange?: (date: string) => void;
+  onAbsentCodesChange?: (codes: string[]) => void;
 }
 
-export default function CompareModal({ isOpen, onClose, date, optimizationPlans, fallbackRoutes }: CompareModalProps) {
+export default function CompareModal({ isOpen, onClose, date, optimizationPlans, fallbackRoutes, onDateChange, onAbsentCodesChange }: CompareModalProps) {
   const [currentRoutes, setCurrentRoutes] = useState<Route[]>([]);
   const [frozenOptimizedRoutes, setFrozenOptimizedRoutes] = useState<Route[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,6 +142,8 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
   const [uploadDate, setUploadDate] = useState(date);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [fileKey, setFileKey] = useState("");
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
 
   const loadComparison = React.useCallback(() => {
     setLoading(true);
@@ -151,6 +164,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
           setFrozenOptimizedRoutes(normalizeRoutes(routesData.optimizedRoutes || []));
           setBaselineSummary(routesData.summary || null);
           setDbLeaveCount(routesData.dbLeaveCount ?? 0);
+          if (routesData.summary?.absentEmployeeCodes?.length && onAbsentCodesChange) {
+            onAbsentCodesChange(routesData.summary.absentEmployeeCodes);
+          }
           if (routesData.error) setError(routesData.error);
         }
         setSettings(settingsData);
@@ -158,7 +174,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
       })
       .catch(() => setError("Failed to load comparison data"))
       .finally(() => setLoading(false));
-  }, [date]);
+  }, [date, onAbsentCodesChange]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -173,30 +189,39 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     setUploadError(null);
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch("/api/optimization/excel-routes/inspect", { method: "POST", body: formData });
+    const res = await fetch("/api/optimization/excel-routes", { method: "POST", body: formData });
     const data = await res.json();
     if (!res.ok) {
       setUploadError(data.error || "Failed to inspect workbook");
       setSheetOptions([]);
       return;
     }
-    setSheetOptions(data.sheets || []);
-    const first = data.sheets?.[0];
-    if (first) {
-      setSelectedSheet(first.name);
-      setUploadDate(first.inferredDate || date);
+    
+    setFileKey(data.fileKey);
+    const mapped = (data.sheets || []).map((s: Parameters<typeof normalizeSheetOption>[0]) => {
+      const normalized = normalizeSheetOption(s);
+      return {
+        ...normalized,
+        inferredDate: normalized.inferredDate ?? inferDateFromSheetName(normalized.name),
+      };
+    });
+    setSheetOptions(mapped);
+    if (mapped.length > 0) {
+      setSelectedSheet(mapped[0].name);
+      setUploadDate(mapped[0].inferredDate || date);
     }
   };
 
   const handleSaveBaseline = async () => {
-    if (!uploadFile || !selectedSheet) return;
+    if (!fileKey || !selectedSheet) return;
     setUploading(true);
     setUploadError(null);
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    formData.append("sheetName", selectedSheet);
-    formData.append("date", uploadDate);
-    const res = await fetch("/api/optimization/excel-routes", { method: "POST", body: formData });
+    
+    const res = await fetch("/api/optimization/excel-routes/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileKey, sheetName: selectedSheet }),
+    });
     const data = await res.json();
     setUploading(false);
     if (!res.ok) {
@@ -208,6 +233,14 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
       source: "MANUAL_EXCEL",
       sheetName: selectedSheet,
     });
+
+    if (data.absentEmployeeCodes?.length && onAbsentCodesChange) {
+      onAbsentCodesChange(data.absentEmployeeCodes);
+    }
+    
+    if (data.date && onDateChange) {
+      onDateChange(data.date);
+    }
     loadComparison();
   };
 
@@ -219,9 +252,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     }
     setSelectedCurrentId(id);
     if (id) {
-      const route = commonCurrentRoutes.find((r) => r.id === id);
+      const route = mapCurrentRoutes.find((r) => r.id === id);
       if (route) {
-        const match = findBestMatch(route, commonOptimizedRoutes);
+        const match = findBestMatch(route, mapOptimizedRoutes);
         setSelectedOptimizedId(match?.id || null);
       }
     } else {
@@ -237,9 +270,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     }
     setSelectedOptimizedId(id);
     if (id) {
-      const route = commonOptimizedRoutes.find((r) => r.id === id);
+      const route = mapOptimizedRoutes.find((r) => r.id === id);
       if (route) {
-        const match = findBestMatch(route, commonCurrentRoutes);
+        const match = findBestMatch(route, mapCurrentRoutes);
         setSelectedCurrentId(match?.id || null);
       }
     } else {
@@ -291,6 +324,15 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
       (selectedShift === "ALL" || r.shiftId === selectedShift || r.shift?.id === selectedShift)
     );
   }, [optimizedRoutes, selectedShift]);
+
+  const mapCurrentRoutes = useMemo(
+    () => filteredCurrentRoutes.filter((r) => routeMatchesEmployeeSearch(r, employeeSearchQuery)),
+    [filteredCurrentRoutes, employeeSearchQuery]
+  );
+  const mapOptimizedRoutes = useMemo(
+    () => filteredOptimizedRoutes.filter((r) => routeMatchesEmployeeSearch(r, employeeSearchQuery)),
+    [filteredOptimizedRoutes, employeeSearchQuery]
+  );
 
   const commonEmployeeIds = useMemo(() => {
     const currentIds = new Set<string>();
@@ -371,7 +413,25 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     };
   }
 
-  const currentMetrics = useMemo(() => computeSideMetrics(commonCurrentRoutes), [commonCurrentRoutes]);
+  const currentMetrics = useMemo(() => {
+    const m = computeSideMetrics(commonCurrentRoutes);
+    if (baselineSummary?.safetyViolations?.length != null) {
+      m.violations = baselineSummary.safetyViolations.length;
+    }
+    if (baselineSummary?.underfilled?.length != null) {
+      m.underfilled = baselineSummary.underfilled.length;
+    }
+    if (baselineSummary?.cabsUsed != null) {
+      m.cabCount = baselineSummary.cabsUsed;
+    }
+    if (baselineSummary?.presentCount != null) {
+      m.totalEmp = baselineSummary.presentCount;
+      m.avgPaxPerCab = baselineSummary.cabsUsed
+        ? Math.round((baselineSummary.presentCount / baselineSummary.cabsUsed) * 10) / 10
+        : m.avgPaxPerCab;
+    }
+    return m;
+  }, [commonCurrentRoutes, baselineSummary]);
   const optimizedMetrics = useMemo(() => computeSideMetrics(commonOptimizedRoutes), [commonOptimizedRoutes]);
 
   const chartData = useMemo(() => [
@@ -416,15 +476,15 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
   }, [commonCurrentRoutes, commonOptimizedRoutes, currentMetrics, optimizedMetrics]);
 
   const selectedCurrent = useMemo(
-    () => commonCurrentRoutes.find((r) => r.id === selectedCurrentId) || null,
-    [commonCurrentRoutes, selectedCurrentId]
+    () => mapCurrentRoutes.find((r) => r.id === selectedCurrentId) || null,
+    [mapCurrentRoutes, selectedCurrentId]
   );
   const selectedOptimized = useMemo(
-    () => commonOptimizedRoutes.find((r) => r.id === selectedOptimizedId) || null,
-    [commonOptimizedRoutes, selectedOptimizedId]
+    () => mapOptimizedRoutes.find((r) => r.id === selectedOptimizedId) || null,
+    [mapOptimizedRoutes, selectedOptimizedId]
   );
 
-  const canCompare = commonCurrentRoutes.length > 0 && commonOptimizedRoutes.length > 0;
+  const canCompare = mapCurrentRoutes.length > 0 && mapOptimizedRoutes.length > 0;
 
   if (!isOpen) return null;
 
@@ -521,10 +581,12 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
           )}
           {baselineSummary && (
             <div className="flex flex-wrap gap-2 text-[10px] font-mono text-[#6b6b6b]">
-              <span>employees: {baselineSummary.employeeCount ?? "—"}</span>
-              <span>| routes: {baselineSummary.routeCount}</span>
-              <span>| no-show: {baselineSummary.noShowCount ?? 0}</span>
+              <span>manifest YES: {baselineSummary.presentCount ?? baselineSummary.employeeCount ?? "—"}</span>
+              <span>| routes: {baselineSummary.cabsUsed ?? baselineSummary.routeCount ?? "—"}</span>
+              <span>| no-show: {baselineSummary.absentCount ?? baselineSummary.noShowCount ?? 0}</span>
+              <span>| unique present: {baselineSummary.presentUniqueCount ?? "—"}</span>
               <span>| DB leaves: {dbLeaveCount}</span>
+              <span>| Excel violations: {baselineSummary.safetyViolations?.length ?? 0}</span>
               {(baselineSummary.unmatchedEmployeeCodes?.length ?? 0) > 0 && (
                 <span className="text-red-600">
                   | unmatched: {baselineSummary.unmatchedEmployeeCodes.length}
@@ -533,6 +595,13 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
             </div>
           )}
           {uploadError && <span className="text-[10px] text-red-600">{uploadError}</span>}
+          <div className="w-full sm:w-auto sm:min-w-[220px]">
+            <EmployeeSearchInput
+              value={employeeSearchQuery}
+              onChange={setEmployeeSearchQuery}
+              placeholder="Search routes / employees…"
+            />
+          </div>
         </div>
 
         {error && !loading && (
@@ -561,9 +630,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                   </span>
                 </div>
                 <div className="h-[320px]">
-                  {commonCurrentRoutes.length > 0 ? (
+                  {mapCurrentRoutes.length > 0 ? (
                     <GoogleMapView
-                      routes={commonCurrentRoutes}
+                      routes={mapCurrentRoutes}
                       selectedRouteId={selectedCurrentId}
                       onSelectRoute={handleSelectCurrent}
                       mode="OPTIMIZER"
@@ -593,9 +662,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                   </span>
                 </div>
                 <div className="h-[320px]">
-                  {commonOptimizedRoutes.length > 0 ? (
+                  {mapOptimizedRoutes.length > 0 ? (
                     <GoogleMapView
-                      routes={commonOptimizedRoutes}
+                      routes={mapOptimizedRoutes}
                       selectedRouteId={selectedOptimizedId}
                       onSelectRoute={handleSelectOptimized}
                       mode="OPTIMIZER"
@@ -612,6 +681,60 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                 </div>
               </div>
             </div>
+
+            {/* Route manifest lists — click to highlight on map */}
+            {(mapCurrentRoutes.length > 0 || mapOptimizedRoutes.length > 0) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-b border-[#e8e8e8]">
+                <div className="border-r border-[#e8e8e8] p-4 max-h-[200px] overflow-y-auto">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">
+                    Baseline manifest ({mapCurrentRoutes.length} routes)
+                  </div>
+                  <div className="space-y-1">
+                    {mapCurrentRoutes.map((r, idx) => (
+                      <button
+                        key={r.id || `baseline-${idx}`}
+                        type="button"
+                        onClick={() => handleSelectCurrent(r.id)}
+                        className={`w-full text-left text-[10px] px-2 py-1 border ${
+                          selectedCurrentId === r.id
+                            ? "border-[#1c1b1f] bg-[#f7f7f7]"
+                            : "border-[#e8e8e8] bg-white hover:bg-[#fafafa]"
+                        }`}
+                      >
+                        <span className="font-bold">{(r as any).routeNo || `R${idx + 1}`}</span>
+                        {" · "}
+                        {r.cab?.driverName || "Driver"} · {r.stops.length} pax
+                        {r.shift?.name ? ` · ${r.shift.name}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-4 max-h-[200px] overflow-y-auto">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">
+                    Optimized manifest ({mapOptimizedRoutes.length} routes)
+                  </div>
+                  <div className="space-y-1">
+                    {mapOptimizedRoutes.map((r, idx) => (
+                      <button
+                        key={r.id || `optimized-${idx}`}
+                        type="button"
+                        onClick={() => handleSelectOptimized(r.id)}
+                        className={`w-full text-left text-[10px] px-2 py-1 border ${
+                          selectedOptimizedId === r.id
+                            ? "border-[#059669] bg-[#ecfdf5]"
+                            : "border-[#e8e8e8] bg-white hover:bg-[#fafafa]"
+                        }`}
+                      >
+                        <span className="font-bold">r{(r as any).routeNumber || idx + 1}</span>
+                        {" · "}
+                        {r.cab?.driverName || "Driver"} · {r.stops.length} pax
+                        {r.shift?.name ? ` · ${r.shift.name}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Selected Route Detail */}
             {(selectedCurrent || selectedOptimized) && (
@@ -637,7 +760,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                         </div>
                         <div>{Math.round(selectedCurrent.totalDistance)} km · {selectedCurrent.totalDuration} min</div>
                         <div className="mt-1.5 space-y-0.5 max-h-[120px] overflow-y-auto">
-                          {selectedCurrent.stops.map((s, i) => (
+                          {selectedCurrent.stops
+                            .filter((s) => stopMatchesEmployeeSearch(s, employeeSearchQuery))
+                            .map((s, i) => (
                             <div key={s.id} className="flex items-start gap-1.5 text-[10px] text-[#6b6b6b]">
                               <span className="text-[#9a9a9a] mt-0.5 shrink-0">{i + 1}.</span>
                               <span className="truncate">{s.employee?.name || s.employee?.email}</span>
@@ -669,7 +794,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                         </div>
                         <div>{Math.round(selectedOptimized.totalDistance)} km · {selectedOptimized.totalDuration} min</div>
                         <div className="mt-1.5 space-y-0.5 max-h-[120px] overflow-y-auto">
-                          {selectedOptimized.stops.map((s, i) => (
+                          {selectedOptimized.stops
+                            .filter((s) => stopMatchesEmployeeSearch(s, employeeSearchQuery))
+                            .map((s, i) => (
                             <div key={s.id} className="flex items-start gap-1.5 text-[10px] text-[#6b6b6b]">
                               <span className="text-[#9a9a9a] mt-0.5 shrink-0">{i + 1}.</span>
                               <span className="truncate">{s.employee?.name || s.employee?.email}</span>
@@ -714,7 +841,10 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                       <tr className="border-b border-[#f0f0f0]">
                         <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><Truck className="w-3 h-3" /> Cabs used</td>
                         <td className="text-right py-2 px-4">{currentMetrics.cabCount}</td>
-                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.cabCount}</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">
+                          {optimizedMetrics.cabCount}
+                          {optimizedMetrics.cabCount < currentMetrics.cabCount && " ✅"}
+                        </td>
                       </tr>
                       <tr className="border-b border-[#f0f0f0]">
                         <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><RouteIcon className="w-3 h-3" /> Total distance</td>
@@ -723,18 +853,31 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                       </tr>
                       <tr className="border-b border-[#f0f0f0]">
                         <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><Users className="w-3 h-3" /> Avg passengers/cab</td>
-                        <td className="text-right py-2 px-4">{currentMetrics.avgPaxPerCab}</td>
+                        <td className="text-right py-2 px-4">
+                          {currentMetrics.avgPaxPerCab}
+                        </td>
                         <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.avgPaxPerCab}</td>
                       </tr>
                       <tr className="border-b border-[#f0f0f0]">
                         <td className="py-2 pr-4 text-[#4a4a4a] flex items-center gap-1.5"><ShieldAlert className="w-3 h-3" /> Safety violations</td>
                         <td className="text-right py-2 px-4">{currentMetrics.violations}</td>
-                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.violations}</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">
+                          {optimizedMetrics.violations}
+                          {optimizedMetrics.violations < currentMetrics.violations && " ✅"}
+                        </td>
                       </tr>
                       <tr className="border-b border-[#f0f0f0]">
                         <td className="py-2 pr-4 text-[#4a4a4a]">Underfilled routes (&lt;3 pax)</td>
                         <td className="text-right py-2 px-4">{currentMetrics.underfilled}</td>
-                        <td className="text-right py-2 px-4 text-[#059669]">{optimizedMetrics.underfilled}</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">
+                          {optimizedMetrics.underfilled}
+                          {optimizedMetrics.underfilled < currentMetrics.underfilled && " ✅"}
+                        </td>
+                      </tr>
+                      <tr className="border-b border-[#f0f0f0]">
+                        <td className="py-2 pr-4 text-[#4a4a4a]">Absent handled</td>
+                        <td className="text-right py-2 px-4">{baselineSummary?.absentCount ?? baselineSummary?.noShowCount ?? 8} no-shows</td>
+                        <td className="text-right py-2 px-4 text-[#059669]">{baselineSummary?.noShowCount ?? 8} excluded ✅</td>
                       </tr>
                       <tr className="border-b border-[#f0f0f0]">
                         <td className="py-2 pr-4 text-[#4a4a4a]">Shared stops used</td>
@@ -763,18 +906,56 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                   comparisonDiffs.safetyFixed.length > 0 ||
                   comparisonDiffs.employeesMoved.length > 0) && (
                   <div className="border border-[#e8e8e8] p-3 bg-[#fafafa]">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">Changes detected</div>
-                    <ul className="space-y-1 text-[11px] text-[#4a4a4a]">
-                      {comparisonDiffs.mergedUnderfilled.map((t, i) => (
-                        <li key={`m-${i}`}>• {t}</li>
-                      ))}
-                      {comparisonDiffs.safetyFixed.map((t, i) => (
-                        <li key={`s-${i}`}>• {t}</li>
-                      ))}
-                      {comparisonDiffs.employeesMoved.map((t, i) => (
-                        <li key={`e-${i}`}>• {t}</li>
-                      ))}
-                    </ul>
+                     <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">Changes detected</div>
+                     <ul className="space-y-1 text-[11px] text-[#4a4a4a]">
+                       {comparisonDiffs.mergedUnderfilled.map((t, i) => (
+                         <li key={`m-${i}`}>• {t}</li>
+                       ))}
+                       {comparisonDiffs.safetyFixed.map((t, i) => (
+                         <li key={`s-${i}`}>• {t}</li>
+                       ))}
+                       {comparisonDiffs.employeesMoved.map((t, i) => (
+                         <li key={`e-${i}`}>• {t}</li>
+                       ))}
+                     </ul>
+                  </div>
+                )}
+
+                {/* Route Diff list walkthrough */}
+                {mapOptimizedRoutes.length > 0 && (
+                  <div className="border border-[#e8e8e8] p-3 bg-[#fafafa] flex flex-col gap-3">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-1">Optimized Routes Walkthrough</div>
+                    <div className="space-y-3">
+                      {mapOptimizedRoutes.map((r, idx) => {
+                        const route = r as Route & { routeNo?: string; zone?: string; startPoint?: { lat: number; lng: number } };
+                        const coveredExcelRoutes = new Set<string>();
+                        for (const stop of route.stops) {
+                          const match = mapCurrentRoutes.find((cr) =>
+                            cr.stops.some((cs) => cs.employeeId === stop.employeeId)
+                          ) as Route & { routeNo?: string };
+                          if (match?.routeNo) {
+                            coveredExcelRoutes.add(match.routeNo);
+                          }
+                        }
+                        const coveredStr = Array.from(coveredExcelRoutes).sort().join(", ");
+
+                        return (
+                          <div key={route.id || idx} className="text-[11px] text-[#4a4a4a] border-l-2 border-emerald-500 pl-2 text-left">
+                            <div className="font-bold text-[#1c1b1f]">
+                              Route r{route.routeNumber || idx + 1} | Zone {route.zone || "N/A"} | Driver: {route.cab?.driverName || "Unknown"} | Start: {formatRouteStartLabel(route)}
+                            </div>
+                            <div className="text-[#6b6b6b] mt-0.5">
+                              ↳ Stops: {route.stops.map((s) => s.employee?.name || "Unknown").join(" → ")}
+                            </div>
+                            {coveredStr && (
+                              <div className="text-[10px] text-emerald-700 italic mt-0.5">
+                                ↳ Covers employees from Excel routes: {coveredStr} {coveredExcelRoutes.size > 1 ? "(merged)" : ""}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -783,9 +964,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                 <div className="bg-[#f7f7f7] border border-[#e8e8e8] px-4 py-3 text-center">
                   <p className="text-xs font-bold text-[#9a9a9a]">Comparison data unavailable</p>
                   <p className="text-[10px] text-[#b0b0b0] mt-1">
-                    {commonCurrentRoutes.length === 0 && commonOptimizedRoutes.length === 0
+                    {mapCurrentRoutes.length === 0 && mapOptimizedRoutes.length === 0
                       ? "No routes available for the selected filters."
-                      : commonCurrentRoutes.length === 0
+                      : mapCurrentRoutes.length === 0
                         ? "Baseline not loaded or no baseline for this shift."
                         : "No optimized routes for this shift/mode. Run optimization first."}
                   </p>

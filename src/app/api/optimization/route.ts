@@ -14,6 +14,7 @@ import {
 import { requireApiRole } from "@/lib/apiAuth";
 
 import { audit } from "@/lib/audit";
+import { getExcelFilterForDate } from "@/lib/excelFilter";
 
 function reqIp(req: NextRequest | Request): string {
   if (req instanceof NextRequest) {
@@ -68,7 +69,7 @@ async function fetchOptimizationInputs(
   extraAbsentEmployeeIds?: string[],
   extraAbsentEmployeeCodes?: string[]
 ) {
-  const dbEmployees = await prisma.employee.findMany({
+  let dbEmployees = await prisma.employee.findMany({
     where: {
       status: "ACTIVE",
       ...(shiftId ? { shiftId } : {}),
@@ -89,6 +90,28 @@ async function fetchOptimizationInputs(
     },
   });
 
+  const excelFilter = getExcelFilterForDate(currentDateStr);
+  if (excelFilter) {
+    const VARIATION_MAP: Record<string, string> = {
+      "devalla kumar": "devalla sudheer kumar",
+      "devalla sudheer kumar": "devalla sudheer kumar",
+      "meghana u": "meghana b u",
+      "meghana b u": "meghana b u",
+      "prashanth pathlavath": "prashant pathlavat",
+      "prashant pathlavat": "prashant pathlavat",
+      "vajja prakash": "vajja bhanu prakash",
+      "vajja bhanu prakash": "vajja bhanu prakash"
+    };
+    const normalizeName = (name: string) => {
+      const lower = name.trim().toLowerCase();
+      return VARIATION_MAP[lower] || lower;
+    };
+    dbEmployees = dbEmployees.filter(emp => {
+      const normDb = normalizeName(emp.name);
+      return excelFilter.employeeNames.has(normDb);
+    });
+  }
+
   const absentIdSet = new Set(extraAbsentEmployeeIds || []);
   const absentCodeSet = new Set((extraAbsentEmployeeCodes || []).map((c) => c.toLowerCase()));
 
@@ -98,28 +121,64 @@ async function fetchOptimizationInputs(
     if (absentCodeSet.has(emp.employeeCode.toLowerCase())) return false;
     return true;
   });
-  const fallbackShiftId = availableEmployees[0]?.shiftId || shiftId || "";
+  const fallbackShiftId = shiftId || availableEmployees[0]?.shiftId || "";
 
   // Load all shift start times for chronological comparison
   const allShifts = await prisma.shift.findMany({ select: { id: true, startTime: true } });
   const shiftStartTimes = new Map(allShifts.map(s => [s.id, s.startTime || "00:00"]));
   const currentShiftStartTime = shiftStartTimes.get(fallbackShiftId) || "00:00";
 
-  const dbCabs = await prisma.cab.findMany({
-    where: {
-      status: "AVAILABLE",
-      shifts: { some: { id: fallbackShiftId } }
-    },
-    include: {
-      routes: {
-        where: { date: currentDateStr },
-        include: {
-          stops: { include: { employee: true } },
-          locations: { orderBy: { timestamp: "desc" }, take: 1 }
-        }
+  const cabInclude = {
+    routes: {
+      where: { date: currentDateStr },
+      include: {
+        stops: { include: { employee: true } },
+        locations: { orderBy: { timestamp: "desc" as const }, take: 1 }
       }
     }
+  };
+
+  let dbCabs = await prisma.cab.findMany({
+    where: {
+      status: "AVAILABLE",
+      ...(fallbackShiftId ? { shifts: { some: { id: fallbackShiftId } } } : {}),
+    },
+    include: cabInclude,
   });
+
+  if (dbCabs.length === 0 && availableEmployees.length > 0) {
+    console.warn(
+      `No cabs linked to shift ${fallbackShiftId}; using full available fleet for ${availableEmployees.length} employees`
+    );
+    dbCabs = await prisma.cab.findMany({
+      where: { status: "AVAILABLE" },
+      include: cabInclude,
+    });
+  }
+
+  const activeEmployeeCount = availableEmployees.length;
+  const cabCapacity = dbCabs[0]?.capacity ?? 6;
+  const minCabsNeeded = activeEmployeeCount > 0 ? Math.ceil(activeEmployeeCount / cabCapacity) : 0;
+
+  if (excelFilter && minCabsNeeded > 0) {
+    const excelMatched = dbCabs.filter((cab) =>
+      excelFilter.cabVehicleNumbers.has(cab.vehicleNumber.trim().toUpperCase())
+    );
+    if (excelMatched.length >= minCabsNeeded) {
+      dbCabs = excelMatched;
+    } else if (excelMatched.length > 0) {
+      const matchedIds = new Set(excelMatched.map((c) => c.id));
+      const topUp = dbCabs.filter((c) => !matchedIds.has(c.id));
+      dbCabs = [...excelMatched, ...topUp].slice(0, Math.max(minCabsNeeded, excelMatched.length));
+      console.warn(
+        `Excel cab filter: ${excelMatched.length} MH plates matched, fleet topped up to ${dbCabs.length} for ${minCabsNeeded} needed`
+      );
+    } else {
+      console.warn(
+        `Excel cab filter matched 0 vehicle plates; using full shift fleet (${dbCabs.length} cabs) for optimization`
+      );
+    }
+  }
 
   const cabTripSequenceMap: Record<string, number> = {};
 
@@ -190,14 +249,13 @@ async function fetchOptimizationInputs(
     };
   });
 
-  const activeEmployeeCount = optEmployees.length;
-  const cabCapacity = optCabs[0]?.capacity ?? 6;
-  const minCabsNeeded = Math.ceil(activeEmployeeCount / cabCapacity);
+  const activeEmployeeCountFinal = optEmployees.length;
+  const minCabsNeededFinal = activeEmployeeCountFinal > 0 ? Math.ceil(activeEmployeeCountFinal / cabCapacity) : 0;
   const activeCabs = optCabs
     .sort((a, b) => b.capacity - a.capacity)
-    .slice(0, Math.max(minCabsNeeded, 1));
+    .slice(0, Math.max(minCabsNeededFinal, activeEmployeeCountFinal > 0 ? 1 : 0));
 
-  console.log(`Fleet sized: ${activeCabs.length} of ${optCabs.length} cabs active for ${activeEmployeeCount} employees`);
+  console.log(`Fleet sized: ${activeCabs.length} of ${optCabs.length} cabs active for ${activeEmployeeCountFinal} employees`);
 
   const shiftStartTime = shiftStartTimes.get(fallbackShiftId) || "09:00";
   const dbLeaveCount = dbEmployees.filter((emp) => (emp.user?.leaves || []).length > 0).length;
@@ -211,11 +269,11 @@ async function fetchOptimizationInputs(
     fallbackShiftId,
     cabTripSequenceMap,
     shiftStartTime,
-    activeEmployeeCount,
+    activeEmployeeCount: activeEmployeeCountFinal,
     totalEmployeeCount: dbEmployees.length,
     dbLeaveCount,
     overlayAbsentCount,
-    minCabsNeeded,
+    minCabsNeeded: minCabsNeededFinal,
   };
 }
 
@@ -508,10 +566,26 @@ export async function POST(req: NextRequest) {
       const { optEmployees, optCabs, shiftStartTime } = inputs;
 
       if (optEmployees.length === 0) {
-        return NextResponse.json({ error: "No active employees found for this shift" }, { status: 400 });
+        return NextResponse.json({
+          skipped: true,
+          reason: "no_employees",
+          shiftId,
+          preview: null,
+          fleetSizing: { activeEmployees: 0, activeCabs: 0 },
+        });
       }
       if (optCabs.length === 0) {
-        return NextResponse.json({ error: "No available cabs found" }, { status: 400 });
+        return NextResponse.json({
+          skipped: true,
+          reason: "no_cabs",
+          shiftId,
+          preview: null,
+          fleetSizing: {
+            activeEmployees: inputs.activeEmployeeCount,
+            activeCabs: 0,
+            minCabsNeeded: inputs.minCabsNeeded,
+          },
+        });
       }
 
       const plans = await optimizeAllStrategies(optEmployees, optCabs, isPickup ?? true, apiKey, depot, constraints, shiftStartTime);

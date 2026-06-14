@@ -225,6 +225,9 @@ export default function GoogleMapView({
         !selectedRouteId ||
         selectedRouteId.startsWith("preview-") ||
         selectedRouteId.startsWith("manual-") ||
+        selectedRouteId.startsWith("assign_") ||
+        selectedRouteId.startsWith("baseline_") ||
+        selectedRouteId.startsWith("excel-") ||
         !routes.find((r) => r.id === selectedRouteId)
       ) {
         if (!cancelled) setVariationsData([]);
@@ -388,7 +391,7 @@ export default function GoogleMapView({
 
     // Overview pass: all routes (or just selected)
     routes.forEach((route, idx) => {
-      if (selectedRouteId && route.id !== selectedRouteId) return;
+      const isSelectedOverview = selectedRouteId === route.id;
 
       const overviewMode  = routeViewModes?.[route.id]
         ? routeViewModes[route.id] === "pickup"
@@ -397,7 +400,7 @@ export default function GoogleMapView({
       if (sortedStops.length === 0) return;
 
       const routeColor            = shiftColorMap.get(route.shiftId) ?? SHIFT_PALETTE[idx % SHIFT_PALETTE.length];
-      const isSelectedOverview    = selectedRouteId === route.id;
+      const overviewOpacity       = selectedRouteId && !isSelectedOverview ? 0.25 : 0.4;
       const routeStart            = getRouteStartLatLng(route);
 
       // Employee dot markers (overview — dim, no label)
@@ -424,7 +427,7 @@ export default function GoogleMapView({
           position: { lat: markerY, lng: markerX },
           map,
           icon: {
-            url:    employeeSvg(20, "", routeColor, stop.employee.gender, false, 0.4),
+            url:    employeeSvg(20, "", routeColor, stop.employee.gender, false, overviewOpacity),
             anchor: new google.maps.Point(10, 10),
           },
           zIndex: 10,
@@ -448,7 +451,7 @@ export default function GoogleMapView({
             path:          overviewPath,
             map,
             strokeColor:   routeColor,
-            strokeOpacity: 0.35,
+            strokeOpacity: selectedRouteId && !isSelectedOverview ? 0.15 : 0.35,
             strokeWeight:  1.5,
             zIndex:        2,
             icons: [{

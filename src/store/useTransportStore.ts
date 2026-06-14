@@ -378,6 +378,14 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         }
 
         const data = await res.json();
+        if (data.skipped) {
+          storeLog("previewOptimization — shift skipped", {
+            shift: shift.name,
+            reason: data.reason,
+          });
+          continue;
+        }
+
         if (data.preview) {
           const assignedCabs = new Set<string>();
           for (const key of ["MAXIMIZE_UTILIZATION", "MINIMIZE_TIME", "BALANCED"]) {

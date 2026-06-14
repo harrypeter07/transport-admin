@@ -120,6 +120,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const beforeSnapshot = { ...currentEmp };
+
+    if (
+      body.pickupPointId !== undefined &&
+      Object.keys(body).every((k) => k === "pickupPointId")
+    ) {
+      const pickupResult = await resolvePickupPointId(body.pickupPointId, currentEmp.pickupPointId);
+      if (pickupResult instanceof NextResponse) return pickupResult;
+
+      const employee = await prisma.employee.update({
+        where: { id },
+        data: { pickupPointId: pickupResult },
+        include: {
+          shift: true,
+          manager: { select: { id: true, name: true } },
+          pickupPoint: true,
+        },
+      });
+
+      await audit({
+        userId: auth.session.userId,
+        role: auth.session.role,
+        action: "UPDATE",
+        entity: "Employee",
+        entityId: id,
+        before: beforeSnapshot,
+        after: employee,
+        ip,
+      });
+      return NextResponse.json(employee);
+    }
+
     const coordsResult = await resolveCoords(body, currentEmp);
     if (coordsResult instanceof NextResponse) return coordsResult;
 
