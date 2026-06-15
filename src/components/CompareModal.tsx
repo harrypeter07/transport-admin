@@ -144,6 +144,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [fileKey, setFileKey] = useState("");
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
+  const [activeMapType, setActiveMapType] = useState<"BASELINE" | "OPTIMIZED">("OPTIMIZED");
 
   const loadComparison = React.useCallback(() => {
     setLoading(true);
@@ -251,6 +252,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
       return;
     }
     setSelectedCurrentId(id);
+    setActiveMapType("BASELINE");
     if (id) {
       const route = mapCurrentRoutes.find((r) => r.id === id);
       if (route) {
@@ -269,6 +271,7 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
       return;
     }
     setSelectedOptimizedId(id);
+    setActiveMapType("OPTIMIZED");
     if (id) {
       const route = mapOptimizedRoutes.find((r) => r.id === id);
       if (route) {
@@ -445,7 +448,6 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
   const comparisonDiffs = useMemo(() => {
     const mergedUnderfilled: string[] = [];
     const safetyFixed: string[] = [];
-    const employeesMoved: string[] = [];
 
     if (currentMetrics.underfilled > optimizedMetrics.underfilled) {
       mergedUnderfilled.push(
@@ -459,21 +461,8 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
       );
     }
 
-    const excelEmpRoute = new Map<string, string>();
-    for (const r of commonCurrentRoutes) {
-      for (const s of r.stops) excelEmpRoute.set(s.employeeId, r.id);
-    }
-    for (const r of commonOptimizedRoutes) {
-      for (const s of r.stops) {
-        const prev = excelEmpRoute.get(s.employeeId);
-        if (prev && prev !== r.id) {
-          employeesMoved.push(`${s.employee?.name || s.employeeId} moved between routes`);
-        }
-      }
-    }
-
-    return { mergedUnderfilled, safetyFixed, employeesMoved: employeesMoved.slice(0, 20) };
-  }, [commonCurrentRoutes, commonOptimizedRoutes, currentMetrics, optimizedMetrics]);
+    return { mergedUnderfilled, safetyFixed };
+  }, [currentMetrics, optimizedMetrics]);
 
   const selectedCurrent = useMemo(
     () => mapCurrentRoutes.find((r) => r.id === selectedCurrentId) || null,
@@ -617,20 +606,43 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
         ) : (
           <div className="flex-1 flex flex-col overflow-y-auto">
             {/* Maps Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-b border-[#e8e8e8]">
-              {/* LEFT: Current Routes */}
-              <div className="flex flex-col border-r border-[#e8e8e8]">
-                <div className="px-4 py-2 bg-[#fafafa] border-b border-[#e8e8e8] flex items-center gap-2">
-                  <div className="w-2 h-2 bg-[#1c1b1f] rounded-full" />
+            <div className="flex flex-col border-b border-[#e8e8e8]">
+              {/* Map switcher bar */}
+              <div className="px-6 py-2 bg-[#fafafa] border-b border-[#e8e8e8] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2.5 h-2.5 rounded-full ${activeMapType === "BASELINE" ? "bg-[#1c1b1f]" : "bg-[#059669]"}`} />
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#4a4a4a]">
-                    Current Baseline
-                  </span>
-                  <span className="text-[10px] text-[#9a9a9a] ml-auto font-mono">
-                    {currentMetrics.cabCount} routes
+                    Map: {activeMapType === "BASELINE" ? "Current Baseline (Manual)" : "System Optimized"}
                   </span>
                 </div>
-                <div className="h-[320px]">
-                  {mapCurrentRoutes.length > 0 ? (
+                <div className="flex items-center gap-1 bg-white p-0.5 border border-[#e8e8e8] rounded-none">
+                  <button
+                    type="button"
+                    onClick={() => setActiveMapType("BASELINE")}
+                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide transition-all ${
+                      activeMapType === "BASELINE"
+                        ? "bg-[#1c1b1f] text-white"
+                        : "text-[#6b6b6b] hover:text-[#1c1b1f]"
+                    }`}
+                  >
+                    Current Baseline ({currentMetrics.cabCount} routes)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMapType("OPTIMIZED")}
+                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide transition-all ${
+                      activeMapType === "OPTIMIZED"
+                        ? "bg-[#059669] text-white"
+                        : "text-[#6b6b6b] hover:text-[#059669]"
+                    }`}
+                  >
+                    System Optimized ({optimizedMetrics.cabCount} routes)
+                  </button>
+                </div>
+              </div>
+              <div className="h-[360px] relative w-full">
+                {activeMapType === "BASELINE" ? (
+                  mapCurrentRoutes.length > 0 ? (
                     <GoogleMapView
                       routes={mapCurrentRoutes}
                       selectedRouteId={selectedCurrentId}
@@ -646,23 +658,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                       <div className="text-xs font-bold text-[#9a9a9a]">No baseline routes available</div>
                       <div className="text-[10px] text-[#b0b0b0]">The baseline could not be loaded. Please update the baseline in settings or wait for generation.</div>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* RIGHT: Optimized Routes */}
-              <div className="flex flex-col">
-                <div className="px-4 py-2 bg-[#fafafa] border-b border-[#e8e8e8] flex items-center gap-2">
-                  <div className="w-2 h-2 bg-[#059669] rounded-full" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#4a4a4a]">
-                    Optimized Routes
-                  </span>
-                  <span className="text-[10px] text-[#9a9a9a] ml-auto font-mono">
-                    {optimizedMetrics.cabCount} routes
-                  </span>
-                </div>
-                <div className="h-[320px]">
-                  {mapOptimizedRoutes.length > 0 ? (
+                  )
+                ) : (
+                  mapOptimizedRoutes.length > 0 ? (
                     <GoogleMapView
                       routes={mapOptimizedRoutes}
                       selectedRouteId={selectedOptimizedId}
@@ -677,8 +675,8 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                     <div className="w-full h-full flex items-center justify-center bg-[#f7f7f7] text-xs text-[#9a9a9a] font-medium">
                       Run optimization first to see optimized routes
                     </div>
-                  )}
-                </div>
+                  )
+                )}
               </div>
             </div>
 
@@ -888,74 +886,18 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                   </table>
                 </div>
 
-                <div className="h-48 border border-[#e8e8e8] p-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="metric" tick={{ fontSize: 9 }} />
-                      <YAxis tick={{ fontSize: 9 }} />
-                      <Tooltip contentStyle={{ fontSize: 11 }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
-                      <Bar dataKey="Excel" fill="#1c1b1f" name="Excel (Manual)" />
-                      <Bar dataKey="Optimized" fill="#059669" name="System (Optimized)" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
                 {(comparisonDiffs.mergedUnderfilled.length > 0 ||
-                  comparisonDiffs.safetyFixed.length > 0 ||
-                  comparisonDiffs.employeesMoved.length > 0) && (
+                  comparisonDiffs.safetyFixed.length > 0) && (
                   <div className="border border-[#e8e8e8] p-3 bg-[#fafafa]">
-                     <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">Changes detected</div>
-                     <ul className="space-y-1 text-[11px] text-[#4a4a4a]">
+                     <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">Key Highlights</div>
+                     <ul className="space-y-1 text-[11px] text-[#4a4a4a] font-semibold">
                        {comparisonDiffs.mergedUnderfilled.map((t, i) => (
-                         <li key={`m-${i}`}>• {t}</li>
+                         <li key={`m-${i}`}>✅ {t}</li>
                        ))}
                        {comparisonDiffs.safetyFixed.map((t, i) => (
-                         <li key={`s-${i}`}>• {t}</li>
-                       ))}
-                       {comparisonDiffs.employeesMoved.map((t, i) => (
-                         <li key={`e-${i}`}>• {t}</li>
+                         <li key={`s-${i}`}>✅ {t}</li>
                        ))}
                      </ul>
-                  </div>
-                )}
-
-                {/* Route Diff list walkthrough */}
-                {mapOptimizedRoutes.length > 0 && (
-                  <div className="border border-[#e8e8e8] p-3 bg-[#fafafa] flex flex-col gap-3">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-1">Optimized Routes Walkthrough</div>
-                    <div className="space-y-3">
-                      {mapOptimizedRoutes.map((r, idx) => {
-                        const route = r as Route & { routeNo?: string; zone?: string; startPoint?: { lat: number; lng: number } };
-                        const coveredExcelRoutes = new Set<string>();
-                        for (const stop of route.stops) {
-                          const match = mapCurrentRoutes.find((cr) =>
-                            cr.stops.some((cs) => cs.employeeId === stop.employeeId)
-                          ) as Route & { routeNo?: string };
-                          if (match?.routeNo) {
-                            coveredExcelRoutes.add(match.routeNo);
-                          }
-                        }
-                        const coveredStr = Array.from(coveredExcelRoutes).sort().join(", ");
-
-                        return (
-                          <div key={route.id || idx} className="text-[11px] text-[#4a4a4a] border-l-2 border-emerald-500 pl-2 text-left">
-                            <div className="font-bold text-[#1c1b1f]">
-                              Route r{route.routeNumber || idx + 1} | Zone {route.zone || "N/A"} | Driver: {route.cab?.driverName || "Unknown"} | Start: {formatRouteStartLabel(route)}
-                            </div>
-                            <div className="text-[#6b6b6b] mt-0.5">
-                              ↳ Stops: {route.stops.map((s) => s.employee?.name || "Unknown").join(" → ")}
-                            </div>
-                            {coveredStr && (
-                              <div className="text-[10px] text-emerald-700 italic mt-0.5">
-                                ↳ Covers employees from Excel routes: {coveredStr} {coveredExcelRoutes.size > 1 ? "(merged)" : ""}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
                 )}
               </div>

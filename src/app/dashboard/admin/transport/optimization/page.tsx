@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -94,7 +96,7 @@ function checkSafetyPreviewLocal(
   const hasMale = activeStops.some((s) => s.gender === "MALE");
   const allFemale = activeStops.every((s) => s.gender === "FEMALE");
 
-  let ordered = [...activeStops];
+  const ordered = [...activeStops];
 
   if (hasMale && !allFemale) {
     if (isPickup) {
@@ -198,95 +200,25 @@ export default function TransitAdminSPA() {
 
  const router = useRouter();
 
-  const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "COMPLIANCE" | "ANALYSIS" | "MANUAL_ROUTING">("OPTIMIZER");
-  const [uploadingExcel, setUploadingExcel] = useState(false);
-  const [publishingManual, setPublishingManual] = useState(false);
-  const [publishManualSuccess, setPublishManualSuccess] = useState(false);
-  const [excelError, setExcelError] = useState<string | null>(null);
-  const [pendingExcelFile, setPendingExcelFile] = useState<File | null>(null);
-  const [excelSheetOptions, setExcelSheetOptions] = useState<{ name: string; inferredDate: string | null; routePreviewCount: number }[]>([]);
-  const [selectedExcelSheet, setSelectedExcelSheet] = useState("");
-  const [excelUploadDate, setExcelUploadDate] = useState(selectedDate);
- const [initialDataLoaded, setInitialDataLoaded] = useState(false);
-  const [addressChanged, setAddressChanged] = useState(false);
+  const [activeDesk, setActiveDesk] = useState<"OPTIMIZER" | "COMPLIANCE" | "ANALYSIS">("OPTIMIZER");
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  const addressChanged = useMemo(() => {
+    for (const route of routes) {
+      for (const stop of route.stops) {
+        const emp = employees.find(e => e.id === stop.employeeId);
+        if (emp && (emp.x !== stop.employee?.x || emp.y !== stop.employee?.y)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [employees, routes]);
   const [applySuccess, setApplySuccess] = useState(false);
   const [publishCount, setPublishCount] = useState<number | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [confirmPublishDraft, setConfirmPublishDraft] = useState(false);
   const [confirmPublishExisting, setConfirmPublishExisting] = useState(false);
-  const [isPublishManualModalOpen, setIsPublishManualModalOpen] = useState(false);
   const [dragOverRouteId, setDragOverRouteId] = useState<string | null>(null);
-
-  const handlePublishManualRoutes = async () => {
-    setPublishingManual(true);
-    try {
-      // Group routes by shiftId
-      const shiftsSet = new Set<string>();
-      manualRoutes?.forEach((r: any) => {
-        if (r.shiftId) shiftsSet.add(r.shiftId);
-      });
-      
-      const shiftIds = shiftsSet.size > 0 ? Array.from(shiftsSet) : [activeShiftId];
-
-      for (const sId of shiftIds) {
-        const shiftRoutes = (manualRoutes ?? []).filter((r: any) => (r.shiftId || activeShiftId) === sId);
-        
-        const previewRoutes = shiftRoutes.map((route: any) => ({
-          cabId: route.cabId,
-          vehicleNumber: route.vehicleNumber,
-          shiftId: sId,
-          isPickup: true,
-          totalDistance: route.totalDistance,
-          totalDuration: route.totalDuration,
-          optimizationScore: route.optimizationScore,
-          tripSequence: route.tripSequence || 1,
-          stops: (route.stops || [])
-            .filter((stop: any) => !stop.employeeId.startsWith("excel_"))
-            .map((stop: any, index: number) => ({
-              employeeId: stop.employeeId,
-              stopOrder: index + 1, // Re-index after filtering
-              etaMinutes: stop.etaMinutes || 0,
-            })),
-          violations: [],
-        })).filter((r: any) => r.stops.length > 0 && r.cabId && !r.cabId.startsWith("manual_"));
-
-        if (previewRoutes.length === 0) continue; // skip empty shifts
-
-        const saveRes = await fetch("/api/optimization", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            shiftId: sId,
-            isPickup: true,
-            date: selectedDate,
-            mode: "APPLY",
-            selectedStrategy: "MANUAL_EXCEL",
-            previewRoutes,
-          }),
-        });
-        if (!saveRes.ok) throw new Error(`Failed to save draft routes for shift ${sId}.`);
-
-        const pubRes = await fetch("/api/optimization/publish", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date: selectedDate,
-            shiftId: sId,
-            isManual: true
-          }),
-        });
-        if (!pubRes.ok) throw new Error(`Failed to publish routes for shift ${sId}.`);
-      }
-
-      setPublishManualSuccess(true);
-      fetchAnalysisData();
-    } catch (err: any) {
-      alert("Failed to publish manual routes: " + err.message);
-    } finally {
-      setPublishingManual(false);
-      setIsPublishManualModalOpen(false);
-    }
-  };
 
   // Analysis Dashboard State
  const [analysisData, setAnalysisData] = useState<any>(null);
@@ -472,22 +404,6 @@ export default function TransitAdminSPA() {
  setEmployeeForm((prev) => ({ ...prev, shiftId: shifts[0].id }));
  }
   }, [shifts]);
-
-  // Detect if route stop coords differ from current employee data (address was changed)
-  useEffect(() => {
-    let changed = false;
-    for (const route of routes) {
-      for (const stop of route.stops) {
-        const emp = employees.find(e => e.id === stop.employeeId);
-        if (emp && (emp.x !== stop.employee.x || emp.y !== stop.employee.y)) {
-          changed = true;
-          break;
-        }
-      }
-      if (changed) break;
-    }
-    setAddressChanged(changed);
-  }, [employees, routes]);
 
     const handleGeneratePlans = async () => {
    setOptimizing(true);
@@ -698,14 +614,13 @@ export default function TransitAdminSPA() {
    });
  })()
  : null;
- const activeRoutesRaw = (hasOptimized || previewRoutes)
- ? (previewRoutes
-   ? [...previewRoutes].sort((a, b) => {
-       const timeA = a.shift?.startTime || "";
-       const timeB = b.shift?.startTime || "";
-       if (timeA !== timeB) return timeA.localeCompare(timeB);
-       return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
-     })
+ const activeRoutesRaw = previewRoutes
+    ? [...previewRoutes].sort((a, b) => {
+        const timeA = a.shift?.startTime || "";
+        const timeB = b.shift?.startTime || "";
+        if (timeA !== timeB) return timeA.localeCompare(timeB);
+        return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
+      })
     : dbActiveRoutes.map(r => {
         const replacementCabId = temporaryReplacements[r.cabId];
         if (replacementCabId) {
@@ -713,9 +628,8 @@ export default function TransitAdminSPA() {
           if (repCab) return { ...r, cabId: repCab.id, cab: repCab };
         }
         return r;
-      }))
- : [];
- const activeRoutes = activeRoutesRaw as Route[];
+      });
+  const activeRoutes = activeRoutesRaw as Route[];
   const manifestRoutes = activeRoutes.filter(r => (r.stops || []).length > 0);
   
   const getDriverTripCount = (cabId: string) => {
@@ -759,43 +673,43 @@ export default function TransitAdminSPA() {
     return effectiveIsPickup ? sorted : [...sorted].reverse();
   };
 
-  // Group manifest routes by shiftId, sorted by shift startTime ascending
- const shiftGroups: { shiftId: string; shiftLabel: string; shiftTime: string; routes: typeof manifestRoutes }[] = [];
- const seenShiftIds = new Set<string>();
- const sortedManifest = [...manifestRoutes].sort((a, b) => {
-   const tA = (a as any).shift?.startTime || "";
-   const tB = (b as any).shift?.startTime || "";
-   return tA.localeCompare(tB);
- });
- for (const route of sortedManifest) {
-   const sid = route.shiftId || "unknown";
-   if (!seenShiftIds.has(sid)) {
-     seenShiftIds.add(sid);
-     shiftGroups.push({
-       shiftId: sid,
-       shiftLabel: getRouteShiftLabel(route),
-       shiftTime: (route as any).shift?.startTime || "",
-       routes: [],
-     });
-   }
-   shiftGroups[shiftGroups.findIndex(g => g.shiftId === sid)].routes.push(route);
-  }
-
-  const filteredShiftGroups =
-    mapShiftFilter === "ALL"
-      ? shiftGroups
-      : shiftGroups.filter((g) => g.shiftId === mapShiftFilter);
-
+  // Group manifest routes by shiftId and apply search/shift filters
   const searchedShiftGroups = useMemo(() => {
+    const groups: { shiftId: string; shiftLabel: string; shiftTime: string; routes: typeof manifestRoutes }[] = [];
+    const seenShiftIds = new Set<string>();
+    const sortedManifest = [...manifestRoutes].sort((a, b) => {
+      const tA = (a as any).shift?.startTime || "";
+      const tB = (b as any).shift?.startTime || "";
+      return tA.localeCompare(tB);
+    });
+
+    for (const route of sortedManifest) {
+      const sid = route.shiftId || "unknown";
+      if (!seenShiftIds.has(sid)) {
+        seenShiftIds.add(sid);
+        groups.push({
+          shiftId: sid,
+          shiftLabel: getRouteShiftLabel(route),
+          shiftTime: (route as any).shift?.startTime || "",
+          routes: [],
+        });
+      }
+      groups[groups.findIndex(g => g.shiftId === sid)].routes.push(route);
+    }
+
+    const filtered = mapShiftFilter === "ALL"
+      ? groups
+      : groups.filter((g) => g.shiftId === mapShiftFilter);
+
     const q = manifestSearchQuery.trim();
-    if (!q) return filteredShiftGroups;
-    return filteredShiftGroups
+    if (!q) return filtered;
+    return filtered
       .map((g) => ({
         ...g,
         routes: g.routes.filter((r) => routeMatchesEmployeeSearch(r, q)),
       }))
       .filter((g) => g.routes.length > 0);
-  }, [filteredShiftGroups, manifestSearchQuery]);
+  }, [manifestRoutes, mapShiftFilter, manifestSearchQuery, shifts]);
 
   // Apply known canonical sequences to specific routes
   useEffect(() => {
@@ -857,12 +771,10 @@ export default function TransitAdminSPA() {
  0
  );
 
- // Calculate unassigned employees — only meaningful after an optimization run
+ // Calculate unassigned employees
  const activeEmployees = employees.filter((emp) => emp.status === "ACTIVE");
  const assignedEmployeeIds = new Set(activeRoutes.flatMap((r) => r.stops.map((s) => s.employeeId)));
- const unassignedEmployees = (hasOptimized || optimizationPlans !== null)
-   ? activeEmployees.filter((emp) => !assignedEmployeeIds.has(emp.id))
-   : [];
+ const unassignedEmployees = activeEmployees.filter((emp) => !assignedEmployeeIds.has(emp.id));
 
  // Filter lists
  const filteredEmployees = employees.filter((emp) =>
@@ -942,20 +854,6 @@ export default function TransitAdminSPA() {
  </svg>
  Route ROI & Savings Analytics
  </button>
-  <div className="w-px h-4 bg-slate-200 mx-1"></div>
-  <button
-  onClick={() => setActiveDesk("MANUAL_ROUTING")}
-  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-none text-xs font-bold tracking-wide transition-all
-  ${
-  activeDesk === "MANUAL_ROUTING"
-  ? "bg-[#1c1b1f] text-white"
-  : "text-[#6b6b6b] hover:text-[#1c1b1f] hover:bg-[#f7f7f7]"
-  }
-  `}
-  >
-  <FileSpreadsheet className="w-3.5 h-3.5" />
-  Manual Routing
-  </button>
  </nav>
 
   <div className="flex items-center gap-2 ml-auto">
@@ -2063,7 +1961,6 @@ export default function TransitAdminSPA() {
           className="flex items-center gap-3 border-b border-slate-200 pb-2 cursor-pointer select-none"
           onClick={() => {
             setExpandedShifts(prev => ({ ...prev, [group.shiftId]: !prev[group.shiftId] }));
-            setMapShiftFilter(prev => prev === group.shiftId ? "ALL" : group.shiftId);
           }}
         >
           <div className="flex items-center gap-2">
@@ -3134,309 +3031,7 @@ export default function TransitAdminSPA() {
  })()}
   </div>
 
-  <div className={`flex flex-col gap-6 text-left ${activeDesk === "MANUAL_ROUTING" ? "" : "hidden"}`}>
-    {/* Manual Routes Map — shown once routes are parsed */}
-    {manualRoutes && manualRoutes.length > 0 && isMounted && (() => {
-      // Normalize manualRoutes → Route[] shape that GoogleMapView expects
-      const manualRoutesMapped = (manualRoutes as any[]).map((r: any, idx: number) => ({
-        id: `manual-${r.cabId || idx}-${idx}`,
-        cabId: r.cabId || `manual_${idx}`,
-        cab: {
-          id: r.cabId || `manual_${idx}`,
-          vehicleNumber: r.vehicleNumber || `CAB-${idx + 1}`,
-          driverName: r.driverName || "Driver",
-          driverPhone: r.driverPhone || "",
-          driverAddress: r.driverAddress || "",
-          driverX: typeof r.driverX === "number" ? r.driverX : undefined,
-          driverY: typeof r.driverY === "number" ? r.driverY : undefined,
-          formattedAddress: r.driverAddress || "",
-        },
-        shiftId: r.shiftId || activeShiftId || "",
-        shift: r.shift || shifts.find((s: any) => s.id === (r.shiftId || activeShiftId)),
-        isPickup: true,
-        totalDistance: r.totalDistance || 0,
-        totalDuration: r.totalDuration || 0,
-        optimizationScore: r.optimizationScore || 0,
-        tripSequence: r.tripSequence || 1,
-        routeNumber: idx + 1,
-        status: "PLANNED" as const,
-        zone: null,
-        updatedAt: new Date(),
-        hasEscort: false,
-        stops: (r.stops || []).map((stop: any, sIdx: number) => ({
-          id: `manual-stop-${idx}-${sIdx}`,
-          routeId: `manual-${r.cabId || idx}-${idx}`,
-          employeeId: stop.employeeId || `excel_${sIdx}`,
-          stopOrder: stop.stopOrder || sIdx + 1,
-          etaMinutes: stop.etaMinutes || 0,
-          status: "PENDING" as const,
-          employee: {
-            id: stop.employeeId || `excel_${sIdx}`,
-            name: stop.employee?.name || stop.employeeName || "Unknown",
-            gender: stop.employee?.gender || stop.gender || "MALE",
-            x: stop.employee?.x ?? stop.x ?? 79.0526,
-            y: stop.employee?.y ?? stop.y ?? 21.0625,
-            address: stop.employee?.address || stop.address || "",
-            formattedAddress: stop.employee?.formattedAddress || stop.employee?.address || stop.address || "",
-            phone: stop.employee?.phone || "N/A",
-            email: "",
-            employeeCode: stop.employee?.employeeCode || "",
-            department: stop.employee?.department || "",
-          },
-        })),
-        violations: [],
-      }));
 
-      const manualSelectedId = selectedRouteId && manualRoutesMapped.some((r: any) => r.id === selectedRouteId)
-        ? selectedRouteId
-        : null;
-
-      return (
-        <div className="h-[480px] border border-[#e8e8e8] shadow-xs overflow-hidden">
-          <RouteVisualizer
-            routes={manualRoutesMapped as any}
-            selectedRouteId={manualSelectedId}
-            onSelectRoute={setSelectedRouteId}
-          />
-        </div>
-      );
-    })()}
-
-    <div className="bg-white p-6 border border-[#e8e8e8] rounded-none shadow-xs mt-8">
-      <h2 className="text-sm font-bold text-[#1c1b1f] uppercase tracking-wider mb-2 flex items-center gap-2">
-        <FileSpreadsheet className="w-4 h-4 text-[#ff4f00]" />
-        Import Manual Routing Baseline
-      </h2>
-      <p className="text-xs text-[#6b6b6b] mb-6 max-w-2xl">
-        Upload your existing Excel roster to visualize the human-planned routes on the map. This will NOT overwrite the production database or active optimizations. It is purely an in-browser sandbox for visual comparison and auditing.
-      </p>
-
-      {!manualRoutes && !pendingExcelFile ? (
-        <div className="border-2 border-dashed border-[#e8e8e8] hover:border-[#ff4f00] bg-[#f7f7f7] transition-colors p-8 flex flex-col items-center justify-center relative group">
-          <input
-            type="file"
-            accept=".xlsx, .xls"
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setUploadingExcel(true);
-              setExcelError(null);
-              const formData = new FormData();
-              formData.append("file", file);
-              try {
-                const res = await fetch("/api/optimization/excel-routes/inspect", { method: "POST", body: formData });
-                const data = await res.json();
-                if (res.ok) {
-                  setPendingExcelFile(file);
-                  setExcelSheetOptions(data.sheets || []);
-                  const first = data.sheets?.[0];
-                  if (first) {
-                    setSelectedExcelSheet(first.name);
-                    setExcelUploadDate(first.inferredDate || selectedDate);
-                  }
-                } else {
-                  setExcelError(data.error || "Failed to inspect workbook");
-                }
-              } catch {
-                setExcelError("Network error uploading file");
-              } finally {
-                setUploadingExcel(false);
-                e.target.value = "";
-              }
-            }}
-            disabled={uploadingExcel}
-          />
-          <Upload className={`w-8 h-8 mb-3 transition-colors ${uploadingExcel ? "text-[#ff4f00] animate-bounce" : "text-[#9a9a9a] group-hover:text-[#ff4f00]"}`} />
-          <div className="text-sm font-bold text-[#1c1b1f] mb-1">
-            {uploadingExcel ? "Reading workbook..." : "Click or drag roster.xlsx here"}
-          </div>
-          <div className="text-[10px] uppercase tracking-wider text-[#9a9a9a] font-bold">
-            Multi-sheet workbooks supported — pick date sheet after upload
-          </div>
-        </div>
-      ) : !manualRoutes && pendingExcelFile ? (
-        <div className="border border-[#e8e8e8] p-6 bg-[#fafafa] flex flex-col gap-4">
-          <div className="text-xs font-bold text-[#1c1b1f]">Select sheet and date</div>
-          <div className="flex flex-wrap gap-3 items-center">
-            <select
-              value={selectedExcelSheet}
-              onChange={(e) => {
-                setSelectedExcelSheet(e.target.value);
-                const sheet = excelSheetOptions.find((s) => s.name === e.target.value);
-                if (sheet?.inferredDate) setExcelUploadDate(sheet.inferredDate);
-              }}
-              className="text-xs border border-[#e8e8e8] px-2 py-1.5 bg-white"
-            >
-              {excelSheetOptions.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {s.name} ({s.routePreviewCount} routes)
-                </option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={excelUploadDate}
-              onChange={(e) => setExcelUploadDate(e.target.value)}
-              className="text-xs border border-[#e8e8e8] px-2 py-1.5"
-            />
-            <button
-              type="button"
-              disabled={uploadingExcel || !selectedExcelSheet}
-              onClick={async () => {
-                if (!pendingExcelFile) return;
-                setUploadingExcel(true);
-                setExcelError(null);
-                const formData = new FormData();
-                formData.append("file", pendingExcelFile);
-                formData.append("sheetName", selectedExcelSheet);
-                formData.append("date", excelUploadDate);
-                try {
-                  const res = await fetch("/api/optimization/excel-routes", { method: "POST", body: formData });
-                  const data = await res.json();
-                  if (res.ok) {
-                    const totalCabs = data.routes.length;
-                    const totalStops = data.routes.reduce((acc: number, r: any) => acc + (r.stops?.length || 0), 0);
-                    setManualRoutes(data.routes);
-                    setExcelMetrics({
-                      totalCabs,
-                      totalStops,
-                      noShowCount: data.noShowCount,
-                      unmatched: data.unmatchedEmployeeCodes?.length ?? 0,
-                    });
-                    setAbsentEmployeeCodes(data.absentEmployeeCodes || []);
-                    setPendingExcelFile(null);
-                  } else {
-                    setExcelError(data.details || data.error || "Failed to parse Excel");
-                  }
-                } catch {
-                  setExcelError("Network error uploading file");
-                } finally {
-                  setUploadingExcel(false);
-                }
-              }}
-              className="text-xs font-bold bg-[#ff4f00] text-white px-4 py-1.5 disabled:opacity-50"
-            >
-              {uploadingExcel ? "Parsing..." : "Load routes"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPendingExcelFile(null);
-                setExcelSheetOptions([]);
-              }}
-              className="text-xs text-[#6b6b6b] underline"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4 animate-fadeIn">
-          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-4 py-3">
-            <div className="flex items-center gap-2 text-emerald-800">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <div className="text-xs font-bold">
-                {publishManualSuccess ? "Manual fleet published successfully to production!" : "Manual roster parsed and mapped successfully."}
-              </div>
-            </div>
-            <div className="flex items-center gap-3 relative z-10">
-              <button
-                onClick={() => {
-                  setManualRoutes(null);
-                  setPublishManualSuccess(false);
-                }}
-                className="text-[10px] uppercase font-bold text-[#6b6b6b] hover:text-[#1c1b1f] border border-[#e8e8e8] px-3 py-1.5 bg-white cursor-pointer transition-colors shadow-2xs"
-              >
-                Clear & Upload New
-              </button>
-              {!publishManualSuccess && (
-                <button
-                  disabled={publishingManual}
-                  onClick={() => setIsPublishManualModalOpen(true)}
-                  className={`text-white px-4 py-1.5 font-bold text-xs transition-colors shadow-sm flex items-center gap-2 ${publishingManual ? "bg-[#ff4f00]/70 cursor-not-allowed" : "bg-[#ff4f00] hover:bg-[#e64600] cursor-pointer"}`}
-                >
-                  {publishingManual ? (
-                    <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  ) : (
-                    <ArrowUp className="w-3.5 h-3.5" /> 
-                  )}
-                  {publishingManual ? "Publishing..." : "Publish Manual Fleet"}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-8 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-            {Array.from(new Set((manualRoutes ?? []).map((r: any) => r.shiftId || activeShiftId))).map((sId: any) => {
-        const shiftRoutes = (manualRoutes ?? []).filter((r: any) => (r.shiftId || activeShiftId) === sId);
-              const shiftTimeLabel = shiftRoutes[0]?.shiftTime || String(sId);
-              return (
-                <div key={String(sId)} className="flex flex-col gap-4">
-                  <div className="text-[10px] font-bold text-[#9a9a9a] uppercase tracking-wider border-b border-[#e8e8e8] pb-2">
-                    Route Sequences (Shift: {shiftTimeLabel})
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
-                    {shiftRoutes.map((route: any, i: number) => {
-                      const routeId = `manual-${route.cabId || i}-${i}`;
-                      const isActive = selectedRouteId === routeId;
-                      return (
-                        <div
-                          key={`${route.cabId}-${i}`}
-                          className={`border transition-all cursor-pointer bg-white ${
-                            isActive ? "border-[#1c1b1f] shadow-md scale-[1.02]" : "border-[#e8e8e8] hover:border-[#b0b0b0]"
-                          }`}
-                          onClick={() => setSelectedRouteId(isActive ? null : routeId)}
-                        >
-                          <div className="p-3 bg-[#f7f7f7] border-b border-[#e8e8e8] flex justify-between items-center">
-                            <div className="flex flex-col">
-                              <span className="text-xs font-bold text-[#1c1b1f]">{route.driverName || "Unknown Driver"}</span>
-                              <span className="text-[10px] font-semibold text-[#6b6b6b]">{route.vehicleNumber}</span>
-                            </div>
-                            <div className="flex flex-col items-end">
-                              <span className="text-xs font-bold">{route.stops.length} Stops</span>
-                              <span className="text-[9px] text-[#9a9a9a]">{route.totalDistance ? `${route.totalDistance.toFixed(1)} km` : "No Dist"}</span>
-                            </div>
-                          </div>
-                          {isActive && (
-                            <div className="p-3 bg-white flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-                              {route.stops.map((stop: any, sIdx: number) => (
-                                <div key={sIdx} className="flex gap-2">
-                                  <div className="w-4 h-4 mt-0.5 rounded-full bg-[#f7f7f7] border border-[#e8e8e8] flex items-center justify-center text-[8px] font-bold text-[#6b6b6b] shrink-0">
-                                    {stop.stopOrder}
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-[11px] font-bold text-[#1c1b1f]">
-                                      {stop.employee?.name || stop.employeeName || "Unknown Employee"}
-                                    </span>
-                                    <span className="text-[9px] text-[#6b6b6b] truncate max-w-[200px]" title={stop.employee?.address || stop.address}>
-                                      {stop.employee?.address || stop.address || "Unknown Address"}
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {excelError && (
-        <div className="mt-4 bg-red-50 border border-red-200 px-3 py-2 text-[11px] text-red-700 font-semibold flex items-center gap-2 animate-fadeIn">
-          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-          {excelError}
-        </div>
-      )}
-    </div>
-  </div>
 
   </main>
 
@@ -3788,7 +3383,7 @@ export default function TransitAdminSPA() {
  >
  <div className="flex flex-col gap-3">
  <p className="text-[11px] text-[#6b6b6b] leading-relaxed border-b border-slate-100 pb-3">
- Temporarily substitute an absent driver for today's operational cycle. Existing database routes and permanent assignments will not be altered.
+ Temporarily substitute an absent driver for today&apos;s operational cycle. Existing database routes and permanent assignments will not be altered.
  </p>
 
  <div className="flex flex-col gap-1.5">
@@ -3969,14 +3564,7 @@ export default function TransitAdminSPA() {
     onAbsentCodesChange={setAbsentEmployeeCodes}
   />
 
-      <ConfirmModal
-        isOpen={isPublishManualModalOpen}
-        onClose={() => setIsPublishManualModalOpen(false)}
-        onConfirm={handlePublishManualRoutes}
-        title="Publish Manual Routes"
-        message="Are you sure you want to publish these manual routes? This will overwrite existing active routes for the selected date and shift."
-        confirmText="Publish Routes"
-      />
+
 
       {assigningEmployee && (
         <AssignPickupPointModal

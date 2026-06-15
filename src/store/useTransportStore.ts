@@ -355,6 +355,14 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
       const absentEmployeeCodes = state.absentEmployeeCodes;
 
       for (const shift of shiftsToOptimize) {
+        if (shift.id === "shift-0800") {
+          storeLog("previewOptimization — shift skipped (protected)", {
+            shift: shift.name,
+            reason: "protected",
+          });
+          continue;
+        }
+
         const res = await fetch("/api/optimization", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -371,6 +379,15 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           const message = errData.error || `Preview failed for ${shift.name}`;
+          
+          if (res.status === 403 || message.toLowerCase().includes("protected")) {
+            storeLog("previewOptimization — shift skipped (protected)", {
+              shift: shift.name,
+              reason: "protected",
+            });
+            continue;
+          }
+
           if (!message.toLowerCase().includes("no active employees")) {
             hardErrors.push(`${shift.name}: ${message}`);
           }
