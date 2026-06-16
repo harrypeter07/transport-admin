@@ -404,7 +404,11 @@ export default function TransitAdminSPA() {
 		let isActive = true;
 
 		const loadInitialData = async () => {
-			await fetchInitialData();
+			// Cache check: if we already have employees and cabs loaded, avoid refetching on revisit
+			const hasData = employees.length > 0 && cabs.length > 0;
+			if (!hasData) {
+				await fetchInitialData();
+			}
 			if (isActive) {
 				setInitialDataLoaded(true);
 

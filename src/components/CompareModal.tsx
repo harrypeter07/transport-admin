@@ -314,10 +314,14 @@ export default function CompareModal({
 			},
 		);
 		setSheetOptions(mapped);
-		// AUDIT FIX #1 & #9: Do NOT auto-select first sheet or date
-		// User must explicitly choose sheet and date before saving baseline
-		setSelectedSheet(""); // Reset selection
-		setUploadDate(date); // Keep original date until user changes
+		// Auto-select the first sheet and its inferred date by default
+		const defaultSheet = mapped[0]?.name || "";
+		setSelectedSheet(defaultSheet);
+		if (mapped[0]?.inferredDate) {
+			setUploadDate(mapped[0].inferredDate);
+		} else {
+			setUploadDate(date);
+		}
 
 		console.log("[COMPARE] Upload", {
 			fileName: file.name,
