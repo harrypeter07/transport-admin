@@ -325,11 +325,10 @@ export default function GoogleMapView({
 	const hasPreciseDriverStart = (route: Route) => {
 		const cab = route.cab;
 		if ((route.tripSequence || 1) > 1) return false;
-		const xVal = cab?.driverX;
-		const yVal = cab?.driverY;
-		if (xVal === undefined || xVal === null || yVal === undefined || yVal === null) return false;
-		const lng = typeof xVal === "object" ? Number(xVal.toString()) : Number(xVal);
-		const lat = typeof yVal === "object" ? Number(yVal.toString()) : Number(yVal);
+		if (typeof cab?.driverX !== "number" || typeof cab?.driverY !== "number")
+			return false;
+		const lat = cab.driverY;
+		const lng = cab.driverX;
 		if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
 		if (!isWithinBounds(lat, lng) || isDepotLatLng(lat, lng)) return false;
 		const address = cab?.driverAddress?.trim() ?? "";
@@ -341,11 +340,7 @@ export default function GoogleMapView({
 	const getRouteStartLatLng = (route: Route): any => {
 		const cab = route.cab;
 		if (hasPreciseDriverStart(route)) {
-			const xVal = cab.driverX;
-			const yVal = cab.driverY;
-			const lng = typeof xVal === "object" && xVal !== null ? Number(xVal.toString()) : Number(xVal);
-			const lat = typeof yVal === "object" && yVal !== null ? Number(yVal.toString()) : Number(yVal);
-			return { lat, lng };
+			return { lat: cab!.driverY!, lng: cab!.driverX! };
 		}
 		return { lat: depotLat, lng: depotLng };
 	};
