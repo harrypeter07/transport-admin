@@ -419,24 +419,30 @@ async function main() {
 				});
 
 				if (!dryRun) {
-					await prisma.driverAssignment.upsert({
+					const existingAssignment = await prisma.driverAssignment.findFirst({
 						where: {
-							cabId_date: {
-								cabId: dbCab.id,
-								date: "2026-06-16",
-							},
-						},
-						update: {
-							driverName: cabDetail.driverName,
-							driverPhone: cabDetail.driverPhone,
-						},
-						create: {
 							cabId: dbCab.id,
 							date: "2026-06-16",
-							driverName: cabDetail.driverName,
-							driverPhone: cabDetail.driverPhone,
 						},
 					});
+					if (existingAssignment) {
+						await prisma.driverAssignment.update({
+							where: { id: existingAssignment.id },
+							data: {
+								driverName: cabDetail.driverName,
+								driverPhone: cabDetail.driverPhone,
+							},
+						});
+					} else {
+						await prisma.driverAssignment.create({
+							data: {
+								cabId: dbCab.id,
+								date: "2026-06-16",
+								driverName: cabDetail.driverName,
+								driverPhone: cabDetail.driverPhone,
+							},
+						});
+					}
 				}
 
 				driverAssignmentCount++;

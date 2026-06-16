@@ -243,7 +243,7 @@ async function main() {
 			},
 			audit: {
 				employeesInWorkbook: workbookEmployees.size,
-				employeesInDatabase: dbEmployees.size,
+				employeesInDatabase: dbEmployees.length,
 				employeesMissingFromDb: missingFromDb.sort(),
 				employeesMissingFromWorkbook: missingFromWorkbook.sort(),
 				emailMatches,
