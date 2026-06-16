@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { Route } from "@/store/useTransportStore";
+import { Route, useTransportStore } from "@/store/useTransportStore";
 import {
 	X,
 	Truck,
@@ -152,6 +152,7 @@ export default function CompareModal({
 	onDateChange,
 	onAbsentCodesChange,
 }: CompareModalProps) {
+	const previewOptimization = useTransportStore((state) => state.previewOptimization);
 	const [currentRoutes, setCurrentRoutes] = useState<Route[]>([]);
 	const [frozenOptimizedRoutes, setFrozenOptimizedRoutes] = useState<Route[]>(
 		[],
@@ -333,6 +334,14 @@ export default function CompareModal({
 			sheetName: selectedSheet,
 			snapshotId,
 		};
+
+		// Run optimization for this new date and absent codes
+		setLoading(true);
+		try {
+			await previewOptimization(true);
+		} catch (optErr) {
+			console.error("Failed to run optimization for comparison", optErr);
+		}
 
 		// Load comparison in background but restore manual baseline
 		loadComparison();
@@ -1037,10 +1046,10 @@ export default function CompareModal({
 								type="button"
 								onClick={handleSaveBaseline}
 								disabled={uploading}
-								className="text-xs font-bold bg-[#ff4f00] text-white px-3 py-1 disabled:opacity-50 flex items-center gap-1"
+								className="text-xs font-bold bg-[#ff4f00] text-white px-3 py-1 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
 							>
 								<Upload className="w-3 h-3" />
-								{uploading ? "Saving..." : "Save baseline"}
+								{uploading ? "Comparing..." : "Compare"}
 							</button>
 						</>
 					)}
@@ -1089,15 +1098,7 @@ export default function CompareModal({
 					</div>
 				</div>
 
-				{employeePopulationMismatch && (
-					<div className="px-6 py-2 bg-orange-50 border-b border-orange-200 text-[11px] text-orange-900 font-semibold">
-						⚠️ Comparison based on different employee populations: Manual=
-						{employeeComparison.manualEmployees.size} vs Optimized=
-						{employeeComparison.optimizedEmployees.size}. Missing from
-						optimized: {employeeComparison.missingFromOptimized.size}. Extra in
-						optimized: {employeeComparison.extraInOptimized.size}.
-					</div>
-				)}
+
 				{error && !loading && (
 					<div className="px-6 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-900">
 						{error}
@@ -1112,84 +1113,60 @@ export default function CompareModal({
 					<div className="flex-1 flex flex-col overflow-y-auto">
 						{/* Maps Section */}
 						<div className="flex flex-col border-b border-[#e8e8e8]">
-							{/* Map switcher bar */}
-							<div className="px-6 py-2 bg-[#fafafa] border-b border-[#e8e8e8] flex items-center justify-between">
-								<div className="flex items-center gap-2">
-									<div
-										className={`w-2.5 h-2.5 rounded-full ${activeMapType === "BASELINE" ? "bg-[#1c1b1f]" : "bg-[#059669]"}`}
-									/>
-									<span className="text-[10px] font-bold uppercase tracking-wider text-[#4a4a4a]">
-										Map:{" "}
-										{activeMapType === "BASELINE"
-											? "Current Baseline (Manual)"
-											: "System Optimized"}
-									</span>
-								</div>
-								<div className="flex items-center gap-1 bg-white p-0.5 border border-[#e8e8e8] rounded-none">
-									<button
-										type="button"
-										onClick={() => setActiveMapType("BASELINE")}
-										className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide transition-all ${
-											activeMapType === "BASELINE"
-												? "bg-[#1c1b1f] text-white"
-												: "text-[#6b6b6b] hover:text-[#1c1b1f]"
-										}`}
-									>
-										Current Baseline ({currentMetrics.cabCount} routes)
-									</button>
-									<button
-										type="button"
-										onClick={() => setActiveMapType("OPTIMIZED")}
-										className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide transition-all ${
-											activeMapType === "OPTIMIZED"
-												? "bg-[#059669] text-white"
-												: "text-[#6b6b6b] hover:text-[#059669]"
-										}`}
-									>
-										System Optimized ({optimizedMetrics.cabCount} routes)
-									</button>
-								</div>
-							</div>
-							<div className="h-[360px] relative w-full">
-								{activeMapType === "BASELINE" ? (
-									mapCurrentRoutes.length > 0 ? (
-										<GoogleMapView
-											routes={mapCurrentRoutes}
-											selectedRouteId={selectedCurrentId}
-											onSelectRoute={handleSelectCurrent}
-											mode="OPTIMIZER"
-											depotLat={depotLat}
-											depotLng={depotLng}
-											depotName={depotName}
-											apiKey={apiKey}
-										/>
-									) : (
-										<div className="w-full h-full flex items-center justify-center bg-[#f7f7f7] flex-col gap-2 px-6 text-center">
-											<div className="text-xs font-bold text-[#9a9a9a]">
+							<div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 h-[380px] bg-[#fafafa]">
+								{/* Left Map: Current Baseline */}
+								<div className="relative border border-[#e8e8e8] h-full flex flex-col bg-white">
+									<div className="px-3 py-1.5 bg-[#f7f7f7] border-b border-[#e8e8e8] flex items-center justify-between">
+										<span className="text-[10px] font-bold uppercase tracking-wider text-[#1c1b1f]">
+											Current Baseline ({mapCurrentRoutes.length} routes)
+										</span>
+									</div>
+									<div className="flex-1 relative min-h-0">
+										{mapCurrentRoutes.length > 0 ? (
+											<GoogleMapView
+												routes={mapCurrentRoutes}
+												selectedRouteId={selectedCurrentId}
+												onSelectRoute={handleSelectCurrent}
+												mode="OPTIMIZER"
+												depotLat={depotLat}
+												depotLng={depotLng}
+												depotName={depotName}
+												apiKey={apiKey}
+											/>
+										) : (
+											<div className="w-full h-full flex items-center justify-center bg-[#f7f7f7] text-xs text-[#9a9a9a] font-medium">
 												No baseline routes available
 											</div>
-											<div className="text-[10px] text-[#b0b0b0]">
-												The baseline could not be loaded. Please update the
-												baseline in settings or wait for generation.
-											</div>
-										</div>
-									)
-								) : mapOptimizedRoutes.length > 0 ? (
-									<GoogleMapView
-										routes={mapOptimizedRoutes}
-										selectedRouteId={selectedOptimizedId}
-										onSelectRoute={handleSelectOptimized}
-										mode="OPTIMIZER"
-										depotLat={depotLat}
-										depotLng={depotLng}
-										depotName={depotName}
-										apiKey={apiKey}
-									/>
-								) : (
-									<div className="w-full h-full flex items-center justify-center bg-[#f7f7f7] text-xs text-[#9a9a9a] font-medium">
-										Run optimization first to see optimized routes
+										)}
 									</div>
-								)}
+								</div>
+
+								{/* Right Map: System Optimized */}
+								<div className="relative border border-[#e8e8e8] h-full flex flex-col bg-white">
+									<div className="px-3 py-1.5 bg-[#f7f7f7] border-b border-[#e8e8e8] flex items-center justify-between">
+										<span className="text-[10px] font-bold uppercase tracking-wider text-[#059669]">
+											System Optimized ({mapOptimizedRoutes.length} routes)
+										</span>
+									</div>
+									<div className="flex-1 relative min-h-0">
+										{mapOptimizedRoutes.length > 0 ? (
+											<GoogleMapView
+												routes={mapOptimizedRoutes}
+												selectedRouteId={selectedOptimizedId}
+												onSelectRoute={handleSelectOptimized}
+												mode="OPTIMIZER"
+												depotLat={depotLat}
+												depotLng={depotLng}
+												depotName={depotName}
+												apiKey={apiKey}
+											/>
+										) : (
+											<div className="w-full h-full flex items-center justify-center bg-[#f7f7f7] text-xs text-[#9a9a9a] font-medium">
+												Run optimization first to see optimized routes
+											</div>
+										)}
+									</div>
+								</div>
 							</div>
 						</div>
 
@@ -1446,7 +1423,7 @@ export default function CompareModal({
 								<div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">
 									Validation Summary
 								</div>
-								<div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 text-[10px] font-mono">
+								<div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] font-mono">
 									<div className="bg-white p-2 border border-[#e8e8e8]">
 										<div className="text-[#9a9a9a] text-[9px]">
 											Manual Routes
@@ -1473,63 +1450,16 @@ export default function CompareModal({
 									</div>
 									<div className="bg-white p-2 border border-[#e8e8e8]">
 										<div className="text-[#9a9a9a] text-[9px]">
-											Optimized Employees
-										</div>
-										<div className="font-bold text-[#059669]">
-											{employeeComparison.optimizedEmployees.size}
-										</div>
-									</div>
-									<div className="bg-white p-2 border border-[#e8e8e8]">
-										<div className="text-[#9a9a9a] text-[9px]">
-											Common Employees
-										</div>
-										<div className="font-bold text-[#4a4a4a]">
-											{employeeComparison.commonEmployees.size}
-										</div>
-									</div>
-									<div className="bg-white p-2 border border-[#e8e8e8]">
-										<div className="text-[#9a9a9a] text-[9px]">
-											Missing (Optimized)
-										</div>
-										<div
-											className={`font-bold ${employeeComparison.missingFromOptimized.size > 0 ? "text-[#dc2626]" : "text-[#059669]"}`}
-										>
-											{employeeComparison.missingFromOptimized.size}
-										</div>
-									</div>
-									<div className="bg-white p-2 border border-[#e8e8e8]">
-										<div className="text-[#9a9a9a] text-[9px]">Coverage %</div>
-										<div className="font-bold text-[#4a4a4a]">
-											{employeeComparison.manualEmployees.size > 0
-												? Math.round(
-														(employeeComparison.commonEmployees.size /
-															employeeComparison.manualEmployees.size) *
-															100,
-													)
-												: 0}
-											%
-										</div>
-									</div>
-									<div className="bg-white p-2 border border-[#e8e8e8]">
-										<div className="text-[#9a9a9a] text-[9px]">
 											Distance Confidence
 										</div>
 										<div className={`font-bold text-sm`}>
-											{/* AUDIT FIX #7: Multi-factor Distance Confidence */}
 											{(() => {
-												const employeeMatchPercent =
-													employeeComparison.manualEmployees.size > 0
-														? (employeeComparison.commonEmployees.size /
-																employeeComparison.manualEmployees.size) *
-															100
-														: 0;
 												const routeCountMatch =
 													mapCurrentRoutes.length === mapOptimizedRoutes.length;
 												const distanceValid =
 													currentMetrics.distanceValidationStatus === "VALID";
 
 												if (
-													employeeMatchPercent >= 95 &&
 													routeCountMatch &&
 													distanceValid
 												) {
@@ -1537,7 +1467,6 @@ export default function CompareModal({
 														<span className="text-[#059669]">✅ High</span>
 													);
 												} else if (
-													employeeMatchPercent >= 80 &&
 													distanceValid
 												) {
 													return (
@@ -1559,22 +1488,13 @@ export default function CompareModal({
 								<div className="text-[9px] font-bold uppercase tracking-wider text-[#15803d] mb-2">
 									📋 Detailed Diagnostics
 								</div>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[10px] font-mono">
+								<div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[10px] font-mono">
 									<div className="bg-white p-2 border border-[#d1fae5] rounded-sm">
 										<div className="text-[#15803d] font-bold mb-1">
 											Manual Employees
 										</div>
 										<div className="text-[#047857]">
 											{employeeComparison.manualEmployees.size} total
-										</div>
-									</div>
-
-									<div className="bg-white p-2 border border-[#d1fae5] rounded-sm">
-										<div className="text-[#15803d] font-bold mb-1">
-											Optimized Employees
-										</div>
-										<div className="text-[#047857]">
-											{employeeComparison.optimizedEmployees.size} total
 										</div>
 									</div>
 
@@ -1613,33 +1533,6 @@ export default function CompareModal({
 												: `❌ ${currentMetrics.totalDist} km (>1000 km threshold)`}
 										</div>
 									</div>
-
-									{employeeComparison.missingFromOptimized.size > 0 && (
-										<div className="bg-white p-2 border border-[#fecaca] rounded-sm md:col-span-2">
-											<div className="text-[#dc2626] font-bold mb-1">
-												⚠️ Missing from Optimization (
-												{employeeComparison.missingFromOptimized.size})
-											</div>
-											<div className="text-[#991b1b] max-h-[80px] overflow-y-auto">
-												{employeeComparison.missingEmployeeNames
-													?.slice(0, 5)
-													.map((name, i) => (
-														<div key={i} className="text-[9px]">
-															• {name}
-														</div>
-													))}
-												{(employeeComparison.missingEmployeeNames?.length ??
-													0) > 5 && (
-													<div className="text-[9px] italic">
-														... and{" "}
-														{(employeeComparison.missingEmployeeNames?.length ??
-															0) - 5}{" "}
-														more
-													</div>
-												)}
-											</div>
-										</div>
-									)}
 								</div>
 							</div>
 						)}
