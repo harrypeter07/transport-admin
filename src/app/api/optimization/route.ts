@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
@@ -90,39 +91,9 @@ async function fetchOptimizationInputs(
     },
   });
 
-  // ── Diagnostic: capture pre-Excel-filter employee state ──
-  const preExcelFilterCount = dbEmployees.length;
-  const preExcelFilterNames = dbEmployees.map(e => e.name);
-
-  const excelFilter = getExcelFilterForDate(currentDateStr);
-  if (excelFilter) {
-    const VARIATION_MAP: Record<string, string> = {
-      "devalla kumar": "devalla sudheer kumar",
-      "devalla sudheer kumar": "devalla sudheer kumar",
-      "meghana u": "meghana b u",
-      "meghana b u": "meghana b u",
-      "prashanth pathlavath": "prashant pathlavat",
-      "prashant pathlavat": "prashant pathlavat",
-      "vajja prakash": "vajja bhanu prakash",
-      "vajja bhanu prakash": "vajja bhanu prakash"
-    };
-    const normalizeName = (name: string) => {
-      const lower = name.trim().toLowerCase();
-      return VARIATION_MAP[lower] || lower;
-    };
-    dbEmployees = dbEmployees.filter(emp => {
-      const normDb = normalizeName(emp.name);
-      return excelFilter.employeeNames.has(normDb);
-    });
-    // ── Diagnostic: log Excel filter results ──
-    const postFilterNormNames = new Set(dbEmployees.map(e => normalizeName(e.name)));
-    const inExcelNotInDb = [...excelFilter.employeeNames].filter(n => !postFilterNormNames.has(n));
-    const droppedNames = preExcelFilterNames.filter(n => !dbEmployees.some(e => e.name === n));
-    console.log(`[DIAG] Excel filter | shiftId=${shiftId} | dbBefore=${preExcelFilterCount} | dbAfter=${dbEmployees.length} | excelTotal=${excelFilter.employeeNames.size} | dropped=[${droppedNames.join(', ')}]`);
-    if (inExcelNotInDb.length > 0) {
-      console.log(`[DIAG] Excel names NOT in DB (shift=${shiftId}): [${inExcelNotInDb.join(', ')}]`);
-    }
-  }
+  // ── DISABLED: Excel filter disabled for optimization ──
+  // Database is source of truth, not external Excel files
+  const excelFilter = null;
 
   const absentIdSet = new Set(extraAbsentEmployeeIds || []);
   const absentCodeSet = new Set((extraAbsentEmployeeCodes || []).map((c) => c.toLowerCase()));
@@ -133,12 +104,7 @@ async function fetchOptimizationInputs(
     if (absentCodeSet.has(emp.employeeCode.toLowerCase())) return false;
     return true;
   });
-  // ── Diagnostic: log leave/absent filter results ──
-  const droppedByLeaveAbsent = dbEmployees.filter(e => !availableEmployees.includes(e)).map(e => e.name);
-  if (droppedByLeaveAbsent.length > 0) {
-    console.log(`[DIAG] Leave/absent filter | shiftId=${shiftId} | before=${dbEmployees.length} | after=${availableEmployees.length} | dropped=[${droppedByLeaveAbsent.join(', ')}]`);
-  }
-  console.log(`[DIAG] Final optimizer input | shiftId=${shiftId || '(all)'} | count=${availableEmployees.length} | names=[${availableEmployees.map(e => e.name).join(', ')}]`);
+  // ── Reduced verbose logging for performance ──
 
   const fallbackShiftId = shiftId || availableEmployees[0]?.shiftId || "";
 
@@ -179,25 +145,8 @@ async function fetchOptimizationInputs(
   const cabCapacity = dbCabs[0]?.capacity ?? 6;
   const minCabsNeeded = activeEmployeeCount > 0 ? Math.ceil(activeEmployeeCount / cabCapacity) : 0;
 
-  if (excelFilter && minCabsNeeded > 0) {
-    const excelMatched = dbCabs.filter((cab) =>
-      excelFilter.cabVehicleNumbers.has(cab.vehicleNumber.trim().toUpperCase())
-    );
-    if (excelMatched.length >= minCabsNeeded) {
-      dbCabs = excelMatched;
-    } else if (excelMatched.length > 0) {
-      const matchedIds = new Set(excelMatched.map((c) => c.id));
-      const topUp = dbCabs.filter((c) => !matchedIds.has(c.id));
-      dbCabs = [...excelMatched, ...topUp].slice(0, Math.max(minCabsNeeded, excelMatched.length));
-      console.warn(
-        `Excel cab filter: ${excelMatched.length} MH plates matched, fleet topped up to ${dbCabs.length} for ${minCabsNeeded} needed`
-      );
-    } else {
-      console.warn(
-        `Excel cab filter matched 0 vehicle plates; using full shift fleet (${dbCabs.length} cabs) for optimization`
-      );
-    }
-  }
+  // ── DISABLED: Excel cab filter ──
+  // Database cabs are source of truth
 
   const cabTripSequenceMap: Record<string, number> = {};
 

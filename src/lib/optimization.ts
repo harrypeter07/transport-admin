@@ -2582,17 +2582,7 @@ export function flagIsolatedEmployees(
   const isolatedCandidates: OptimizeEmployee[] = [];
 
   console.log("[ISOLATED] Total employees passed in:", allEmployees.length);
-  console.log(
-    "[ISOLATED] Shift breakdown:",
-    allEmployees.reduce(
-      (acc, e) => {
-        const key = e.shiftId ?? "null";
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>
-    )
-  );
+  // ── Reduced verbose logging ──
 
   for (const { cab, cluster } of assignments) {
     if (!cab.startPoint) continue;
@@ -2644,13 +2634,7 @@ export function flagIsolatedEmployees(
       sameShift.length === 0
         ? 0
         : Math.min(...sameShift.map((n) => haversineKm(emp.y, emp.x, n.y, n.x)));
-    console.log(
-      `[ISOLATED] ${emp.name}:`,
-      `shiftId=${emp.shiftId}`,
-      `coords=(${emp.x}, ${emp.y})`,
-      `sameShiftCount=${sameShift.length}`,
-      `nearestNeighborKm=${nearest.toFixed(2)}`
-    );
+    // ── Verbose logging disabled for performance ──
   }
 
   return isolated;

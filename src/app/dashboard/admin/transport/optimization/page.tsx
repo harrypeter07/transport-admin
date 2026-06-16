@@ -1529,59 +1529,29 @@ export default function TransitAdminSPA() {
 							</div>
 							<div className="flex flex-wrap gap-2">
 								{(["N", "S", "E", "W"] as const).map((primaryZone) => {
-									// Sub-zones that belong to this primary zone
-									const subZoneKeys: Record<string, string[]> = {
-										N: ["NE", "NW"],
-										S: ["SE", "SW"],
-										E: ["NE", "SE"],
-										W: ["NW", "SW"],
-									};
-									const subs = subZoneKeys[primaryZone];
-									// Aggregate employees + cabs from all sub-zone keys for this primary
-									const allKeys = [primaryZone, ...subs];
-									let totalEmp = 0,
-										totalCabs = 0;
-									const subBreakdown: { key: string; emp: number }[] = [];
-									allKeys.forEach((k) => {
-										const d = optimizationPlans.zoneSummary?.[k];
-										if (d) {
-											totalEmp += d.employees;
-											totalCabs += d.cabs;
-										}
-									});
-									subs.forEach((k) => {
-										const d = optimizationPlans.zoneSummary?.[k];
-										if (d?.employees)
-											subBreakdown.push({ key: k, emp: d.employees });
-									});
-									if (totalEmp === 0) return null;
-									return (
-										<span
-											key={primaryZone}
-											className="inline-flex flex-col px-2 py-1 text-[10px] font-bold border border-[#e8e8e8] bg-[#f7f7f7]"
-											style={{
-												borderLeftColor: ZONE_COLORS[primaryZone],
-												borderLeftWidth: 3,
-											}}
-										>
-											<span className="flex items-center gap-1.5">
-												<span style={{ color: ZONE_COLORS[primaryZone] }}>
-													{primaryZone}
-												</span>
-												<span className="text-[#6b6b6b] font-normal">
-													{totalEmp} emp · {totalCabs} cab
-													{totalCabs !== 1 ? "s" : ""}
-												</span>
+								// Only use primary zone data (N, S, E, W) - avoid sub-zone double counting
+								const d = optimizationPlans.zoneSummary?.[primaryZone];
+								if (!d || d.employees === 0) return null;
+								return (
+									<span
+										key={primaryZone}
+										className="inline-flex flex-col px-2 py-1 text-[10px] font-bold border border-[#e8e8e8] bg-[#f7f7f7]"
+										style={{
+											borderLeftColor: ZONE_COLORS[primaryZone],
+											borderLeftWidth: 3,
+										}}
+									>
+										<span className="flex items-center gap-1.5">
+											<span style={{ color: ZONE_COLORS[primaryZone] }}>
+												{primaryZone}
 											</span>
-											{subBreakdown.length > 0 && (
-												<span className="text-[8px] text-[#9a9a9a] font-normal mt-0.5">
-													{subBreakdown
-														.map((s) => `${s.key}: ${s.emp}`)
-														.join("  ")}
-												</span>
-											)}
+											<span className="text-[#6b6b6b] font-normal">
+												{d.employees} emp · {d.cabs} cab
+												{d.cabs !== 1 ? "s" : ""}
+											</span>
 										</span>
-									);
+									</span>
+								);
 								})}
 							</div>
 						</div>
@@ -1616,7 +1586,8 @@ export default function TransitAdminSPA() {
 														{iso.suggestedAction.replace(/_/g, " ")}
 													</div>
 													{iso.suggestedAction === "ASSIGN_PICKUP_POINT" &&
-														emp && (
+														emp && 
+														!emp.pickupPoint && (
 															<button
 																type="button"
 																onClick={() =>

@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { MapPin, Briefcase, Truck, Navigation } from "lucide-react";
+import { MapPin, Briefcase, Truck, Navigation, X } from "lucide-react";
+import EmployeeSearchBar from "./EmployeeSearchBar";
 
 interface PickupPoint {
 	id: string;
@@ -64,6 +65,8 @@ export default function PickupMapView({
 	const [selectedPoint, setSelectedPoint] = useState<PickupPoint | null>(null);
 	const [hoveredEmployee, setHoveredEmployee] = useState<string | null>(null);
 	const [hoveredVehicle, setHoveredVehicle] = useState<string | null>(null);
+	const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
+	const [shifts, setShifts] = useState<any[]>([]);
 
 	// Initialize map
 	useEffect(() => {
@@ -87,12 +90,28 @@ export default function PickupMapView({
 		};
 	}, []);
 
+	// Fetch shifts
+	useEffect(() => {
+		const fetchShifts = async () => {
+			try {
+				const res = await fetch("/api/shifts");
+				if (res.ok) {
+					const data = await res.json();
+					setShifts(data);
+				}
+			} catch (error) {
+				console.error("Failed to fetch shifts:", error);
+			}
+		};
+		fetchShifts();
+	}, []);
+
 	// Update map when data changes
 	useEffect(() => {
 		if (mapRef.current) {
 			updateMapContent();
 		}
-	}, [employees, pickupPoints, vehicles, selectedPoint, hoveredEmployee]);
+	}, [employees, pickupPoints, vehicles, selectedPoint, hoveredEmployee, selectedEmployee]);
 
 	// Calculate stats
 	useEffect(() => {
@@ -165,17 +184,42 @@ export default function PickupMapView({
 				(e) => e.pickupPoint?.id === point.id,
 			).length;
 
+			// Create SVG pin marker using canvas
+			const zoneColor = zoneColors[point.zone || "N"] || "#3b82f6";
+			
+			// Create marker using canvas for better compatibility
+			const canvas = document.createElement("canvas");
+			canvas.width = 32;
+			canvas.height = 45;
+			const ctx = canvas.getContext("2d");
+			if (ctx) {
+				// Draw pin shape
+				ctx.fillStyle = zoneColor;
+				ctx.beginPath();
+				ctx.moveTo(16, 0);
+				ctx.bezierCurveTo(16, 0, 8, 8, 8, 15);
+				ctx.bezierCurveTo(8, 25, 16, 45, 16, 45);
+				ctx.bezierCurveTo(16, 45, 24, 25, 24, 15);
+				ctx.bezierCurveTo(24, 8, 16, 0, 16, 0);
+				ctx.fill();
+
+				// Draw white circle in center
+				ctx.fillStyle = "white";
+				ctx.beginPath();
+				ctx.arc(16, 13, 3.5, 0, Math.PI * 2);
+				ctx.fill();
+			}
+
+			const iconUrl = canvas.toDataURL("image/png");
+
 			const marker = new window.google.maps.Marker({
 				position: latlng,
 				map: mapRef.current,
 				title: `${point.name} (${empCount} employees)`,
 				icon: {
-					path: window.google.maps.SymbolPath.CIRCLE,
-					scale: isSelected ? 15 : 10,
-					fillColor: zoneColors[point.zone || "N"] || "#3b82f6",
-					fillOpacity: isSelected ? 1 : 0.7,
-					strokeColor: "#ffffff",
-					strokeWeight: 2,
+					url: iconUrl,
+					scaledSize: new window.google.maps.Size(32, 45),
+					anchor: new window.google.maps.Point(16, 45),
 				},
 				clickable: true,
 			});
@@ -208,7 +252,14 @@ export default function PickupMapView({
 			markersRef.current.push(marker);
 		});
 
-		// Add employee markers
+		// Add employee markers with zone colors
+		const zoneEmpColors: Record<string, string> = {
+			N: "#3b82f6",  // Blue
+			S: "#ef4444",  // Red
+			E: "#10b981",  // Green
+			W: "#f59e0b",  // Amber/Orange
+		};
+
 		employees.forEach((emp) => {
 			if (emp.pickupPoint?.latitude && emp.pickupPoint?.longitude) {
 				const latlng = new window.google.maps.LatLng(
@@ -218,30 +269,37 @@ export default function PickupMapView({
 				bounds.extend(latlng);
 
 				const isHovered = hoveredEmployee === emp.id;
+				const isSelected = selectedEmployee?.id === emp.id;
+				const empZone = emp.zone || "N";
+				const baseColor = zoneEmpColors[empZone];
+				
 				const marker = new window.google.maps.Marker({
 					position: latlng,
 					map: mapRef.current,
 					title: emp.name,
 					icon: {
-						path: "M0,-32C-17.7,-32 -32,-17.7 -32,0C-32,32 0,64 0,64C0,64 32,32 32,0C32,-17.7 17.7,-32 0,-32Z",
-						scale: isHovered ? 1.5 : 1,
-						fillColor: isHovered ? "#ef4444" : "#64748b",
-						fillOpacity: isHovered ? 1 : 0.6,
-						strokeColor: "#ffffff",
-						strokeWeight: 1.5,
+						path: "M0,-24C-13.3,-24 -24,-13.3 -24,0C-24,24 0,48 0,48C0,48 24,24 24,0C24,-13.3 13.3,-24 0,-24Z",
+						scale: isSelected ? 1.8 : isHovered ? 1.4 : 1,
+						fillColor: isSelected ? "#000000" : baseColor,
+						fillOpacity: isSelected ? 1 : isHovered ? 0.9 : 0.75,
+						strokeColor: isSelected ? "#ffff00" : "#ffffff",
+						strokeWeight: isSelected ? 4 : 2,
 					},
 					clickable: true,
 				});
 
 				const infoWindow = new window.google.maps.InfoWindow({
 					content: `
-            <div class="p-2 max-w-xs text-sm">
-              <div class="font-bold">${emp.name}</div>
-              <div class="text-gray-600">${emp.email}</div>
-              <div class="text-gray-600">${emp.phone}</div>
-              <div class="text-xs text-gray-500 mt-1">${emp.pickupPoint?.name}</div>
+          <div class="p-3 max-w-xs text-sm bg-white rounded shadow-lg border-l-4" style="border-color: ${baseColor}">
+            <div class="font-bold text-gray-900 text-base">${emp.name}</div>
+            <div class="text-xs text-gray-600 mt-2">📧 ${emp.email || 'N/A'}</div>
+            <div class="text-xs text-gray-600">📱 ${emp.phone || 'N/A'}</div>
+            <div class="text-xs text-gray-600 mt-1">📍 ${emp.address || 'N/A'}</div>
+            <div class="mt-3 px-2 py-1 rounded text-xs font-semibold" style="background-color: ${baseColor}20; color: ${baseColor}">
+              ✓ Zone ${empZone}
             </div>
-          `,
+          </div>
+        `,
 				});
 
 				marker.addListener("mouseover", () => {
@@ -257,6 +315,16 @@ export default function PickupMapView({
 				markersRef.current.push(marker);
 			}
 		});
+
+		// Auto-zoom to selected employee
+		if (selectedEmployee?.lat && selectedEmployee?.lng) {
+			const empLatlng = new window.google.maps.LatLng(
+				selectedEmployee.lat,
+				selectedEmployee.lng,
+			);
+			mapRef.current.setZoom(15);
+			mapRef.current.panTo(empLatlng);
+		}
 
 		// Add vehicle/driver markers
 		vehicles.forEach((vehicle) => {
@@ -348,9 +416,18 @@ export default function PickupMapView({
 		<div className="w-full h-full flex flex-col bg-gray-50">
 			{/* Header */}
 			<div className="bg-white border-b border-gray-200 p-4 shadow-sm">
-				<div className="flex items-center gap-2 mb-2">
-					<Navigation className="w-5 h-5 text-blue-600" />
-					<h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+				<div className="flex items-center justify-between mb-2">
+					<div className="flex items-center gap-2">
+						<Navigation className="w-5 h-5 text-blue-600" />
+						<h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+					</div>
+					<div className="w-full max-w-md">
+						<EmployeeSearchBar 
+							employees={employees}
+							shifts={shifts}
+							onSelectEmployee={setSelectedEmployee}
+						/>
+					</div>
 				</div>
 
 				{showStats && (
@@ -458,6 +535,63 @@ export default function PickupMapView({
 						>
 							Close
 						</button>
+					</div>
+				)}
+
+				{/* Selected Employee Info Panel */}
+				{selectedEmployee && (
+					<div className="absolute bottom-6 right-6 bg-white rounded-lg shadow-lg p-4 max-w-sm border-l-4 border-red-500">
+						<div className="flex items-center justify-between mb-3">
+							<div className="font-bold text-gray-900 text-lg">{selectedEmployee.name}</div>
+							<button
+								onClick={() => setSelectedEmployee(null)}
+								className="text-gray-500 hover:text-gray-700"
+							>
+								<X size={20} />
+							</button>
+						</div>
+
+						{/* Zone Badge */}
+						<div className="mb-3">
+							<span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+								selectedEmployee.zone === 'N' ? 'bg-blue-100 text-blue-800' :
+								selectedEmployee.zone === 'S' ? 'bg-red-100 text-red-800' :
+								selectedEmployee.zone === 'E' ? 'bg-green-100 text-green-800' :
+								'bg-purple-100 text-purple-800'
+							}`}>
+								Zone {selectedEmployee.zone}
+							</span>
+						</div>
+
+						{/* Contact Info */}
+						<div className="text-sm space-y-2 mb-3 border-b pb-3">
+							<div className="flex items-center gap-2">
+								<span className="text-gray-600">📧</span>
+								<span className="text-gray-700">{selectedEmployee.email}</span>
+							</div>
+							<div className="flex items-center gap-2">
+								<span className="text-gray-600">📱</span>
+								<span className="text-gray-700">{selectedEmployee.phone}</span>
+							</div>
+							<div className="flex items-start gap-2">
+								<span className="text-gray-600">📍</span>
+								<span className="text-gray-700 text-xs">{selectedEmployee.address}</span>
+							</div>
+						</div>
+
+						{/* Shift Info */}
+						<div className="mb-3 bg-blue-50 rounded p-3">
+							<div className="text-xs font-semibold text-gray-700 mb-1">📅 Shift Information</div>
+							<div className="text-sm font-bold text-blue-700">{selectedEmployee.shift}</div>
+							<div className="text-xs text-gray-600">🕐 {selectedEmployee.shiftTime}</div>
+						</div>
+
+						{/* Coordinates */}
+						<div className="text-xs text-gray-500 bg-gray-50 rounded p-2">
+							<div className="font-semibold mb-1">Coordinates</div>
+							<div>Lat: {selectedEmployee.lat?.toFixed(4)}</div>
+							<div>Lng: {selectedEmployee.lng?.toFixed(4)}</div>
+						</div>
 					</div>
 				)}
 			</div>
