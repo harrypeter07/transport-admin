@@ -278,11 +278,13 @@ export default function CompareModal({
 	// Load comparison when modal opens or date changes
 	useEffect(() => {
 		if (!isOpen) return;
-		setHasUploadedInSession(false);
-		setBaselineSummary(null);
-		setCurrentRoutes([]);
-		// Queue the comparison load after the effect cleanup
-		queueMicrotask(() => loadComparison());
+		// Queue the state resets and comparison load to prevent synchronous setState within the effect
+		queueMicrotask(() => {
+			setHasUploadedInSession(false);
+			setBaselineSummary(null);
+			setCurrentRoutes([]);
+			loadComparison();
+		});
 	}, [isOpen, date, loadComparison]);
 
 	const handleInspectFile = async (file: File) => {
