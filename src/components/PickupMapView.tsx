@@ -131,7 +131,8 @@ export default function PickupMapView({
 			totalEmployees: employees.length,
 			totalPickupPoints: pickupPoints.length,
 			totalVehicles: vehicles.length,
-			activeRoutes: vehicles.filter((v: Vehicle) => v.status === "ACTIVE").length,
+			activeRoutes: vehicles.filter((v: Vehicle) => v.status === "ACTIVE")
+				.length,
 		});
 	}, [employees, pickupPoints, vehicles]);
 
@@ -140,28 +141,31 @@ export default function PickupMapView({
 		initializeMapRef.current = () => {
 			if (!(window as any).google || !containerRef.current) return;
 
-			mapRef.current = new (window as any).google.maps.Map(containerRef.current, {
-				center: NAGPUR_CENTER,
-				zoom: 12,
-				mapTypeControl: true,
-				fullscreenControl: true,
-				zoomControl: true,
-				streetViewControl: false,
-				styles: [
-					{
-						featureType: "poi.business",
-						stylers: [{ visibility: "off" }],
-					},
-					{
-						featureType: "transit",
-						stylers: [{ visibility: "off" }],
-					},
-					{
-						featureType: "landscape",
-						stylers: [{ color: "#f2eee9" }],
-					},
-				],
-			});
+			mapRef.current = new (window as any).google.maps.Map(
+				containerRef.current,
+				{
+					center: NAGPUR_CENTER,
+					zoom: 12,
+					mapTypeControl: true,
+					fullscreenControl: true,
+					zoomControl: true,
+					streetViewControl: false,
+					styles: [
+						{
+							featureType: "poi.business",
+							stylers: [{ visibility: "off" }],
+						},
+						{
+							featureType: "transit",
+							stylers: [{ visibility: "off" }],
+						},
+						{
+							featureType: "landscape",
+							stylers: [{ color: "#f2eee9" }],
+						},
+					],
+				},
+			);
 		};
 	}, []);
 
@@ -174,80 +178,80 @@ export default function PickupMapView({
 			markersRef.current.forEach((marker: any) => marker.setMap(null));
 			markersRef.current = [];
 
-		// Clear polyline
-		if (polylineRef.current) {
-			polylineRef.current.setMap(null);
-			polylineRef.current = null;
-		}
-
-		// Add pickup point markers
-		const bounds = new (window as any).google.maps.LatLngBounds();
-		const zoneColors: Record<string, string> = {
-			N: "#3b82f6",
-			S: "#ef4444",
-			E: "#10b981",
-			W: "#8b5cf6",
-		};
-
-		pickupPoints.forEach((point) => {
-			const latlng = new (window as any).google.maps.LatLng(
-				point.latitude,
-				point.longitude,
-			);
-			bounds.extend(latlng);
-
-			const isSelected = selectedPoint?.id === point.id;
-			const empCount = employees.filter(
-				(e) => e.pickupPoint?.id === point.id,
-			).length;
-
-			// Create SVG pin marker using canvas
-			const zoneColor = zoneColors[point.zone || "N"] || "#3b82f6";
-
-			// Create marker using canvas for better compatibility
-			const canvas = document.createElement("canvas");
-			canvas.width = 32;
-			canvas.height = 45;
-			const ctx = canvas.getContext("2d");
-			if (ctx) {
-				// Draw pin shape
-				ctx.fillStyle = zoneColor;
-				ctx.beginPath();
-				ctx.moveTo(16, 0);
-				ctx.bezierCurveTo(16, 0, 8, 8, 8, 15);
-				ctx.bezierCurveTo(8, 25, 16, 45, 16, 45);
-				ctx.bezierCurveTo(16, 45, 24, 25, 24, 15);
-				ctx.bezierCurveTo(24, 8, 16, 0, 16, 0);
-				ctx.fill();
-
-				// Draw white circle in center
-				ctx.fillStyle = "white";
-				ctx.beginPath();
-				ctx.arc(16, 13, 3.5, 0, Math.PI * 2);
-				ctx.fill();
+			// Clear polyline
+			if (polylineRef.current) {
+				polylineRef.current.setMap(null);
+				polylineRef.current = null;
 			}
 
-			const iconUrl = canvas.toDataURL("image/png");
+			// Add pickup point markers
+			const bounds = new (window as any).google.maps.LatLngBounds();
+			const zoneColors: Record<string, string> = {
+				N: "#3b82f6",
+				S: "#ef4444",
+				E: "#10b981",
+				W: "#8b5cf6",
+			};
 
-			const marker = new (window as any).google.maps.Marker({
-				position: latlng,
-				map: mapRef.current,
-				title: `${point.name} (${empCount} employees)`,
-				icon: {
-					url: iconUrl,
-					scaledSize: new (window as any).google.maps.Size(32, 45),
-					anchor: new (window as any).google.maps.Point(16, 45),
-				},
-				clickable: true,
-			});
+			pickupPoints.forEach((point) => {
+				const latlng = new (window as any).google.maps.LatLng(
+					point.latitude,
+					point.longitude,
+				);
+				bounds.extend(latlng);
 
-			marker.addListener("click", () => {
-				setSelectedPoint(isSelected ? null : point);
-			});
+				const isSelected = selectedPoint?.id === point.id;
+				const empCount = employees.filter(
+					(e) => e.pickupPoint?.id === point.id,
+				).length;
 
-			// Info window
-			const infoWindow = new (window as any).google.maps.InfoWindow({
-				content: `
+				// Create SVG pin marker using canvas
+				const zoneColor = zoneColors[point.zone || "N"] || "#3b82f6";
+
+				// Create marker using canvas for better compatibility
+				const canvas = document.createElement("canvas");
+				canvas.width = 32;
+				canvas.height = 45;
+				const ctx = canvas.getContext("2d");
+				if (ctx) {
+					// Draw pin shape
+					ctx.fillStyle = zoneColor;
+					ctx.beginPath();
+					ctx.moveTo(16, 0);
+					ctx.bezierCurveTo(16, 0, 8, 8, 8, 15);
+					ctx.bezierCurveTo(8, 25, 16, 45, 16, 45);
+					ctx.bezierCurveTo(16, 45, 24, 25, 24, 15);
+					ctx.bezierCurveTo(24, 8, 16, 0, 16, 0);
+					ctx.fill();
+
+					// Draw white circle in center
+					ctx.fillStyle = "white";
+					ctx.beginPath();
+					ctx.arc(16, 13, 3.5, 0, Math.PI * 2);
+					ctx.fill();
+				}
+
+				const iconUrl = canvas.toDataURL("image/png");
+
+				const marker = new (window as any).google.maps.Marker({
+					position: latlng,
+					map: mapRef.current,
+					title: `${point.name} (${empCount} employees)`,
+					icon: {
+						url: iconUrl,
+						scaledSize: new (window as any).google.maps.Size(32, 45),
+						anchor: new (window as any).google.maps.Point(16, 45),
+					},
+					clickable: true,
+				});
+
+				marker.addListener("click", () => {
+					setSelectedPoint(isSelected ? null : point);
+				});
+
+				// Info window
+				const infoWindow = new (window as any).google.maps.InfoWindow({
+					content: `
           <div class="p-3 max-w-xs">
             <div class="font-bold text-sm">${point.name}</div>
             <div class="text-xs text-gray-600">${point.address || "N/A"}</div>
@@ -256,57 +260,57 @@ export default function PickupMapView({
             </div>
           </div>
         `,
-			});
-
-			marker.addListener("mouseover", () => {
-				infoWindow.open(mapRef.current, marker);
-			});
-
-			marker.addListener("mouseout", () => {
-				infoWindow.close();
-			});
-
-			markersRef.current.push(marker);
-		});
-
-		// Add employee markers with zone colors
-		const zoneEmpColors: Record<string, string> = {
-			N: "#3b82f6", // Blue
-			S: "#ef4444", // Red
-			E: "#10b981", // Green
-			W: "#f59e0b", // Amber/Orange
-		};
-
-		employees.forEach((emp) => {
-			if (emp.pickupPoint?.latitude && emp.pickupPoint?.longitude) {
-				const latlng = new (window as any).google.maps.LatLng(
-					emp.pickupPoint.latitude,
-					emp.pickupPoint.longitude,
-				);
-				bounds.extend(latlng);
-
-				const isHovered = hoveredEmployee === emp.id;
-				const isSelected = selectedEmployee?.id === emp.id;
-				const empZone = emp.zone || "N";
-				const baseColor = zoneEmpColors[empZone];
-
-				const marker = new (window as any).google.maps.Marker({
-					position: latlng,
-					map: mapRef.current,
-					title: emp.name,
-					icon: {
-						path: "M0,-24C-13.3,-24 -24,-13.3 -24,0C-24,24 0,48 0,48C0,48 24,24 24,0C24,-13.3 13.3,-24 0,-24Z",
-						scale: isSelected ? 1.8 : isHovered ? 1.4 : 1,
-						fillColor: isSelected ? "#000000" : baseColor,
-						fillOpacity: isSelected ? 1 : isHovered ? 0.9 : 0.75,
-						strokeColor: isSelected ? "#ffff00" : "#ffffff",
-						strokeWeight: isSelected ? 4 : 2,
-					},
-					clickable: true,
 				});
 
-				const infoWindow = new (window as any).google.maps.InfoWindow({
-					content: `
+				marker.addListener("mouseover", () => {
+					infoWindow.open(mapRef.current, marker);
+				});
+
+				marker.addListener("mouseout", () => {
+					infoWindow.close();
+				});
+
+				markersRef.current.push(marker);
+			});
+
+			// Add employee markers with zone colors
+			const zoneEmpColors: Record<string, string> = {
+				N: "#3b82f6", // Blue
+				S: "#ef4444", // Red
+				E: "#10b981", // Green
+				W: "#f59e0b", // Amber/Orange
+			};
+
+			employees.forEach((emp) => {
+				if (emp.pickupPoint?.latitude && emp.pickupPoint?.longitude) {
+					const latlng = new (window as any).google.maps.LatLng(
+						emp.pickupPoint.latitude,
+						emp.pickupPoint.longitude,
+					);
+					bounds.extend(latlng);
+
+					const isHovered = hoveredEmployee === emp.id;
+					const isSelected = selectedEmployee?.id === emp.id;
+					const empZone = emp.zone || "N";
+					const baseColor = zoneEmpColors[empZone];
+
+					const marker = new (window as any).google.maps.Marker({
+						position: latlng,
+						map: mapRef.current,
+						title: emp.name,
+						icon: {
+							path: "M0,-24C-13.3,-24 -24,-13.3 -24,0C-24,24 0,48 0,48C0,48 24,24 24,0C24,-13.3 13.3,-24 0,-24Z",
+							scale: isSelected ? 1.8 : isHovered ? 1.4 : 1,
+							fillColor: isSelected ? "#000000" : baseColor,
+							fillOpacity: isSelected ? 1 : isHovered ? 0.9 : 0.75,
+							strokeColor: isSelected ? "#ffff00" : "#ffffff",
+							strokeWeight: isSelected ? 4 : 2,
+						},
+						clickable: true,
+					});
+
+					const infoWindow = new (window as any).google.maps.InfoWindow({
+						content: `
           <div class="p-3 max-w-xs text-sm bg-white rounded shadow-lg border-l-4" style="border-color: ${baseColor}">
             <div class="font-bold text-gray-900 text-base">${emp.name}</div>
             <div class="text-xs text-gray-600 mt-2">📧 ${emp.email || "N/A"}</div>
@@ -317,58 +321,61 @@ export default function PickupMapView({
             </div>
           </div>
         `,
-				});
+					});
 
-				marker.addListener("mouseover", () => {
-					infoWindow.open(mapRef.current, marker);
-					setHoveredEmployee(emp.id);
-				});
+					marker.addListener("mouseover", () => {
+						infoWindow.open(mapRef.current, marker);
+						setHoveredEmployee(emp.id);
+					});
 
-				marker.addListener("mouseout", () => {
-					infoWindow.close();
-					setHoveredEmployee(null);
-				});
+					marker.addListener("mouseout", () => {
+						infoWindow.close();
+						setHoveredEmployee(null);
+					});
 
-				markersRef.current.push(marker);
-			}
-		});
-
-		// Auto-zoom to selected employee
-		if (selectedEmployee?.lat && selectedEmployee?.lng) {
-			const empLatlng = new (window as any).google.maps.LatLng(
-				selectedEmployee.lat,
-				selectedEmployee.lng,
-			);
-			mapRef.current.setZoom(15);
-			mapRef.current.panTo(empLatlng);
-		}
-
-		// Add vehicle/driver markers
-		vehicles.forEach((vehicle) => {
-			const isHovered = hoveredVehicle === vehicle.id;
-			const driverLat = 21.14 + Math.random() * 0.05;
-			const driverLng = 79.09 + Math.random() * 0.05;
-
-			const latlng = new (window as any).google.maps.LatLng(driverLat, driverLng);
-			bounds.extend(latlng);
-
-			const marker = new (window as any).google.maps.Marker({
-				position: latlng,
-				map: mapRef.current,
-				title: `${vehicle.vehicleNumber} - ${vehicle.driverName}`,
-				icon: {
-					path: "M0,-24C-13.3,-24 -24,-13.3 -24,0C-24,24 0,48 0,48C0,48 24,24 24,0C24,-13.3 13.3,-24 0,-24Z",
-					scale: isHovered ? 1.3 : 1,
-					fillColor: isHovered ? "#ff9800" : "#ff6b35",
-					fillOpacity: isHovered ? 1 : 0.7,
-					strokeColor: "#ffffff",
-					strokeWeight: 2,
-				},
-				clickable: true,
+					markersRef.current.push(marker);
+				}
 			});
 
-			const infoWindow = new (window as any).google.maps.InfoWindow({
-				content: `
+			// Auto-zoom to selected employee
+			if (selectedEmployee?.lat && selectedEmployee?.lng) {
+				const empLatlng = new (window as any).google.maps.LatLng(
+					selectedEmployee.lat,
+					selectedEmployee.lng,
+				);
+				mapRef.current.setZoom(15);
+				mapRef.current.panTo(empLatlng);
+			}
+
+			// Add vehicle/driver markers
+			vehicles.forEach((vehicle) => {
+				const isHovered = hoveredVehicle === vehicle.id;
+				const driverLat = 21.14 + Math.random() * 0.05;
+				const driverLng = 79.09 + Math.random() * 0.05;
+
+				const latlng = new (window as any).google.maps.LatLng(
+					driverLat,
+					driverLng,
+				);
+				bounds.extend(latlng);
+
+				const marker = new (window as any).google.maps.Marker({
+					position: latlng,
+					map: mapRef.current,
+					title: `${vehicle.vehicleNumber} - ${vehicle.driverName}`,
+					icon: {
+						path: "M0,-24C-13.3,-24 -24,-13.3 -24,0C-24,24 0,48 0,48C0,48 24,24 24,0C24,-13.3 13.3,-24 0,-24Z",
+						scale: isHovered ? 1.3 : 1,
+						fillColor: isHovered ? "#ff9800" : "#ff6b35",
+						fillOpacity: isHovered ? 1 : 0.7,
+						strokeColor: "#ffffff",
+						strokeWeight: 2,
+					},
+					clickable: true,
+				});
+
+				const infoWindow = new (window as any).google.maps.InfoWindow({
+					content: `
           <div class="p-2 max-w-xs text-sm bg-orange-50">
             <div class="font-bold text-orange-700">${vehicle.vehicleNumber}</div>
             <div class="text-gray-700">Driver: ${vehicle.driverName}</div>
@@ -377,57 +384,65 @@ export default function PickupMapView({
             </div>
           </div>
         `,
+				});
+
+				marker.addListener("mouseover", () => {
+					infoWindow.open(mapRef.current, marker);
+					setHoveredVehicle(vehicle.id);
+				});
+
+				marker.addListener("mouseout", () => {
+					infoWindow.close();
+					setHoveredVehicle(null);
+				});
+
+				markersRef.current.push(marker);
 			});
 
-			marker.addListener("mouseover", () => {
-				infoWindow.open(mapRef.current, marker);
-				setHoveredVehicle(vehicle.id);
-			});
+			// Draw route polylines
+			const routePoints = pickupPoints.map((p) => ({
+				lat: p.latitude,
+				lng: p.longitude,
+			}));
 
-			marker.addListener("mouseout", () => {
-				infoWindow.close();
-				setHoveredVehicle(null);
-			});
-
-			markersRef.current.push(marker);
-		});
-
-		// Draw route polylines
-		const routePoints = pickupPoints.map((p) => ({
-			lat: p.latitude,
-			lng: p.longitude,
-		}));
-
-		if (routePoints.length > 1) {
-			const polylineColors = ["#00bcd4", "#2196f3", "#9c27b0", "#f44336"];
-			const polyline = new (window as any).google.maps.Polyline({
-				path: routePoints,
-				geodesic: true,
-				strokeColor: polylineColors[0],
-				strokeOpacity: 0.7,
-				strokeWeight: 3,
-				map: mapRef.current,
-				icons: [
-					{
-						icon: {
-							path: "M 0,-1 0,1",
-							strokeOpacity: 0.8,
-							scale: 4,
+			if (routePoints.length > 1) {
+				const polylineColors = ["#00bcd4", "#2196f3", "#9c27b0", "#f44336"];
+				const polyline = new (window as any).google.maps.Polyline({
+					path: routePoints,
+					geodesic: true,
+					strokeColor: polylineColors[0],
+					strokeOpacity: 0.7,
+					strokeWeight: 3,
+					map: mapRef.current,
+					icons: [
+						{
+							icon: {
+								path: "M 0,-1 0,1",
+								strokeOpacity: 0.8,
+								scale: 4,
+							},
+							offset: "0",
+							repeat: "20px",
 						},
-						offset: "0",
-						repeat: "20px",
-					},
-				],
-			});
-			polylineRef.current = polyline;
-		}
+					],
+				});
+				polylineRef.current = polyline;
+			}
 
-		// Auto-fit bounds
-		if (autoZoom && markersRef.current.length > 0) {
-			mapRef.current.fitBounds(bounds);
-		}
+			// Auto-fit bounds
+			if (autoZoom && markersRef.current.length > 0) {
+				mapRef.current.fitBounds(bounds);
+			}
 		};
-	}, [employees, pickupPoints, vehicles, selectedPoint, hoveredEmployee, selectedEmployee, autoZoom]);
+	}, [
+		employees,
+		pickupPoints,
+		vehicles,
+		selectedPoint,
+		hoveredEmployee,
+		selectedEmployee,
+		autoZoom,
+	]);
 
 	return (
 		<div className="w-full h-full flex flex-col bg-gray-50">
