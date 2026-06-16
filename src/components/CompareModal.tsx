@@ -66,23 +66,60 @@ function computeRouteDistance(stops: any[]): number {
 	return total;
 }
 
-function normalizeRoute(route: any): Route {
+function cleanCoords(latVal: any, lngVal: any): { lat: number; lng: number } {
+	let lat = typeof latVal === "number" ? latVal : parseFloat(latVal);
+	let lng = typeof lngVal === "number" ? lngVal : parseFloat(lngVal);
+
+	if (isNaN(lat) || isNaN(lng)) {
+		return { lat: 21.1278, lng: 79.0068 }; // Default Nagpur coordinates
+	}
+
+	// Nagpur coordinates range: Latitude is around 21, Longitude is around 79.
+	// If lat is around 79 and lng is around 21, they are swapped!
+	if (lat > 70 && lat < 85 && lng > 15 && lng < 30) {
+		return { lat: lng, lng: lat };
+	}
+
+	return { lat, lng };
+}
+
+function normalizeRoute(route: any, dbEmployees: any[] = []): Route {
 	if (!route) return route;
-	const stops = (route.stops || []).map((stop: any, stopIdx: number) => ({
-		...stop,
-		id: stop.id || stop.employeeId || `${route.id || "route"}-stop-${stopIdx}`,
-		employee:
-			stop.employee?.y !== undefined
-				? stop.employee
-				: {
-						id: stop.employeeId || stop.employee?.id,
-						name: stop.employeeName || stop.employee?.name || "Unknown",
-						gender: stop.gender || stop.employee?.gender || "MALE",
-						y: stop.y || stop.employee?.y || 21.1278,
-						x: stop.x || stop.employee?.x || 79.0068,
-						address: stop.address || stop.employee?.address || "",
-					},
-	}));
+	const stops = (route.stops || []).map((stop: any, stopIdx: number) => {
+		// Extremely robust matching against dbEmployees
+		const matchedEmp = (dbEmployees || []).find((e: any) => {
+			const empIdStr = String(stop.employeeId || "").trim().toLowerCase();
+			const empCodeStr = String(stop.employeeName || stop.employeeCode || "").trim().toLowerCase();
+			return (
+				(e.id && String(e.id).toLowerCase() === empIdStr) ||
+				(e.employeeCode && String(e.employeeCode).toLowerCase() === empIdStr) ||
+				(e.name && String(e.name).toLowerCase() === empCodeStr) ||
+				(stop.employee?.name && String(e.name).toLowerCase() === String(stop.employee.name).toLowerCase()) ||
+				(stop.employee?.employeeCode && String(e.employeeCode).toLowerCase() === String(stop.employee.employeeCode).toLowerCase())
+			);
+		});
+
+		// Extract raw coordinate values from any possible source
+		const rawY = matchedEmp?.y ?? stop.employee?.y ?? stop.y ?? 21.1278;
+		const rawX = matchedEmp?.x ?? stop.employee?.x ?? stop.x ?? 79.0068;
+
+		// Clean and correct coordinate swap if any (y is latitude, x is longitude)
+		const cleaned = cleanCoords(rawY, rawX);
+
+		return {
+			...stop,
+			id: stop.id || stop.employeeId || `${route.id || "route"}-stop-${stopIdx}`,
+			employee: {
+				id: stop.employeeId || stop.employee?.id || matchedEmp?.id,
+				name: matchedEmp?.name || stop.employeeName || stop.employee?.name || "Unknown",
+				gender: matchedEmp?.gender || stop.gender || stop.employee?.gender || "MALE",
+				y: cleaned.lat, // latitude
+				x: cleaned.lng, // longitude
+				address: matchedEmp?.address || stop.address || stop.employee?.address || "",
+			},
+		};
+	});
+
 	let totalDistance = 0;
 	let totalDuration = 0;
 	if (stops.length > 0) {
@@ -109,8 +146,8 @@ function normalizeRoute(route: any): Route {
 	};
 }
 
-function normalizeRoutes(routes: any[]): Route[] {
-	return (routes || []).map(normalizeRoute);
+function normalizeRoutes(routes: any[], dbEmployees: any[] = []): Route[] {
+	return (routes || []).map((r) => normalizeRoute(r, dbEmployees));
 }
 
 function findBestMatch(
@@ -153,6 +190,7 @@ export default function CompareModal({
 	onAbsentCodesChange,
 }: CompareModalProps) {
 	const previewOptimization = useTransportStore((state) => state.previewOptimization);
+	const dbEmployees = useTransportStore((state) => state.employees);
 	const [currentRoutes, setCurrentRoutes] = useState<Route[]>([]);
 	const [frozenOptimizedRoutes, setFrozenOptimizedRoutes] = useState<Route[]>(
 		[],
@@ -173,6 +211,7 @@ export default function CompareModal({
 	const [settings, setSettings] = useState<any>(null);
 	const [apiKey, setApiKey] = useState<string>("");
 	const [baselineSummary, setBaselineSummary] = useState<any>(null);
+	const [hasUploadedInSession, setHasUploadedInSession] = useState(false);
 	const [dbLeaveCount, setDbLeaveCount] = useState(0);
 	const [sheetOptions, setSheetOptions] = useState<
 		{ name: string; inferredDate: string | null; routePreviewCount: number }[]
@@ -187,7 +226,7 @@ export default function CompareModal({
 		"OPTIMIZED",
 	);
 
-	const loadComparison = React.useCallback(() => {
+	const loadComparison = React.useCallback((skipBaselineUpdate = false) => {
 		setLoading(true);
 		setError(null);
 		Promise.all([
@@ -204,15 +243,22 @@ export default function CompareModal({
 							? `${routesData.error} — ${routesData.details}`
 							: routesData.error,
 					);
-					setCurrentRoutes([]);
+					if (!skipBaselineUpdate) {
+						setCurrentRoutes([]);
+						setBaselineSummary(null);
+						setHasUploadedInSession(false);
+					}
 					setFrozenOptimizedRoutes([]);
-					setBaselineSummary(null);
 				} else {
-					setCurrentRoutes(normalizeRoutes(routesData.routes || []));
+					// Use normalizations directly on initial load
+					if (!skipBaselineUpdate) {
+						setCurrentRoutes(normalizeRoutes(routesData.routes || [], dbEmployees));
+						setBaselineSummary(null);
+						setHasUploadedInSession(false);
+					}
 					setFrozenOptimizedRoutes(
-						normalizeRoutes(routesData.optimizedRoutes || []),
+						normalizeRoutes(routesData.optimizedRoutes || [], dbEmployees),
 					);
-					setBaselineSummary(routesData.summary || null);
 					setDbLeaveCount(routesData.dbLeaveCount ?? 0);
 					if (
 						routesData.summary?.absentEmployeeCodes?.length &&
@@ -227,11 +273,14 @@ export default function CompareModal({
 			})
 			.catch(() => setError("Failed to load comparison data"))
 			.finally(() => setLoading(false));
-	}, [date, onAbsentCodesChange]);
+	}, [date, onAbsentCodesChange, dbEmployees]);
 
 	// Load comparison when modal opens or date changes
 	useEffect(() => {
 		if (!isOpen) return;
+		setHasUploadedInSession(false);
+		setBaselineSummary(null);
+		setCurrentRoutes([]);
 		// Queue the comparison load after the effect cleanup
 		queueMicrotask(() => loadComparison());
 	}, [isOpen, date, loadComparison]);
@@ -343,12 +392,14 @@ export default function CompareModal({
 			console.error("Failed to run optimization for comparison", optErr);
 		}
 
-		// Load comparison in background but restore manual baseline
-		loadComparison();
+		// Load comparison in background but skip overwriting our new baseline routes
+		loadComparison(true);
 
 		// Restore manual baseline summary after comparison loads
 		setTimeout(() => {
 			setBaselineSummary(savedManualBaseline);
+			setCurrentRoutes(normalizeRoutes(data.routes || [], dbEmployees));
+			setHasUploadedInSession(true);
 			// Keep current routes for display
 		}, 500);
 	};
@@ -406,17 +457,17 @@ export default function CompareModal({
 	}, [optimizationPlans, selectedStrategy, frozenOptimizedRoutes]);
 
 	const optimizedRoutes = useMemo(
-		() => normalizeRoutes(rawOptimizedRoutes),
-		[rawOptimizedRoutes],
+		() => normalizeRoutes(rawOptimizedRoutes, dbEmployees),
+		[rawOptimizedRoutes, dbEmployees],
 	);
 
 	const normalizedCurrent = useMemo(() => {
 		// AUDIT FIX #1: Baseline ONLY from uploaded Excel, never mix with fallback
-		return normalizeRoutes(currentRoutes);
-	}, [currentRoutes]);
+		return normalizeRoutes(currentRoutes, dbEmployees);
+	}, [currentRoutes, dbEmployees]);
 
 	const filteredCurrentRoutes = useMemo(() => {
-		if (normalizedCurrent.length === 0) return [];
+		if (!hasUploadedInSession || normalizedCurrent.length === 0) return [];
 		return normalizedCurrent.filter(
 			(r) =>
 				r.isPickup === true &&
@@ -424,7 +475,7 @@ export default function CompareModal({
 					r.shiftId === selectedShift ||
 					r.shift?.id === selectedShift),
 		);
-	}, [normalizedCurrent, selectedShift]);
+	}, [normalizedCurrent, selectedShift, hasUploadedInSession]);
 
 	const filteredOptimizedRoutes = useMemo(() => {
 		if (optimizedRoutes.length === 0) return [];
@@ -1053,7 +1104,7 @@ export default function CompareModal({
 							</button>
 						</>
 					)}
-					{baselineSummary && (
+					{hasUploadedInSession && baselineSummary && (
 						<div className="flex flex-wrap gap-2 text-[10px] font-mono text-[#6b6b6b]">
 							<span>
 								manifest YES:{" "}
