@@ -111,7 +111,14 @@ export default function PickupMapView({
 		if (mapRef.current) {
 			updateMapContent();
 		}
-	}, [employees, pickupPoints, vehicles, selectedPoint, hoveredEmployee, selectedEmployee]);
+	}, [
+		employees,
+		pickupPoints,
+		vehicles,
+		selectedPoint,
+		hoveredEmployee,
+		selectedEmployee,
+	]);
 
 	// Calculate stats
 	useEffect(() => {
@@ -186,7 +193,7 @@ export default function PickupMapView({
 
 			// Create SVG pin marker using canvas
 			const zoneColor = zoneColors[point.zone || "N"] || "#3b82f6";
-			
+
 			// Create marker using canvas for better compatibility
 			const canvas = document.createElement("canvas");
 			canvas.width = 32;
@@ -254,10 +261,10 @@ export default function PickupMapView({
 
 		// Add employee markers with zone colors
 		const zoneEmpColors: Record<string, string> = {
-			N: "#3b82f6",  // Blue
-			S: "#ef4444",  // Red
-			E: "#10b981",  // Green
-			W: "#f59e0b",  // Amber/Orange
+			N: "#3b82f6", // Blue
+			S: "#ef4444", // Red
+			E: "#10b981", // Green
+			W: "#f59e0b", // Amber/Orange
 		};
 
 		employees.forEach((emp) => {
@@ -272,7 +279,7 @@ export default function PickupMapView({
 				const isSelected = selectedEmployee?.id === emp.id;
 				const empZone = emp.zone || "N";
 				const baseColor = zoneEmpColors[empZone];
-				
+
 				const marker = new window.google.maps.Marker({
 					position: latlng,
 					map: mapRef.current,
@@ -292,9 +299,9 @@ export default function PickupMapView({
 					content: `
           <div class="p-3 max-w-xs text-sm bg-white rounded shadow-lg border-l-4" style="border-color: ${baseColor}">
             <div class="font-bold text-gray-900 text-base">${emp.name}</div>
-            <div class="text-xs text-gray-600 mt-2">📧 ${emp.email || 'N/A'}</div>
-            <div class="text-xs text-gray-600">📱 ${emp.phone || 'N/A'}</div>
-            <div class="text-xs text-gray-600 mt-1">📍 ${emp.address || 'N/A'}</div>
+            <div class="text-xs text-gray-600 mt-2">📧 ${emp.email || "N/A"}</div>
+            <div class="text-xs text-gray-600">📱 ${emp.phone || "N/A"}</div>
+            <div class="text-xs text-gray-600 mt-1">📍 ${emp.address || "N/A"}</div>
             <div class="mt-3 px-2 py-1 rounded text-xs font-semibold" style="background-color: ${baseColor}20; color: ${baseColor}">
               ✓ Zone ${empZone}
             </div>
@@ -422,7 +429,7 @@ export default function PickupMapView({
 						<h1 className="text-2xl font-bold text-gray-900">{title}</h1>
 					</div>
 					<div className="w-full max-w-md">
-						<EmployeeSearchBar 
+						<EmployeeSearchBar
 							employees={employees}
 							shifts={shifts}
 							onSelectEmployee={setSelectedEmployee}
@@ -542,7 +549,9 @@ export default function PickupMapView({
 				{selectedEmployee && (
 					<div className="absolute bottom-6 right-6 bg-white rounded-lg shadow-lg p-4 max-w-sm border-l-4 border-red-500">
 						<div className="flex items-center justify-between mb-3">
-							<div className="font-bold text-gray-900 text-lg">{selectedEmployee.name}</div>
+							<div className="font-bold text-gray-900 text-lg">
+								{selectedEmployee.name}
+							</div>
 							<button
 								onClick={() => setSelectedEmployee(null)}
 								className="text-gray-500 hover:text-gray-700"
@@ -553,12 +562,17 @@ export default function PickupMapView({
 
 						{/* Zone Badge */}
 						<div className="mb-3">
-							<span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-								selectedEmployee.zone === 'N' ? 'bg-blue-100 text-blue-800' :
-								selectedEmployee.zone === 'S' ? 'bg-red-100 text-red-800' :
-								selectedEmployee.zone === 'E' ? 'bg-green-100 text-green-800' :
-								'bg-purple-100 text-purple-800'
-							}`}>
+							<span
+								className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+									selectedEmployee.zone === "N"
+										? "bg-blue-100 text-blue-800"
+										: selectedEmployee.zone === "S"
+											? "bg-red-100 text-red-800"
+											: selectedEmployee.zone === "E"
+												? "bg-green-100 text-green-800"
+												: "bg-purple-100 text-purple-800"
+								}`}
+							>
 								Zone {selectedEmployee.zone}
 							</span>
 						</div>
@@ -575,15 +589,23 @@ export default function PickupMapView({
 							</div>
 							<div className="flex items-start gap-2">
 								<span className="text-gray-600">📍</span>
-								<span className="text-gray-700 text-xs">{selectedEmployee.address}</span>
+								<span className="text-gray-700 text-xs">
+									{selectedEmployee.address}
+								</span>
 							</div>
 						</div>
 
 						{/* Shift Info */}
 						<div className="mb-3 bg-blue-50 rounded p-3">
-							<div className="text-xs font-semibold text-gray-700 mb-1">📅 Shift Information</div>
-							<div className="text-sm font-bold text-blue-700">{selectedEmployee.shift}</div>
-							<div className="text-xs text-gray-600">🕐 {selectedEmployee.shiftTime}</div>
+							<div className="text-xs font-semibold text-gray-700 mb-1">
+								📅 Shift Information
+							</div>
+							<div className="text-sm font-bold text-blue-700">
+								{selectedEmployee.shift}
+							</div>
+							<div className="text-xs text-gray-600">
+								🕐 {selectedEmployee.shiftTime}
+							</div>
 						</div>
 
 						{/* Coordinates */}

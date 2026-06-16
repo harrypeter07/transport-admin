@@ -1529,29 +1529,29 @@ export default function TransitAdminSPA() {
 							</div>
 							<div className="flex flex-wrap gap-2">
 								{(["N", "S", "E", "W"] as const).map((primaryZone) => {
-								// Only use primary zone data (N, S, E, W) - avoid sub-zone double counting
-								const d = optimizationPlans.zoneSummary?.[primaryZone];
-								if (!d || d.employees === 0) return null;
-								return (
-									<span
-										key={primaryZone}
-										className="inline-flex flex-col px-2 py-1 text-[10px] font-bold border border-[#e8e8e8] bg-[#f7f7f7]"
-										style={{
-											borderLeftColor: ZONE_COLORS[primaryZone],
-											borderLeftWidth: 3,
-										}}
-									>
-										<span className="flex items-center gap-1.5">
-											<span style={{ color: ZONE_COLORS[primaryZone] }}>
-												{primaryZone}
-											</span>
-											<span className="text-[#6b6b6b] font-normal">
-												{d.employees} emp · {d.cabs} cab
-												{d.cabs !== 1 ? "s" : ""}
+									// Only use primary zone data (N, S, E, W) - avoid sub-zone double counting
+									const d = optimizationPlans.zoneSummary?.[primaryZone];
+									if (!d || d.employees === 0) return null;
+									return (
+										<span
+											key={primaryZone}
+											className="inline-flex flex-col px-2 py-1 text-[10px] font-bold border border-[#e8e8e8] bg-[#f7f7f7]"
+											style={{
+												borderLeftColor: ZONE_COLORS[primaryZone],
+												borderLeftWidth: 3,
+											}}
+										>
+											<span className="flex items-center gap-1.5">
+												<span style={{ color: ZONE_COLORS[primaryZone] }}>
+													{primaryZone}
+												</span>
+												<span className="text-[#6b6b6b] font-normal">
+													{d.employees} emp · {d.cabs} cab
+													{d.cabs !== 1 ? "s" : ""}
+												</span>
 											</span>
 										</span>
-									</span>
-								);
+									);
 								})}
 							</div>
 						</div>
@@ -1586,7 +1586,7 @@ export default function TransitAdminSPA() {
 														{iso.suggestedAction.replace(/_/g, " ")}
 													</div>
 													{iso.suggestedAction === "ASSIGN_PICKUP_POINT" &&
-														emp && 
+														emp &&
 														!emp.pickupPoint && (
 															<button
 																type="button"

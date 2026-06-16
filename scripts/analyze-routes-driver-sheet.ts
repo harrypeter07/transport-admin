@@ -35,7 +35,7 @@ async function analyzeGTPLData() {
 	const routes = new Set();
 
 	// Helper to detect if string is a vehicle number
-	function isVehicleNumber(str) {
+	function isVehicleNumber(str: string) {
 		if (!str) return false;
 		const normalized = str.trim().toUpperCase();
 		// Vehicle patterns: MH..., CG..., TS..., AP..., etc (Indian state codes + numbers)
