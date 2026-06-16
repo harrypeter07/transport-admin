@@ -424,6 +424,14 @@ export default function TransitAdminSPA() {
   setPreviewedStrategy("BALANCED"); // Default preview
   try { sessionStorage.setItem("opencode-opt-strategy", "BALANCED"); } catch {}
   setHasOptimized(true);
+
+  // Auto-save the BALANCED strategy as a draft to the database so it is persistent
+  const applyRes = await applyOptimizationPlan("BALANCED", isPickup);
+  if (applyRes.success) {
+    setApplySuccess(true);
+  } else {
+    setOptimizeError(applyRes.error || "Optimization completed, but failed to auto-save draft routes.");
+  }
   }
   } catch (err: any) {
   setOptimizeError(err.message || "Unexpected error generating plans.");
@@ -567,70 +575,75 @@ export default function TransitAdminSPA() {
  };
 
  // Calculations for selected and active items
- const dbActiveRoutes = [...routes].sort((a, b) => {
- const timeA = a.shift?.startTime || "";
- const timeB = b.shift?.startTime || "";
- if (timeA !== timeB) return timeA.localeCompare(timeB);
- return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
- });
- 
- // If previewing a generated plan, show the generated routes for every optimized shift.
- const previewRoutes = (optimizationPlans && previewedStrategy)
- ? (() => {
-   const shiftCounters: Record<string, number> = {};
-   return optimizationPlans[previewedStrategy].routes.map((r: any, idx: number) => {
-   const routeShiftId = r.shiftId || activeShiftId;
-   const routeNum = (shiftCounters[routeShiftId] = (shiftCounters[routeShiftId] || 0) + 1);
-   const routeShift = r.shift || shifts.find((shift) => shift.id === routeShiftId);
+ const dbActiveRoutes = useMemo(() => {
+    return [...routes].sort((a, b) => {
+      const timeA = a.shift?.startTime || "";
+      const timeB = b.shift?.startTime || "";
+      if (timeA !== timeB) return timeA.localeCompare(timeB);
+      return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
+    });
+  }, [routes]);
+  
+  // If previewing a generated plan, show the generated routes for every optimized shift.
+  const previewRoutes = useMemo(() => {
+    if (!optimizationPlans || !previewedStrategy) return null;
+    const shiftCounters: Record<string, number> = {};
+    return optimizationPlans[previewedStrategy].routes.map((r: any, idx: number) => {
+      const routeShiftId = r.shiftId || activeShiftId;
+      const routeNum = (shiftCounters[routeShiftId] = (shiftCounters[routeShiftId] || 0) + 1);
+      const routeShift = r.shift || shifts.find((shift) => shift.id === routeShiftId);
 
- return ({
- ...r,
- id: `preview-${routeShiftId}-r${routeNum}-${idx}`,
- routeNumber: routeNum,
- shiftId: routeShiftId,
- shift: routeShift,
- cab: {
- vehicleNumber: r.vehicleNumber,
- driverName: r.driverName,
- driverPhone: r.driverPhone,
-    driverAddress: r.startPoint ? (cabs.find((c: any) => c.id === r.cabId)?.driverAddress ?? "Configured cab start") : undefined,
- driverX: r.startPoint?.x,
- driverY: r.startPoint?.y,
- },
- stops: r.stops.map((s: any) => ({
- ...s,
- id: `preview-stop-${routeShiftId}-r${routeNum}-${s.employeeId}`,
- employee: {
- id: s.employeeId,
- name: s.employeeName,
- gender: s.gender,
- x: s.x,
- y: s.y,
- address: s.address,
- phone: "N/A"
- }
- }))
- });
-   });
- })()
- : null;
- const activeRoutesRaw = previewRoutes
-    ? [...previewRoutes].sort((a, b) => {
-        const timeA = a.shift?.startTime || "";
-        const timeB = b.shift?.startTime || "";
-        if (timeA !== timeB) return timeA.localeCompare(timeB);
-        return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
-      })
-    : dbActiveRoutes.map(r => {
-        const replacementCabId = temporaryReplacements[r.cabId];
-        if (replacementCabId) {
-          const repCab = cabs.find(c => c.id === replacementCabId);
-          if (repCab) return { ...r, cabId: repCab.id, cab: repCab };
-        }
-        return r;
+      return ({
+        ...r,
+        id: `preview-${routeShiftId}-r${routeNum}-${idx}`,
+        routeNumber: routeNum,
+        shiftId: routeShiftId,
+        shift: routeShift,
+        cab: {
+          vehicleNumber: r.vehicleNumber,
+          driverName: r.driverName,
+          driverPhone: r.driverPhone,
+          driverAddress: r.startPoint ? (cabs.find((c: any) => c.id === r.cabId)?.driverAddress ?? "Configured cab start") : undefined,
+          driverX: r.startPoint?.x,
+          driverY: r.startPoint?.y,
+        },
+        stops: r.stops.map((s: any) => ({
+          ...s,
+          id: `preview-stop-${routeShiftId}-r${routeNum}-${s.employeeId}`,
+          employee: {
+            id: s.employeeId,
+            name: s.employeeName,
+            gender: s.gender,
+            x: s.x,
+            y: s.y,
+            address: s.address,
+            phone: "N/A"
+          }
+        }))
       });
-  const activeRoutes = activeRoutesRaw as Route[];
-  const manifestRoutes = activeRoutes.filter(r => (r.stops || []).length > 0);
+    });
+  }, [optimizationPlans, previewedStrategy, activeShiftId, shifts, cabs]);
+
+  const activeRoutesRaw = useMemo(() => {
+    return previewRoutes
+      ? [...previewRoutes].sort((a, b) => {
+          const timeA = a.shift?.startTime || "";
+          const timeB = b.shift?.startTime || "";
+          if (timeA !== timeB) return timeA.localeCompare(timeB);
+          return a.cab.vehicleNumber.localeCompare(b.cab.vehicleNumber);
+        })
+      : dbActiveRoutes.map(r => {
+          const replacementCabId = temporaryReplacements[r.cabId];
+          if (replacementCabId) {
+            const repCab = cabs.find(c => c.id === replacementCabId);
+            if (repCab) return { ...r, cabId: repCab.id, cab: repCab };
+          }
+          return r;
+        });
+  }, [previewRoutes, dbActiveRoutes, temporaryReplacements, cabs]);
+
+  const activeRoutes = useMemo(() => activeRoutesRaw as Route[], [activeRoutesRaw]);
+  const manifestRoutes = useMemo(() => activeRoutes.filter(r => (r.stops || []).length > 0), [activeRoutes]);
   
   const getDriverTripCount = (cabId: string) => {
     if (!cabId) return 0;
@@ -763,7 +776,13 @@ export default function TransitAdminSPA() {
      BALANCED: filterPlan(optimizationPlans.BALANCED),
      totalEmployees: employees.filter((e: any) => e.shiftId === compareShiftFilter).length
    };
- }, [optimizationPlans, compareShiftFilter, employees]);
+  }, [optimizationPlans, compareShiftFilter, employees]);
+
+  const mapVisibleRoutes = useMemo(() => {
+    const shiftFiltered = mapShiftFilter === "ALL" ? activeRoutes : activeRoutes.filter(r => (r as any).shiftId === mapShiftFilter);
+    if (!manifestSearchQuery.trim()) return shiftFiltered;
+    return shiftFiltered.filter((r) => routeMatchesEmployeeSearch(r, manifestSearchQuery));
+  }, [activeRoutes, mapShiftFilter, manifestSearchQuery]);
 
  const selectedRoute = activeRoutes.find((r: any) => r.id === selectedRouteId);
  const totalViolations = activeRoutes.reduce(
@@ -771,10 +790,30 @@ export default function TransitAdminSPA() {
  0
  );
 
- // Calculate unassigned employees
+ // Calculate unassigned employees — scoped to optimizer's employee set when available
  const activeEmployees = employees.filter((emp) => emp.status === "ACTIVE");
  const assignedEmployeeIds = new Set(activeRoutes.flatMap((r) => r.stops.map((s) => s.employeeId)));
- const unassignedEmployees = activeEmployees.filter((emp) => !assignedEmployeeIds.has(emp.id));
+ const unassignedEmployees = (() => {
+   const optimizedIds = optimizationPlans?.optimizedEmployeeIds;
+   if (optimizedIds && optimizedIds.length > 0) {
+     // Only count employees that were actually in the optimizer’s scope
+     const scopeSet = new Set(optimizedIds);
+     return activeEmployees.filter((emp) => scopeSet.has(emp.id) && !assignedEmployeeIds.has(emp.id));
+   }
+   // DB-only view: compare all active employees against route assignments
+   return activeEmployees.filter((emp) => !assignedEmployeeIds.has(emp.id));
+ })();
+
+ // ── Diagnostic: log overflow calculation ──
+ useEffect(() => {
+   console.log('[DIAG] Overflow calculation', {
+     activeEmployeesInDB: activeEmployees.length,
+     assignedInRoutes: assignedEmployeeIds.size,
+     optimizerScope: optimizationPlans?.optimizedEmployeeIds?.length ?? 'N/A (no optimizer data)',
+     overflowCount: unassignedEmployees.length,
+     overflowNames: unassignedEmployees.map(e => e.name),
+   });
+ }, [employees, routes, optimizationPlans]);
 
  // Filter lists
  const filteredEmployees = employees.filter((emp) =>
@@ -1546,11 +1585,7 @@ export default function TransitAdminSPA() {
     </select>
   </div>
   <RouteVisualizer
-  routes={(() => {
-    const shiftFiltered = mapShiftFilter === "ALL" ? activeRoutes : activeRoutes.filter(r => (r as any).shiftId === mapShiftFilter);
-    if (!manifestSearchQuery.trim()) return shiftFiltered;
-    return shiftFiltered.filter((r) => routeMatchesEmployeeSearch(r, manifestSearchQuery));
-  })()}
+  routes={mapVisibleRoutes}
   selectedRouteId={selectedRouteId}
   onSelectRoute={setSelectedRouteId}
   routeViewModes={routeViewModes}

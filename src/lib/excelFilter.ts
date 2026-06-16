@@ -57,6 +57,12 @@ export function getExcelFilterForDate(dateStr: string) {
         for (const emp of parsed.employees) {
           if (!emp.absent) employeeNames.add(normalizeName(emp.name));
         }
+
+        if (employeeNames.size === 0) {
+          console.warn(`Excel filter sheet "${sheetName}" in ${filePath} has 0 active employees. Skipping filter.`);
+          continue;
+        }
+
         for (const route of parsed.routes) {
           if (route.vehicleNumber.startsWith("MH")) {
             cabVehicleNumbers.add(route.vehicleNumber.replace(/\s+/g, "").toUpperCase());
@@ -79,6 +85,11 @@ export function getExcelFilterForDate(dateStr: string) {
           for (const emp of parsed.employees) {
             if (!emp.absent) employeeNames.add(normalizeName(emp.name));
           }
+
+          if (employeeNames.size === 0) {
+            continue;
+          }
+
           for (const route of parsed.routes) {
             if (route.vehicleNumber.startsWith("MH")) {
               cabVehicleNumbers.add(route.vehicleNumber.replace(/\s+/g, "").toUpperCase());

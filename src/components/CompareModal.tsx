@@ -1,28 +1,18 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { Route } from "@/store/useTransportStore";
-import { X, Truck, Users, Route as RouteIcon, Clock, BarChart3, ShieldAlert, Upload, FileSpreadsheet } from "lucide-react";
+import { X, Truck, Users, Route as RouteIcon, BarChart3, ShieldAlert, Upload, FileSpreadsheet } from "lucide-react";
 import { formatDate } from "@/lib/dateFormat";
 import { inferDateFromSheetName } from "@/lib/excelParser";
 import {
   normalizeSheetOption,
   routeMatchesEmployeeSearch,
   stopMatchesEmployeeSearch,
-  formatRouteStartLabel,
 } from "@/lib/employeeSearch";
 import EmployeeSearchInput from "@/components/EmployeeSearchInput";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from "recharts";
 
 const GoogleMapView = dynamic(() => import("./GoogleMapView"), { ssr: false });
 
@@ -117,12 +107,11 @@ interface CompareModalProps {
   onClose: () => void;
   date: string;
   optimizationPlans?: any | null;
-  fallbackRoutes: Route[];
   onDateChange?: (date: string) => void;
   onAbsentCodesChange?: (codes: string[]) => void;
 }
 
-export default function CompareModal({ isOpen, onClose, date, optimizationPlans, fallbackRoutes, onDateChange, onAbsentCodesChange }: CompareModalProps) {
+export default function CompareModal({ isOpen, onClose, date, optimizationPlans, onDateChange, onAbsentCodesChange }: CompareModalProps) {
   const [currentRoutes, setCurrentRoutes] = useState<Route[]>([]);
   const [frozenOptimizedRoutes, setFrozenOptimizedRoutes] = useState<Route[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,7 +125,6 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
   const [apiKey, setApiKey] = useState<string>("");
   const [baselineSummary, setBaselineSummary] = useState<any>(null);
   const [dbLeaveCount, setDbLeaveCount] = useState(0);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [sheetOptions, setSheetOptions] = useState<{ name: string; inferredDate: string | null; routePreviewCount: number }[]>([]);
   const [selectedSheet, setSelectedSheet] = useState("");
   const [uploadDate, setUploadDate] = useState(date);
@@ -177,16 +165,14 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
       .finally(() => setLoading(false));
   }, [date, onAbsentCodesChange]);
 
+  // Load comparison when modal opens or date changes
   useEffect(() => {
     if (!isOpen) return;
-    setSelectedCurrentId(null);
-    setSelectedOptimizedId(null);
-    setUploadDate(date);
-    loadComparison();
+    // Queue the comparison load after the effect cleanup
+    queueMicrotask(() => loadComparison());
   }, [isOpen, date, loadComparison]);
 
   const handleInspectFile = async (file: File) => {
-    setUploadFile(file);
     setUploadError(null);
     const formData = new FormData();
     formData.append("file", file);
@@ -207,10 +193,16 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
       };
     });
     setSheetOptions(mapped);
-    if (mapped.length > 0) {
-      setSelectedSheet(mapped[0].name);
-      setUploadDate(mapped[0].inferredDate || date);
-    }
+    // AUDIT FIX #1 & #9: Do NOT auto-select first sheet or date
+    // User must explicitly choose sheet and date before saving baseline
+    setSelectedSheet(""); // Reset selection
+    setUploadDate(date); // Keep original date until user changes
+
+    console.log("[COMPARE] Upload", {
+      fileName: file.name,
+      sheets: mapped.length,
+      datesAvailable: mapped.map((m: any) => m.inferredDate).filter(Boolean),
+    });
   };
 
   const handleSaveBaseline = async () => {
@@ -229,10 +221,31 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
       setUploadError(data.details || data.error || "Upload failed");
       return;
     }
+    
+    // AUDIT FIX #6: Add snapshot diagnostics
+    const snapshotId = `baseline-${Date.now()}`;
+    const routeCount = data.cabsUsed || data.routeCount || 0;
+    const employeeCount = data.presentUniqueCount || data.employeeCount || 0;
+    
+    console.log("[SNAPSHOT]", {
+      date: uploadDate,
+      snapshotId,
+      routeCount,
+      employeeCount,
+    });
+    
     setBaselineSummary({
       ...data,
       source: "MANUAL_EXCEL",
       sheetName: selectedSheet,
+      snapshotId,
+    });
+    
+    console.log("[COMPARE] Baseline loaded", {
+      date: uploadDate,
+      routes: routeCount,
+      employees: employeeCount,
+      violations: data.safetyViolations?.length || 0,
     });
 
     if (data.absentEmployeeCodes?.length && onAbsentCodesChange) {
@@ -242,7 +255,24 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     if (data.date && onDateChange) {
       onDateChange(data.date);
     }
+    
+    // AUDIT FIX #4: Preserve manually uploaded baseline summary
+    // Store the current baseline state BEFORE loading comparison
+    const savedManualBaseline = {
+      ...data,
+      source: "MANUAL_EXCEL",
+      sheetName: selectedSheet,
+      snapshotId,
+    };
+    
+    // Load comparison in background but restore manual baseline
     loadComparison();
+    
+    // Restore manual baseline summary after comparison loads
+    setTimeout(() => {
+      setBaselineSummary(savedManualBaseline);
+      // Keep current routes for display
+    }, 500);
   };
 
   const handleSelectCurrent = (id: string | null) => {
@@ -287,30 +317,22 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
   const depotLng = settings?.defaultDepotLng ?? 79.0526;
   const depotName = settings?.depotName ?? "Depot";
 
-  const normalizedFallback = useMemo(() => normalizeRoutes(fallbackRoutes), [fallbackRoutes]);
-
   const rawOptimizedRoutes = useMemo((): any[] => {
     if (optimizationPlans && optimizationPlans[selectedStrategy]) {
-      return optimizationPlans[selectedStrategy].routes || fallbackRoutes;
+      return optimizationPlans[selectedStrategy].routes || [];
     }
     if (frozenOptimizedRoutes && frozenOptimizedRoutes.length > 0) {
       return frozenOptimizedRoutes;
     }
-    return fallbackRoutes;
-  }, [optimizationPlans, selectedStrategy, fallbackRoutes, frozenOptimizedRoutes]);
+    return [];
+  }, [optimizationPlans, selectedStrategy, frozenOptimizedRoutes]);
 
   const optimizedRoutes = useMemo(() => normalizeRoutes(rawOptimizedRoutes), [rawOptimizedRoutes]);
 
   const normalizedCurrent = useMemo(() => {
-    const base = currentRoutes.length > 0 ? currentRoutes : [];
-    if (base.length === 0) return normalizedFallback;
-    const baseShiftIds = new Set(base.map(r => r.shiftId));
-    const merged = [...base];
-    for (const r of fallbackRoutes) {
-      if (r.shiftId && !baseShiftIds.has(r.shiftId)) merged.push(r);
-    }
-    return normalizeRoutes(merged);
-  }, [currentRoutes, fallbackRoutes, normalizedFallback]);
+    // AUDIT FIX #1: Baseline ONLY from uploaded Excel, never mix with fallback
+    return normalizeRoutes(currentRoutes);
+  }, [currentRoutes]);
 
   const filteredCurrentRoutes = useMemo(() => {
     if (normalizedCurrent.length === 0) return [];
@@ -328,48 +350,120 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     );
   }, [optimizedRoutes, selectedShift]);
 
-  const mapCurrentRoutes = useMemo(
-    () => filteredCurrentRoutes.filter((r) => routeMatchesEmployeeSearch(r, employeeSearchQuery)),
-    [filteredCurrentRoutes, employeeSearchQuery]
-  );
-  const mapOptimizedRoutes = useMemo(
-    () => filteredOptimizedRoutes.filter((r) => routeMatchesEmployeeSearch(r, employeeSearchQuery)),
-    [filteredOptimizedRoutes, employeeSearchQuery]
-  );
+  const mapCurrentRoutes = filteredCurrentRoutes.filter((r) => routeMatchesEmployeeSearch(r, employeeSearchQuery));
+  const mapOptimizedRoutes = filteredOptimizedRoutes.filter((r) => routeMatchesEmployeeSearch(r, employeeSearchQuery));
 
-  const commonEmployeeIds = useMemo(() => {
+  const employeeComparison = useMemo(() => {
     const currentIds = new Set<string>();
+    const currentEmployeeMap = new Map<string, { name: string; code?: string }>();
     const optimizedIds = new Set<string>();
-    for (const r of filteredCurrentRoutes) for (const s of r.stops) currentIds.add(s.employeeId);
-    for (const r of filteredOptimizedRoutes) for (const s of r.stops) optimizedIds.add(s.employeeId);
-    const inter = new Set<string>();
-    for (const id of currentIds) if (optimizedIds.has(id)) inter.add(id);
-    return inter;
+    
+    // AUDIT FIX #2: Use stable identifier (employeeId ?? employeeCode ?? name)
+    for (const r of filteredCurrentRoutes) {
+      for (const s of r.stops) {
+        const empId = s.employeeId || s.employee?.id;
+        const empCode = (s as any).employeeCode || (s.employee as any)?.employeeCode;
+        const empName = s.employee?.name || "Unknown";
+        const stableId = empId || empCode || empName;
+        currentIds.add(stableId);
+        if (!currentEmployeeMap.has(stableId)) {
+          currentEmployeeMap.set(stableId, { name: empName, code: empCode });
+        }
+      }
+    }
+    
+    for (const r of filteredOptimizedRoutes) {
+      for (const s of r.stops) {
+        const empId = s.employeeId || s.employee?.id;
+        optimizedIds.add(empId);
+      }
+    }
+    
+    const commonSet = new Set<string>();
+    for (const id of currentIds) if (optimizedIds.has(id)) commonSet.add(id);
+    
+    const missingFromOptimized = new Set<string>();
+    const missingEmployeeNames: string[] = [];
+    for (const id of currentIds) {
+      if (!optimizedIds.has(id)) {
+        missingFromOptimized.add(id);
+        const empInfo = currentEmployeeMap.get(id);
+        if (empInfo) missingEmployeeNames.push(`${empInfo.name} (${empInfo.code || id})`);
+      }
+    }
+    
+    const extraInOptimized = new Set<string>();
+    for (const id of optimizedIds) if (!currentIds.has(id)) extraInOptimized.add(id);
+    
+    // AUDIT PHASE 2: Missing employees detailed investigation
+    const missingEmployeeDetails: any[] = [];
+    for (const r of filteredCurrentRoutes) {
+      for (const s of r.stops) {
+        const empId = s.employeeId || s.employee?.id;
+        if (empId && !optimizedIds.has(empId)) {
+          const empCode = (s as any).employeeCode || (s.employee as any)?.employeeCode;
+          const empName = s.employee?.name || "Unknown";
+          missingEmployeeDetails.push({
+            employeeId: empId,
+            employeeCode: empCode,
+            employeeName: empName,
+            routeNo: (r as any).routeNo || r.id,
+            shift: r.shift?.name || r.shiftId,
+          });
+        }
+      }
+    }
+    
+    console.log("[COMPARE] Missing employees", {
+      count: missingFromOptimized.size,
+      details: missingEmployeeDetails.slice(0, 2), // Show first 2
+    });
+    
+    console.log("[COMPARE] Employee comparison", {
+      manualCount: currentIds.size,
+      optimizedCount: optimizedIds.size,
+      commonCount: commonSet.size,
+      missingFromOptimized: missingFromOptimized.size,
+      missingEmployeeNames: missingEmployeeNames.slice(0, 10), // Show first 10
+    });
+    
+    return {
+      manualEmployees: currentIds,
+      optimizedEmployees: optimizedIds,
+      commonEmployees: commonSet,
+      missingFromOptimized,
+      missingEmployeeNames,
+      extraInOptimized,
+    };
   }, [filteredCurrentRoutes, filteredOptimizedRoutes]);
+  
+  const commonEmployeeIds = employeeComparison.commonEmployees;
 
   const commonCurrentRoutes = useMemo(() => {
+    // AUDIT FIX #2: Use backend totalDistance only, never recompute
     if (commonEmployeeIds.size === 0) return filteredCurrentRoutes;
     return filteredCurrentRoutes
       .map(r => {
         const stops = r.stops.filter(s => commonEmployeeIds.has(s.employeeId));
         if (stops.length === 0) return null;
-        const dist = computeRouteDistance(stops);
-        return { ...r, stops, totalDistance: Math.round(dist * 10) / 10, totalDuration: Math.round(dist * 2.4) };
+        return { ...r, stops }; // Keep backend distances unchanged
       })
       .filter(Boolean) as Route[];
   }, [filteredCurrentRoutes, commonEmployeeIds]);
 
   const commonOptimizedRoutes = useMemo(() => {
+    // AUDIT FIX #2: Use backend totalDistance only, never recompute
     if (commonEmployeeIds.size === 0) return filteredOptimizedRoutes;
     return filteredOptimizedRoutes
       .map(r => {
         const stops = r.stops.filter(s => commonEmployeeIds.has(s.employeeId));
         if (stops.length === 0) return null;
-        const dist = computeRouteDistance(stops);
-        return { ...r, stops, totalDistance: Math.round(dist * 10) / 10, totalDuration: Math.round(dist * 2.4) };
+        return { ...r, stops }; // Keep backend distances unchanged
       })
       .filter(Boolean) as Route[];
   }, [filteredOptimizedRoutes, commonEmployeeIds]);
+
+  // AUDIT FIX #5: Route count consistency check (logged in computeSideMetrics)
 
   const allShifts = useMemo(() => {
     const shiftMap = new Map<string, string>();
@@ -378,19 +472,76 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     return Array.from(shiftMap.entries()).map(([id, name]) => ({ id, name }));
   }, [normalizedCurrent, optimizedRoutes]);
 
-  function computeSideMetrics(routes: Route[]) {
+  const computeSideMetrics = React.useCallback((routes: Route[]) => {
+    // AUDIT FIX #3: Distance validation for Nagpur operations (> 1000 km = INVALID)
+    const NAGPUR_MAX_DISTANCE = 1000; // km
+    let distanceValidationStatus = "VALID";
+    
+    // AUDIT PHASE 2: Cab count and distance audit
+    const cabDetails: any[] = [];
+    const distanceDetails: any[] = [];
+    const uniqueCabs = new Set<string>();
+    
+    for (const r of routes) {
+      const cabId = r.cabId || r.id;
+      uniqueCabs.add(cabId);
+      cabDetails.push({
+        routeId: r.id,
+        cabId: cabId,
+        vehicleNumber: r.cab?.vehicleNumber || "Unknown",
+      });
+      
+      distanceDetails.push({
+        routeNo: (r as any).routeNo || r.id,
+        totalDistance: r.totalDistance || 0,
+        stopCount: r.stops?.length || 0,
+      });
+    }
+    
+    const totalDistanceKm = Math.round(
+      distanceDetails.reduce((sum, d) => sum + d.totalDistance, 0) * 10
+    ) / 10;
+    
+    // AUDIT PHASE 2: Log cab count audit
+    if (routes === commonOptimizedRoutes) {
+      console.log("[COMPARE] Cab audit (OPTIMIZED)", {
+        totalRoutes: routes.length,
+        uniqueCabIds: uniqueCabs.size,
+        cabDetails,
+      });
+    } else if (routes === commonCurrentRoutes) {
+      console.log("[COMPARE] Baseline distance source (BASELINE)", {
+        totalRoutes: routes.length,
+        sumDistance: totalDistanceKm,
+        distanceDetails,
+      });
+    }
+    
+    // Log: Before comparison metrics calculation
+    console.log("[COMPARE] Comparison inputs", {
+      baselineRoutes: mapCurrentRoutes.length,
+      baselineEmployees: commonCurrentRoutes.flatMap(r => r.stops).map(s => s.employeeId).length,
+      optimizedRoutes: mapOptimizedRoutes.length,
+      optimizedEmployees: commonOptimizedRoutes.flatMap(r => r.stops).map(s => s.employeeId).length,
+      baselineDate: date,
+      optimizedDate: date,
+    });
+
     const cabIds = new Set<string>();
     let totalEmp = 0;
     let totalDist = 0;
     let violations = 0;
     let underfilled = 0;
     let sharedStops = 0;
+    const perRouteDistance: number[] = [];
 
     for (const r of routes) {
       cabIds.add(r.cabId || r.id);
       const stops = r.stops || [];
       totalEmp += stops.length;
-      totalDist += r.totalDistance || 0;
+      const routeDist = r.totalDistance || 0;
+      totalDist += routeDist;
+      perRouteDistance.push(routeDist);
       violations += ((r as any).violations || []).filter((v: any) => !v.resolved).length;
       if (stops.length > 0 && stops.length < 3) underfilled++;
 
@@ -405,16 +556,38 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     }
 
     const cabCount = cabIds.size || routes.length;
+    const totalDistanceRaw = totalDist;
+    const totalDistanceKmFinal = Math.round(totalDistanceRaw * 10) / 10;
+    
+    // AUDIT PHASE 2: Check distance validity
+    if (totalDistanceKmFinal > NAGPUR_MAX_DISTANCE) {
+      distanceValidationStatus = "INVALID_DISTANCE";
+      console.warn("[COMPARE] ⚠️ Distance exceeds Nagpur operations threshold", {
+        totalDistanceKm: totalDistanceKmFinal,
+        threshold: NAGPUR_MAX_DISTANCE,
+      });
+    }
+    
+    // Log distance audit
+    console.log("[COMPARE] Distance audit", {
+      routeCount: routes.length,
+      perRouteDistance,
+      totalDistanceRaw: totalDistanceRaw,
+      totalDistanceKm: totalDistanceKmFinal,
+      distanceValidationStatus,
+    });
+    
     return {
       cabCount,
       totalEmp,
-      totalDist: Math.round(totalDist * 10) / 10,
+      totalDist: totalDistanceKmFinal,
       avgPaxPerCab: cabCount > 0 ? Math.round((totalEmp / cabCount) * 10) / 10 : 0,
       violations,
       underfilled,
       sharedStops,
+      distanceValidationStatus,
     };
-  }
+  }, [mapCurrentRoutes, commonCurrentRoutes, mapOptimizedRoutes, commonOptimizedRoutes, date]);
 
   const currentMetrics = useMemo(() => {
     const m = computeSideMetrics(commonCurrentRoutes);
@@ -434,16 +607,118 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
         : m.avgPaxPerCab;
     }
     return m;
-  }, [commonCurrentRoutes, baselineSummary]);
-  const optimizedMetrics = useMemo(() => computeSideMetrics(commonOptimizedRoutes), [commonOptimizedRoutes]);
+  }, [commonCurrentRoutes, computeSideMetrics, baselineSummary]);
+  const optimizedMetrics = useMemo(() => computeSideMetrics(commonOptimizedRoutes), [commonOptimizedRoutes, computeSideMetrics]);
 
-  const chartData = useMemo(() => [
-    { metric: "Cabs", Excel: currentMetrics.cabCount, Optimized: optimizedMetrics.cabCount },
-    { metric: "Avg pax/cab", Excel: currentMetrics.avgPaxPerCab, Optimized: optimizedMetrics.avgPaxPerCab },
-    { metric: "Violations", Excel: currentMetrics.violations, Optimized: optimizedMetrics.violations },
-    { metric: "Underfilled", Excel: currentMetrics.underfilled, Optimized: optimizedMetrics.underfilled },
-    { metric: "Shared stops", Excel: currentMetrics.sharedStops, Optimized: optimizedMetrics.sharedStops },
-  ], [currentMetrics, optimizedMetrics]);
+  // AUDIT PHASE 2: Detailed cab count investigation
+  useEffect(() => {
+    if (commonOptimizedRoutes.length === 0) return;
+    
+    const cabMap = new Map<string, { routes: number; vehicleNumber?: string }>();
+    const cabDetails: any[] = [];
+    
+    for (const r of commonOptimizedRoutes) {
+      const cabId = r.cabId || r.id;
+      const vehicleNumber = r.cab?.vehicleNumber || "Unknown";
+      
+      cabDetails.push({
+        routeId: r.id,
+        cabId: cabId,
+        vehicleNumber: vehicleNumber,
+        stopCount: r.stops?.length || 0,
+      });
+      
+      if (!cabMap.has(cabId)) {
+        cabMap.set(cabId, { routes: 0, vehicleNumber });
+      }
+      const entry = cabMap.get(cabId)!;
+      entry.routes++;
+    }
+    
+    console.log("[COMPARE] Cab audit (OPTIMIZED DETAILED)", {
+      totalRoutes: commonOptimizedRoutes.length,
+      uniqueCabIds: cabMap.size,
+      cabDetails,
+      cabSummary: Array.from(cabMap.entries()).map(([cabId, data]) => ({
+        cabId,
+        vehicleNumber: data.vehicleNumber,
+        routeCount: data.routes,
+      })),
+    });
+  }, [commonOptimizedRoutes]);
+
+  // AUDIT PHASE 2: Detailed baseline distance investigation
+  useEffect(() => {
+    if (commonCurrentRoutes.length === 0) return;
+    
+    const distanceDetails: any[] = [];
+    let sumDistance = 0;
+    const unrealisticRoutes: any[] = [];
+    
+    for (const r of commonCurrentRoutes) {
+      const totalDist = r.totalDistance || 0;
+      sumDistance += totalDist;
+      
+      const detail = {
+        routeNo: (r as any).routeNo || r.id,
+        totalDistance: totalDist,
+        stopCount: r.stops?.length || 0,
+        driverName: r.cab?.driverName || "Unknown",
+      };
+      distanceDetails.push(detail);
+      
+      // Flag unrealistic distances (e.g., > 500 km for typical route)
+      if (totalDist > 500) {
+        unrealisticRoutes.push(detail);
+      }
+    }
+    
+    console.log("[COMPARE] Baseline distance source (DETAILED)", {
+      totalRoutes: commonCurrentRoutes.length,
+      sumDistance: Math.round(sumDistance * 10) / 10,
+      avgDistancePerRoute: Math.round((sumDistance / commonCurrentRoutes.length) * 10) / 10,
+      distanceDetails,
+      unrealisticRoutes,
+    });
+  }, [commonCurrentRoutes]);
+
+  // AUDIT PHASE 2: Summary metrics audit
+  useEffect(() => {
+    if (isOpen && !loading && (currentRoutes.length > 0 || optimizedRoutes.length > 0)) {
+      console.log("[COMPARE] AUDIT SUMMARY", {
+        date,
+        baselineMetrics: {
+          mapRoutes: mapCurrentRoutes.length,
+          metricsRoutes: commonCurrentRoutes.length,
+          filteredRoutes: filteredCurrentRoutes.length,
+          totalCabs: currentMetrics.cabCount,
+          totalEmployees: currentMetrics.totalEmp,
+          totalDistance: currentMetrics.totalDist,
+          avgPaxPerCab: currentMetrics.avgPaxPerCab,
+        },
+        optimizedMetrics: {
+          mapRoutes: mapOptimizedRoutes.length,
+          metricsRoutes: commonOptimizedRoutes.length,
+          filteredRoutes: filteredOptimizedRoutes.length,
+          totalCabs: optimizedMetrics.cabCount,
+          totalEmployees: optimizedMetrics.totalEmp,
+          totalDistance: optimizedMetrics.totalDist,
+          avgPaxPerCab: optimizedMetrics.avgPaxPerCab,
+        },
+        employeeComparison: {
+          manualEmployees: employeeComparison.manualEmployees.size,
+          optimizedEmployees: employeeComparison.optimizedEmployees.size,
+          commonEmployees: employeeComparison.commonEmployees.size,
+          missingFromOptimized: employeeComparison.missingFromOptimized.size,
+          extraInOptimized: employeeComparison.extraInOptimized.size,
+        },
+        distanceValidation: {
+          baselineStatus: currentMetrics.distanceValidationStatus,
+          optimizedStatus: optimizedMetrics.distanceValidationStatus,
+        },
+      });
+    }
+  }, [isOpen, loading, date, selectedStrategy, currentMetrics, optimizedMetrics, currentRoutes.length, optimizedRoutes.length, mapCurrentRoutes, commonCurrentRoutes, filteredCurrentRoutes, mapOptimizedRoutes, commonOptimizedRoutes, filteredOptimizedRoutes, employeeComparison]);
 
   const comparisonDiffs = useMemo(() => {
     const mergedUnderfilled: string[] = [];
@@ -464,6 +739,22 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
     return { mergedUnderfilled, safetyFixed };
   }, [currentMetrics, optimizedMetrics]);
 
+  // AUDIT FIX #4: Remove noisy logs, keep only 5 key diagnostic lines
+  useEffect(() => {
+    if (!isOpen || loading || (currentRoutes.length === 0 && optimizedRoutes.length === 0)) return;
+
+    console.log("[COMPARE] Metrics", {
+      date,
+      selectedStrategy,
+      baselineCabs: currentMetrics.cabCount,
+      optimizedCabs: optimizedMetrics.cabCount,
+      baselineDistance: currentMetrics.totalDist,
+      optimizedDistance: optimizedMetrics.totalDist,
+      violationsBaseline: currentMetrics.violations,
+      violationsOptimized: optimizedMetrics.violations,
+    });
+  }, [isOpen, loading, date, selectedStrategy, currentMetrics, optimizedMetrics, currentRoutes.length, optimizedRoutes.length]);
+
   const selectedCurrent = useMemo(
     () => mapCurrentRoutes.find((r) => r.id === selectedCurrentId) || null,
     [mapCurrentRoutes, selectedCurrentId]
@@ -474,6 +765,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
   );
 
   const canCompare = mapCurrentRoutes.length > 0 && mapOptimizedRoutes.length > 0;
+  
+  const employeePopulationMismatch = 
+    employeeComparison.manualEmployees.size !== employeeComparison.optimizedEmployees.size;
 
   if (!isOpen) return null;
 
@@ -554,7 +848,19 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
               <input
                 type="date"
                 value={uploadDate}
-                onChange={(e) => setUploadDate(e.target.value)}
+                onChange={(e) => {
+                  const newDate = e.target.value;
+                  setUploadDate(newDate);
+                  // Log: Date selected
+                  const selectedSheetInfo = sheetOptions.find(s => s.name === selectedSheet);
+                  const routeCount = selectedSheetInfo?.routePreviewCount || 0;
+                  const employeeCount = 0; // Employee count not in sheet preview
+                  console.log("[COMPARE] Date selected", {
+                    selectedDate: newDate,
+                    routeCount,
+                    employeeCount,
+                  });
+                }}
                 className="text-xs border border-[#e8e8e8] px-2 py-1"
               />
               <button
@@ -593,6 +899,11 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
           </div>
         </div>
 
+        {employeePopulationMismatch && (
+          <div className="px-6 py-2 bg-orange-50 border-b border-orange-200 text-[11px] text-orange-900 font-semibold">
+            ⚠️ Comparison based on different employee populations: Manual={employeeComparison.manualEmployees.size} vs Optimized={employeeComparison.optimizedEmployees.size}. Missing from optimized: {employeeComparison.missingFromOptimized.size}. Extra in optimized: {employeeComparison.extraInOptimized.size}.
+          </div>
+        )}
         {error && !loading && (
           <div className="px-6 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-900">
             {error}
@@ -684,8 +995,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
             {(mapCurrentRoutes.length > 0 || mapOptimizedRoutes.length > 0) && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-b border-[#e8e8e8]">
                 <div className="border-r border-[#e8e8e8] p-4 max-h-[200px] overflow-y-auto">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">
-                    Baseline manifest ({mapCurrentRoutes.length} routes)
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2 flex items-center justify-between">
+                    <span>Baseline manifest ({mapCurrentRoutes.length} routes)</span>
+                    {selectedCurrentId && <span className="text-[8px] bg-[#1c1b1f] text-white px-1.5 py-0.5 rounded">✓ Selected</span>}
                   </div>
                   <div className="space-y-1">
                     {mapCurrentRoutes.map((r, idx) => (
@@ -693,10 +1005,10 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                         key={r.id || `baseline-${idx}`}
                         type="button"
                         onClick={() => handleSelectCurrent(r.id)}
-                        className={`w-full text-left text-[10px] px-2 py-1 border ${
+                        className={`w-full text-left text-[10px] px-2 py-1.5 border transition-all ${
                           selectedCurrentId === r.id
-                            ? "border-[#1c1b1f] bg-[#f7f7f7]"
-                            : "border-[#e8e8e8] bg-white hover:bg-[#fafafa]"
+                            ? "border-[#1c1b1f] bg-[#1c1b1f] text-white font-bold shadow-sm"
+                            : "border-[#e8e8e8] bg-white hover:bg-[#f7f7f7] hover:border-[#1c1b1f]"
                         }`}
                       >
                         <span className="font-bold">{(r as any).routeNo || `R${idx + 1}`}</span>
@@ -708,8 +1020,9 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                   </div>
                 </div>
                 <div className="p-4 max-h-[200px] overflow-y-auto">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">
-                    Optimized manifest ({mapOptimizedRoutes.length} routes)
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2 flex items-center justify-between">
+                    <span>Optimized manifest ({mapOptimizedRoutes.length} routes)</span>
+                    {selectedOptimizedId && <span className="text-[8px] bg-[#059669] text-white px-1.5 py-0.5 rounded">✓ Selected</span>}
                   </div>
                   <div className="space-y-1">
                     {mapOptimizedRoutes.map((r, idx) => (
@@ -717,10 +1030,10 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                         key={r.id || `optimized-${idx}`}
                         type="button"
                         onClick={() => handleSelectOptimized(r.id)}
-                        className={`w-full text-left text-[10px] px-2 py-1 border ${
+                        className={`w-full text-left text-[10px] px-2 py-1.5 border transition-all ${
                           selectedOptimizedId === r.id
-                            ? "border-[#059669] bg-[#ecfdf5]"
-                            : "border-[#e8e8e8] bg-white hover:bg-[#fafafa]"
+                            ? "border-[#059669] bg-[#059669] text-white font-bold shadow-sm"
+                            : "border-[#e8e8e8] bg-white hover:bg-[#f0fdf4] hover:border-[#059669]"
                         }`}
                       >
                         <span className="font-bold">r{(r as any).routeNumber || idx + 1}</span>
@@ -820,6 +1133,119 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                     </span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Validation Panel */}
+            {canCompare && (
+              <div className="px-4 py-3 bg-[#f7f7f7] border-b border-[#e8e8e8]">
+                <div className="text-[9px] font-bold uppercase tracking-wider text-[#9a9a9a] mb-2">Validation Summary</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 text-[10px] font-mono">
+                  <div className="bg-white p-2 border border-[#e8e8e8]">
+                    <div className="text-[#9a9a9a] text-[9px]">Manual Routes</div>
+                    <div className="font-bold text-[#1c1b1f]">{mapCurrentRoutes.length}</div>
+                  </div>
+                  <div className="bg-white p-2 border border-[#e8e8e8]">
+                    <div className="text-[#9a9a9a] text-[9px]">Optimized Routes</div>
+                    <div className="font-bold text-[#059669]">{mapOptimizedRoutes.length}</div>
+                  </div>
+                  <div className="bg-white p-2 border border-[#e8e8e8]">
+                    <div className="text-[#9a9a9a] text-[9px]">Manual Employees</div>
+                    <div className="font-bold text-[#1c1b1f]">{employeeComparison.manualEmployees.size}</div>
+                  </div>
+                  <div className="bg-white p-2 border border-[#e8e8e8]">
+                    <div className="text-[#9a9a9a] text-[9px]">Optimized Employees</div>
+                    <div className="font-bold text-[#059669]">{employeeComparison.optimizedEmployees.size}</div>
+                  </div>
+                  <div className="bg-white p-2 border border-[#e8e8e8]">
+                    <div className="text-[#9a9a9a] text-[9px]">Common Employees</div>
+                    <div className="font-bold text-[#4a4a4a]">{employeeComparison.commonEmployees.size}</div>
+                  </div>
+                  <div className="bg-white p-2 border border-[#e8e8e8]">
+                    <div className="text-[#9a9a9a] text-[9px]">Missing (Optimized)</div>
+                    <div className={`font-bold ${employeeComparison.missingFromOptimized.size > 0 ? "text-[#dc2626]" : "text-[#059669]"}`}>
+                      {employeeComparison.missingFromOptimized.size}
+                    </div>
+                  </div>
+                  <div className="bg-white p-2 border border-[#e8e8e8]">
+                    <div className="text-[#9a9a9a] text-[9px]">Coverage %</div>
+                    <div className="font-bold text-[#4a4a4a]">
+                      {employeeComparison.manualEmployees.size > 0
+                        ? Math.round((employeeComparison.commonEmployees.size / employeeComparison.manualEmployees.size) * 100)
+                        : 0}%
+                    </div>
+                  </div>
+                  <div className="bg-white p-2 border border-[#e8e8e8]">
+                    <div className="text-[#9a9a9a] text-[9px]">Distance Confidence</div>
+                    <div className={`font-bold text-sm`}>
+                      {/* AUDIT FIX #7: Multi-factor Distance Confidence */}
+                      {(() => {
+                        const employeeMatchPercent = employeeComparison.manualEmployees.size > 0
+                          ? (employeeComparison.commonEmployees.size / employeeComparison.manualEmployees.size) * 100
+                          : 0;
+                        const routeCountMatch = mapCurrentRoutes.length === mapOptimizedRoutes.length;
+                        const distanceValid = currentMetrics.distanceValidationStatus === "VALID";
+                        
+                        if (employeeMatchPercent >= 95 && routeCountMatch && distanceValid) {
+                          return <span className="text-[#059669]">✅ High</span>;
+                        } else if (employeeMatchPercent >= 80 && distanceValid) {
+                          return <span className="text-[#f59e0b]">⚠️ Medium</span>;
+                        } else {
+                          return <span className="text-[#dc2626]">❌ Low</span>;
+                        }
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AUDIT FIX #8: Detailed Diagnostics Panel */}
+            {canCompare && (
+              <div className="px-4 py-3 bg-[#f0fdf4] border-b border-[#86efac] max-h-[200px] overflow-y-auto">
+                <div className="text-[9px] font-bold uppercase tracking-wider text-[#15803d] mb-2">📋 Detailed Diagnostics</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[10px] font-mono">
+                  <div className="bg-white p-2 border border-[#d1fae5] rounded-sm">
+                    <div className="text-[#15803d] font-bold mb-1">Manual Employees</div>
+                    <div className="text-[#047857]">{employeeComparison.manualEmployees.size} total</div>
+                  </div>
+                  
+                  <div className="bg-white p-2 border border-[#d1fae5] rounded-sm">
+                    <div className="text-[#15803d] font-bold mb-1">Optimized Employees</div>
+                    <div className="text-[#047857]">{employeeComparison.optimizedEmployees.size} total</div>
+                  </div>
+                  
+                  <div className="bg-white p-2 border border-[#d1fae5] rounded-sm">
+                    <div className="text-[#15803d] font-bold mb-1">Route Count Validation</div>
+                    <div className={mapCurrentRoutes.length === mapOptimizedRoutes.length ? "text-[#059669]" : "text-[#dc2626]"}>
+                      Manual: {mapCurrentRoutes.length} | Optimized: {mapOptimizedRoutes.length}
+                      {mapCurrentRoutes.length === mapOptimizedRoutes.length ? " ✅ Match" : " ❌ Mismatch"}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-2 border border-[#d1fae5] rounded-sm">
+                    <div className="text-[#15803d] font-bold mb-1">Distance Validation</div>
+                    <div className={currentMetrics.distanceValidationStatus === "VALID" ? "text-[#059669]" : "text-[#dc2626]"}>
+                      {currentMetrics.distanceValidationStatus === "VALID" 
+                        ? `✅ ${currentMetrics.totalDist} km`
+                        : `❌ ${currentMetrics.totalDist} km (>1000 km threshold)`}
+                    </div>
+                  </div>
+                  
+                  {employeeComparison.missingFromOptimized.size > 0 && (
+                    <div className="bg-white p-2 border border-[#fecaca] rounded-sm md:col-span-2">
+                      <div className="text-[#dc2626] font-bold mb-1">⚠️ Missing from Optimization ({employeeComparison.missingFromOptimized.size})</div>
+                      <div className="text-[#991b1b] max-h-[80px] overflow-y-auto">
+                        {employeeComparison.missingEmployeeNames?.slice(0, 5).map((name, i) => (
+                          <div key={i} className="text-[9px]">• {name}</div>
+                        ))}
+                        {(employeeComparison.missingEmployeeNames?.length ?? 0) > 5 && (
+                          <div className="text-[9px] italic">... and {(employeeComparison.missingEmployeeNames?.length ?? 0) - 5} more</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

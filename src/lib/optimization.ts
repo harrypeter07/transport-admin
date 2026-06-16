@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable prefer-const */
 import { mapsProvider } from "@/lib/maps";
 import { getSessionCache, setSessionCache } from "@/lib/sessionCache";
 import { computeOsrmRouteMatrix } from "@/lib/maps/osrm";

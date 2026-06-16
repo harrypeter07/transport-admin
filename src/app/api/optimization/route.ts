@@ -90,6 +90,10 @@ async function fetchOptimizationInputs(
     },
   });
 
+  // ── Diagnostic: capture pre-Excel-filter employee state ──
+  const preExcelFilterCount = dbEmployees.length;
+  const preExcelFilterNames = dbEmployees.map(e => e.name);
+
   const excelFilter = getExcelFilterForDate(currentDateStr);
   if (excelFilter) {
     const VARIATION_MAP: Record<string, string> = {
@@ -110,6 +114,14 @@ async function fetchOptimizationInputs(
       const normDb = normalizeName(emp.name);
       return excelFilter.employeeNames.has(normDb);
     });
+    // ── Diagnostic: log Excel filter results ──
+    const postFilterNormNames = new Set(dbEmployees.map(e => normalizeName(e.name)));
+    const inExcelNotInDb = [...excelFilter.employeeNames].filter(n => !postFilterNormNames.has(n));
+    const droppedNames = preExcelFilterNames.filter(n => !dbEmployees.some(e => e.name === n));
+    console.log(`[DIAG] Excel filter | shiftId=${shiftId} | dbBefore=${preExcelFilterCount} | dbAfter=${dbEmployees.length} | excelTotal=${excelFilter.employeeNames.size} | dropped=[${droppedNames.join(', ')}]`);
+    if (inExcelNotInDb.length > 0) {
+      console.log(`[DIAG] Excel names NOT in DB (shift=${shiftId}): [${inExcelNotInDb.join(', ')}]`);
+    }
   }
 
   const absentIdSet = new Set(extraAbsentEmployeeIds || []);
@@ -121,6 +133,13 @@ async function fetchOptimizationInputs(
     if (absentCodeSet.has(emp.employeeCode.toLowerCase())) return false;
     return true;
   });
+  // ── Diagnostic: log leave/absent filter results ──
+  const droppedByLeaveAbsent = dbEmployees.filter(e => !availableEmployees.includes(e)).map(e => e.name);
+  if (droppedByLeaveAbsent.length > 0) {
+    console.log(`[DIAG] Leave/absent filter | shiftId=${shiftId} | before=${dbEmployees.length} | after=${availableEmployees.length} | dropped=[${droppedByLeaveAbsent.join(', ')}]`);
+  }
+  console.log(`[DIAG] Final optimizer input | shiftId=${shiftId || '(all)'} | count=${availableEmployees.length} | names=[${availableEmployees.map(e => e.name).join(', ')}]`);
+
   const fallbackShiftId = shiftId || availableEmployees[0]?.shiftId || "";
 
   // Load all shift start times for chronological comparison
@@ -274,6 +293,8 @@ async function fetchOptimizationInputs(
     dbLeaveCount,
     overlayAbsentCount,
     minCabsNeeded: minCabsNeededFinal,
+    optimizedEmployeeIds: optEmployees.map(e => e.id),
+    optimizedEmployeeNames: optEmployees.map(e => e.name),
   };
 }
 
@@ -589,6 +610,13 @@ export async function POST(req: NextRequest) {
       }
 
       const plans = await optimizeAllStrategies(optEmployees, optCabs, isPickup ?? true, apiKey, depot, constraints, shiftStartTime);
+      // ── Diagnostic: log per-strategy optimization result ──
+      for (const strategy of ['MAXIMIZE_UTILIZATION', 'MINIMIZE_TIME', 'BALANCED'] as const) {
+        const plan = plans[strategy];
+        const coveredIds = new Set(plan.routes.flatMap(r => r.stops.map((s: any) => s.employeeId)));
+        const unassignedNames = optEmployees.filter(e => !coveredIds.has(e.id)).map(e => e.name);
+        console.log(`[DIAG] Result | shiftId=${shiftId} | strategy=${strategy} | covered=${coveredIds.size} | routes=${plan.routes.length} | unassigned=${unassignedNames.length} | unassignedNames=[${unassignedNames.join(', ')}]`);
+      }
       return NextResponse.json({
         preview: plans,
         constraints,
@@ -602,6 +630,7 @@ export async function POST(req: NextRequest) {
           overlayAbsentCount: inputs.overlayAbsentCount,
           activeCabs: inputs.optCabs.length,
           minCabsNeeded: inputs.minCabsNeeded,
+          optimizedEmployeeIds: optEmployees.map(e => e.id),
         },
       });
     }
