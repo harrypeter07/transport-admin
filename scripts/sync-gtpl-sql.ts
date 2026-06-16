@@ -1,11 +1,9 @@
 import path from "path";
 import fs from "fs";
 import * as XLSX from "xlsx";
-import { Pool } from "pg";
+import { PrismaClient } from "@prisma/client";
 
-const pool = new Pool({
-	connectionString: process.env.DATABASE_URL,
-});
+const prisma = new PrismaClient();
 
 const EXISTING_EMPLOYEES = [
 	"Aniket Anand",
@@ -47,28 +45,40 @@ async function main() {
 		process.cwd(),
 		"data/uploads/GTPL Cab Sheet June 26 (3).xlsx",
 	);
+	if (!fs.existsSync(workbookPath)) {
+		console.log(`❌ Workbook not found at ${workbookPath}`);
+		return;
+	}
 	const workbook = XLSX.readFile(workbookPath);
 
 	// Parse daily roster for 16-6-26
 	const dailySheet = workbook.Sheets["16-6-26"];
+	if (!dailySheet) {
+		console.log(`❌ Daily sheet not found`);
+		return;
+	}
 	const dailyData = XLSX.utils.sheet_to_json(dailySheet) as any[];
 
 	// Parse Routes sheet
 	const routesSheet = workbook.Sheets["Routes"];
+	if (!routesSheet) {
+		console.log(`❌ Routes sheet not found`);
+		return;
+	}
 	const routesData = XLSX.utils.sheet_to_json(routesSheet) as any[];
 
 	// Load all employees from database
-	const employees = await pool.query(`
-    SELECT id, "employeeCode", name, email FROM "Employee"
-  `);
+	const dbEmployees = await prisma.employee.findMany({
+		select: { id: true, employeeCode: true, name: true, email: true },
+	});
 	const empMap = new Map();
-	employees.rows.forEach((e: any) => {
+	dbEmployees.forEach((e: any) => {
 		empMap.set(e.employeeCode, e);
 		empMap.set(normalizeEmployeeName(e.name), e);
 		if (e.email) empMap.set(e.email, e);
 	});
 
-	console.log(`Found ${employees.rows.length} employees in database`);
+	console.log(`Found ${dbEmployees.length} employees in database`);
 
 	let updateCount = 0;
 	let noShowCount = 0;
@@ -88,13 +98,24 @@ async function main() {
 
 		if (emp) {
 			// Upsert TransportRoster
-			await pool.query(
-				`INSERT INTO "TransportRoster" ("employeeId", date, "transportRosterStatus", "sourceSheet", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, now(), now())
-         ON CONFLICT ("employeeId", date) DO UPDATE
-         SET "transportRosterStatus" = $3, "sourceSheet" = $4, "updatedAt" = now()`,
-				[emp.id, "2026-06-16", "PRESENT", "16-6-26"],
-			);
+			await prisma.transportRoster.upsert({
+				where: {
+					employeeId_date: {
+						employeeId: emp.id,
+						date: "2026-06-16",
+					},
+				},
+				update: {
+					transportRosterStatus: "PRESENT",
+					sourceSheet: "16-6-26",
+				},
+				create: {
+					employeeId: emp.id,
+					date: "2026-06-16",
+					transportRosterStatus: "PRESENT",
+					sourceSheet: "16-6-26",
+				},
+			});
 			updateCount++;
 		}
 	}
@@ -118,19 +139,30 @@ async function main() {
 	];
 
 	for (const absName of absentEmps) {
-		let emp = employees.rows.find(
+		const emp = dbEmployees.find(
 			(e: any) =>
 				normalizeEmployeeName(e.name) === normalizeEmployeeName(absName),
 		);
 
 		if (emp) {
-			await pool.query(
-				`INSERT INTO "TransportRoster" ("employeeId", date, "transportRosterStatus", "sourceSheet", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, now(), now())
-         ON CONFLICT ("employeeId", date) DO UPDATE
-         SET "transportRosterStatus" = $3, "sourceSheet" = $4, "updatedAt" = now()`,
-				[emp.id, "2026-06-16", "NO_SHOW", "16-6-26"],
-			);
+			await prisma.transportRoster.upsert({
+				where: {
+					employeeId_date: {
+						employeeId: emp.id,
+						date: "2026-06-16",
+					},
+				},
+				update: {
+					transportRosterStatus: "NO_SHOW",
+					sourceSheet: "16-6-26",
+				},
+				create: {
+					employeeId: emp.id,
+					date: "2026-06-16",
+					transportRosterStatus: "NO_SHOW",
+					sourceSheet: "16-6-26",
+				},
+			});
 			noShowCount++;
 		}
 	}
@@ -155,19 +187,28 @@ async function main() {
 			const vehicleNum = vehicleMatch[1];
 
 			// Update CabRosterStatus
-			const cab = await pool.query(
-				`SELECT id FROM "Cab" WHERE "vehicleNumber" = $1`,
-				[vehicleNum],
-			);
+			const cab = await prisma.cab.findUnique({
+				where: { vehicleNumber: vehicleNum },
+				select: { id: true },
+			});
 
-			if (cab.rows.length > 0) {
-				await pool.query(
-					`INSERT INTO "CabRosterStatus" ("cabId", date, status, "createdAt", "updatedAt")
-           VALUES ($1, $2, $3, now(), now())
-           ON CONFLICT ("cabId", date) DO UPDATE
-           SET status = $3, "updatedAt" = now()`,
-					[cab.rows[0].id, "2026-06-16", "ACTIVE"],
-				);
+			if (cab) {
+				await prisma.cabRosterStatus.upsert({
+					where: {
+						cabId_date: {
+							cabId: cab.id,
+							date: "2026-06-16",
+						},
+					},
+					update: {
+						cabRosterStatus: "ACTIVE",
+					},
+					create: {
+						cabId: cab.id,
+						date: "2026-06-16",
+						cabRosterStatus: "ACTIVE",
+					},
+				});
 				vehicleCount++;
 			}
 		}
@@ -176,7 +217,7 @@ async function main() {
 			const driverName = normalizeDriverName(driverMatch[1]);
 
 			// Find driver employee and update
-			const driver = employees.rows.find(
+			const driver = dbEmployees.find(
 				(e: any) => normalizeEmployeeName(e.name) === driverName,
 			);
 
@@ -202,11 +243,13 @@ async function main() {
 	console.log(`   - Absent employees marked: ${noShowCount}`);
 	console.log(`   - Vehicles updated: ${vehicleCount}`);
 	console.log(`   - Drivers processed: ${driverCount}`);
-
-	await pool.end();
 }
 
-main().catch((err) => {
-	console.error("Error:", err);
-	process.exit(1);
-});
+main()
+	.catch((err) => {
+		console.error("Error:", err);
+		process.exit(1);
+	})
+	.finally(async () => {
+		await prisma.$disconnect();
+	});
