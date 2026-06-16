@@ -3594,7 +3594,6 @@ export default function TransitAdminSPA() {
     onClose={() => setCompareOpen(false)}
     date={selectedDate}
     optimizationPlans={optimizationPlans}
-    fallbackRoutes={activeRoutes}
     onDateChange={setSelectedDate}
     onAbsentCodesChange={setAbsentEmployeeCodes}
   />
