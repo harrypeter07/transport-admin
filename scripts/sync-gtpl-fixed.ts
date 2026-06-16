@@ -74,7 +74,7 @@ function parseDailyRosterSheet(
 	const employees: DailyRosterData[] = [];
 
 	// Find column indices by exact header match
-	const firstRow = XLSX.utils.sheet_to_json(ws, { header: 1 })[0] || [];
+	const firstRow = (XLSX.utils.sheet_to_json(ws, { header: 1 })[0] || []) as any[];
 	let empCodeCol = -1;
 	let empNameCol = -1;
 	let emailCol = -1;
