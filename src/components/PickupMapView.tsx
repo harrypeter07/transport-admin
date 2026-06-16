@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -62,6 +63,7 @@ export default function PickupMapView({
 
 	const [selectedPoint, setSelectedPoint] = useState<PickupPoint | null>(null);
 	const [hoveredEmployee, setHoveredEmployee] = useState<string | null>(null);
+	const [hoveredVehicle, setHoveredVehicle] = useState<string | null>(null);
 
 	// Initialize map
 	useEffect(() => {
@@ -255,6 +257,86 @@ export default function PickupMapView({
 				markersRef.current.push(marker);
 			}
 		});
+
+		// Add vehicle/driver markers
+		vehicles.forEach((vehicle) => {
+			const driver_emoji = "🚕";
+			const isHovered = hoveredVehicle === vehicle.id;
+			const driverLat = 21.14 + Math.random() * 0.05;
+			const driverLng = 79.09 + Math.random() * 0.05;
+			
+			const latlng = new window.google.maps.LatLng(driverLat, driverLng);
+			bounds.extend(latlng);
+
+			const marker = new window.google.maps.Marker({
+				position: latlng,
+				map: mapRef.current,
+				title: `${vehicle.vehicleNumber} - ${vehicle.driverName}`,
+				icon: {
+					path: "M0,-24C-13.3,-24 -24,-13.3 -24,0C-24,24 0,48 0,48C0,48 24,24 24,0C24,-13.3 13.3,-24 0,-24Z",
+					scale: isHovered ? 1.3 : 1,
+					fillColor: isHovered ? "#ff9800" : "#ff6b35",
+					fillOpacity: isHovered ? 1 : 0.7,
+					strokeColor: "#ffffff",
+					strokeWeight: 2,
+				},
+				clickable: true,
+			});
+
+			const infoWindow = new window.google.maps.InfoWindow({
+				content: `
+          <div class="p-2 max-w-xs text-sm bg-orange-50">
+            <div class="font-bold text-orange-700">${vehicle.vehicleNumber}</div>
+            <div class="text-gray-700">Driver: ${vehicle.driverName}</div>
+            <div class="text-xs text-gray-600 mt-1 font-semibold">
+              Status: <span class="text-green-600">${vehicle.status}</span>
+            </div>
+          </div>
+        `,
+			});
+
+			marker.addListener("mouseover", () => {
+				infoWindow.open(mapRef.current, marker);
+				setHoveredVehicle(vehicle.id);
+			});
+
+			marker.addListener("mouseout", () => {
+				infoWindow.close();
+				setHoveredVehicle(null);
+			});
+
+			markersRef.current.push(marker);
+		});
+
+		// Draw route polylines
+		const routePoints = pickupPoints.map((p) => ({
+			lat: p.latitude,
+			lng: p.longitude,
+		}));
+
+		if (routePoints.length > 1) {
+			const polylineColors = ["#00bcd4", "#2196f3", "#9c27b0", "#f44336"];
+			const polyline = new window.google.maps.Polyline({
+				path: routePoints,
+				geodesic: true,
+				strokeColor: polylineColors[0],
+				strokeOpacity: 0.7,
+				strokeWeight: 3,
+				map: mapRef.current,
+				icons: [
+					{
+						icon: {
+							path: "M 0,-1 0,1",
+							strokeOpacity: 0.8,
+							scale: 4,
+						},
+						offset: "0",
+						repeat: "20px",
+					},
+				],
+			});
+			polylineRef.current = polyline;
+		}
 
 		// Auto-fit bounds
 		if (autoZoom && markersRef.current.length > 0) {
