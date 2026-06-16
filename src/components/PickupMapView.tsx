@@ -264,7 +264,7 @@ export default function PickupMapView({
 			const isHovered = hoveredVehicle === vehicle.id;
 			const driverLat = 21.14 + Math.random() * 0.05;
 			const driverLng = 79.09 + Math.random() * 0.05;
-			
+
 			const latlng = new window.google.maps.LatLng(driverLat, driverLng);
 			bounds.extend(latlng);
 

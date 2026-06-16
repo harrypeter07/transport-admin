@@ -17,6 +17,11 @@ const nextConfig: NextConfig = {
   turbopack: {},
   // Disable source maps in production to reduce build memory usage
   productionBrowserSourceMaps: false,
+  // Suppress console warnings for cleaner output
+  onDemandEntries: {
+    maxInactiveAge: 60 * 1000,
+    pagesBufferLength: 5,
+  },
   webpack: (config, { isServer, dev }) => {
     // Limit parallelism to prevent RAM exhaustion on low-memory machines
     config.parallelism = 1;
