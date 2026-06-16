@@ -283,7 +283,7 @@ export default function CompareModal({
 		const res = await fetch("/api/optimization/excel-routes/parse", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ fileKey, sheetName: selectedSheet }),
+			body: JSON.stringify({ fileKey, sheetName: selectedSheet, date: uploadDate }),
 		});
 		const data = await res.json();
 		setUploading(false);

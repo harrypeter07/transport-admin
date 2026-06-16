@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 		if (auth.response) return auth.response;
 
 		const body = await req.json();
-		const { fileKey, sheetName } = body;
+		const { fileKey, sheetName, date: dateOverride } = body;
 
 		if (!fileKey || !sheetName) {
 			return NextResponse.json(
@@ -36,7 +36,9 @@ export async function POST(req: NextRequest) {
 
 		const buffer = fs.readFileSync(filePath);
 		const parsed = parseGtlpWorkbookSheet(buffer, sheetName);
-		const { date, routes, employees } = parsed;
+		const routes = parsed.routes;
+		const employees = parsed.employees;
+		const date = dateOverride || parsed.date;
 
 		const dbEmployees = await prisma.employee.findMany({
 			where: { status: "ACTIVE" },
