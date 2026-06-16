@@ -51,11 +51,11 @@ async function main() {
 
 	// Parse daily roster for 16-6-26
 	const dailySheet = workbook.Sheets["16-6-26"];
-	const dailyData = XLSX.utils.sheet_to_json(dailySheet);
+	const dailyData = XLSX.utils.sheet_to_json(dailySheet) as any[];
 
 	// Parse Routes sheet
 	const routesSheet = workbook.Sheets["Routes"];
-	const routesData = XLSX.utils.sheet_to_json(routesSheet);
+	const routesData = XLSX.utils.sheet_to_json(routesSheet) as any[];
 
 	// Load all employees from database
 	const employees = await pool.query(`

@@ -63,7 +63,7 @@ function parseWorkbookSheet(
 		return { employees: new Map(), emails: new Set() };
 	}
 
-	const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+	const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 	const headerRow = rows[0];
 	const columns = detectColumns(headerRow);
 
