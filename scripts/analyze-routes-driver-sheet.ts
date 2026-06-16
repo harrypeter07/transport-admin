@@ -22,7 +22,7 @@ async function analyzeGTPLData() {
 	// Parse Routes and Driver details sheet
 	const routesSheetName = "Routes and Driver details "; // Note: has trailing space
 	const ws = wb.Sheets[routesSheetName];
-	const data = XLSX.utils.sheet_to_json(ws, { defval: "" });
+	const data = XLSX.utils.sheet_to_json(ws, { defval: "" }) as any[];
 
 	console.log("\n1. ROUTES AND DRIVER DETAILS SHEET ANALYSIS");
 	console.log("-".repeat(100));
@@ -181,7 +181,7 @@ async function analyzeGTPLData() {
 
 	for (const sheetName of dailySheets) {
 		const ws = wb.Sheets[sheetName];
-		const sheetData = XLSX.utils.sheet_to_json(ws, { defval: "" });
+		const sheetData = XLSX.utils.sheet_to_json(ws, { defval: "" }) as any[];
 
 		const employeeNames = [];
 		const actualDuplicates = new Map(); // name -> count
@@ -220,19 +220,23 @@ async function analyzeGTPLData() {
 	try {
 		// Get all cabs from database
 		const dbCabs = await prisma.cab.findMany({
-			select: { cabNumber: true, vendor: true },
+			select: { vehicleNumber: true, vendor: true },
 		});
 
 		console.log(`\nDatabase Cabs: ${dbCabs.length}`);
 		console.log(
 			"Sample DB cabs:",
-			dbCabs.slice(0, 5).map((c: any) => c.cabNumber),
+			dbCabs.slice(0, 5).map((c: any) => c.vehicleNumber),
 		);
 
-		// Get all drivers from database
-		const dbDrivers = await prisma.driver.findMany({
-			select: { name: true, phone: true },
+		// Get all drivers from database (from Cab model)
+		const dbCabsForDrivers = await prisma.cab.findMany({
+			select: { driverName: true, driverPhone: true },
 		});
+		const dbDrivers = dbCabsForDrivers.map((c: any) => ({
+			name: c.driverName || "",
+			phone: c.driverPhone || "",
+		}));
 
 		console.log(`\nDatabase Drivers: ${dbDrivers.length}`);
 		console.log(
@@ -243,7 +247,7 @@ async function analyzeGTPLData() {
 		// Compare
 		console.log("\n\nVehicle Comparison:");
 		console.log("-".repeat(100));
-		const dbCabNumbers = new Set(dbCabs.map((c: any) => c.cabNumber));
+		const dbCabNumbers = new Set(dbCabs.map((c: any) => c.vehicleNumber));
 		const workbookVehicles = new Set(vehicles);
 
 		const missingInDb = Array.from(workbookVehicles).filter(

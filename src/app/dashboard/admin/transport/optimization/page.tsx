@@ -901,7 +901,7 @@ export default function TransitAdminSPA() {
 
 	// Build pickup point markers from employee pickup points in visible routes
 	const pickupPointMarkers = useMemo(() => {
-		const seen = new Map<string, { id: string; name: string; lat: number; lng: number; selected?: boolean }>();
+		const seen = new Map<string, { id: string; name: string; lat: number; lng: number; selected?: boolean; routeId?: string }>();
 		for (const route of mapVisibleRoutes) {
 			for (const stop of route.stops) {
 				const emp = stop.employee as any;
@@ -916,6 +916,7 @@ export default function TransitAdminSPA() {
 							lat: pp.y,  // y = lat
 							lng: pp.x,  // x = lng
 							selected: selectedRouteId === route.id,
+							routeId: route.id,
 						});
 					}
 				} else if (emp.x && emp.y && (Math.abs(emp.x) > 0.01 || Math.abs(emp.y) > 0.01)) {
@@ -928,6 +929,7 @@ export default function TransitAdminSPA() {
 							lat: emp.y,
 							lng: emp.x,
 							selected: selectedRouteId === route.id,
+							routeId: route.id,
 						});
 					}
 				}

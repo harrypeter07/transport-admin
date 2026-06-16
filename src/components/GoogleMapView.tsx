@@ -253,6 +253,7 @@ interface GoogleMapViewProps {
 		lat: number;
 		lng: number;
 		selected?: boolean;
+		routeId?: string;
 	}[];
 	showZoneOverlay?: boolean;
 	// FIX #4: Auto-fit control — ON by default
@@ -323,15 +324,16 @@ export default function GoogleMapView({
 
 	const hasPreciseDriverStart = (route: Route) => {
 		const cab = route.cab;
-		const address = cab?.driverAddress?.trim() ?? "";
-		if ((route.tripSequence || 1) > 1 || !address) return false;
-		if (typeof cab?.driverX !== "number" || typeof cab?.driverY !== "number")
-			return false;
-		const lat = cab.driverY;
-		const lng = cab.driverX;
+		if ((route.tripSequence || 1) > 1) return false;
+		const xVal = cab?.driverX;
+		const yVal = cab?.driverY;
+		if (xVal === undefined || xVal === null || yVal === undefined || yVal === null) return false;
+		const lng = typeof xVal === "object" ? Number(xVal.toString()) : Number(xVal);
+		const lat = typeof yVal === "object" ? Number(yVal.toString()) : Number(yVal);
 		if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
 		if (!isWithinBounds(lat, lng) || isDepotLatLng(lat, lng)) return false;
-		if (isNearNagpurAirport(lat, lng) && !isAirportVenueIntent(address))
+		const address = cab?.driverAddress?.trim() ?? "";
+		if (isNearNagpurAirport(lat, lng) && address && !isAirportVenueIntent(address))
 			return false;
 		return true;
 	};
@@ -339,7 +341,11 @@ export default function GoogleMapView({
 	const getRouteStartLatLng = (route: Route): any => {
 		const cab = route.cab;
 		if (hasPreciseDriverStart(route)) {
-			return { lat: cab!.driverY!, lng: cab!.driverX! };
+			const xVal = cab.driverX;
+			const yVal = cab.driverY;
+			const lng = typeof xVal === "object" && xVal !== null ? Number(xVal.toString()) : Number(xVal);
+			const lat = typeof yVal === "object" && yVal !== null ? Number(yVal.toString()) : Number(yVal);
+			return { lat, lng };
 		}
 		return { lat: depotLat, lng: depotLng };
 	};
@@ -593,9 +599,13 @@ export default function GoogleMapView({
 					content: `<div style="padding:6px 10px;border-left:4px solid ${pinColor};font-size:12px;font-weight:bold;">${pp.name}</div>`,
 				});
 				infoWindows.push(ppInfo);
-				ppMarker.addListener("click", () =>
-					ppInfo.open({ map, anchor: ppMarker }),
-				);
+				ppMarker.addListener("click", () => {
+					infoWindows.forEach((iw) => iw.close());
+					ppInfo.open({ map, anchor: ppMarker });
+					if (pp.routeId) {
+						onSelectRoute(pp.routeId);
+					}
+				});
 			}
 		});
 

@@ -17,7 +17,7 @@ interface RouteVisualizerProps {
   selectedEmployeeId?: string | null;
   onSelectEmployee?: (id: string | null) => void;
   showZoneOverlay?: boolean;
-  pickupPointMarkers?: { id: string; name: string; lat: number; lng: number; selected?: boolean }[];
+  pickupPointMarkers?: { id: string; name: string; lat: number; lng: number; selected?: boolean; routeId?: string }[];
   searchQuery?: string;
 }
 
