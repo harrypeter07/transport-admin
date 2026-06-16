@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import PickupMapView from '@/components/PickupMapView';
-import { useRouter } from 'next/navigation';
-import { LogOut, Home } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import PickupMapView from "@/components/PickupMapView";
+import { useRouter } from "next/navigation";
+import { LogOut, Home } from "lucide-react";
 
 interface PickupPoint {
 	id: string;
@@ -48,30 +48,30 @@ export default function RouteVisualizerPage() {
 			setLoading(true);
 
 			// Fetch employees
-			const empRes = await fetch('/api/employees');
-			if (!empRes.ok) throw new Error('Failed to fetch employees');
+			const empRes = await fetch("/api/employees");
+			if (!empRes.ok) throw new Error("Failed to fetch employees");
 			const empData = await empRes.json();
 			setEmployees(empData.employees || []);
 
 			// Fetch pickup points
-			const ppRes = await fetch('/api/pickup-points');
-			if (!ppRes.ok) throw new Error('Failed to fetch pickup points');
+			const ppRes = await fetch("/api/pickup-points");
+			if (!ppRes.ok) throw new Error("Failed to fetch pickup points");
 			const ppData = await ppRes.json();
 			setPickupPoints(ppData.pickupPoints || []);
 
 			// Fetch vehicles
-			const vehicleRes = await fetch('/api/cabs');
-			if (!vehicleRes.ok) throw new Error('Failed to fetch vehicles');
+			const vehicleRes = await fetch("/api/cabs");
+			if (!vehicleRes.ok) throw new Error("Failed to fetch vehicles");
 			const vehicleData = await vehicleRes.json();
 			setVehicles(vehicleData.cabs || []);
 
 			setError(null);
 		} catch (err) {
-			console.error('Error fetching data:', err);
+			console.error("Error fetching data:", err);
 			setError(
 				err instanceof Error
 					? err.message
-					: 'Failed to load data. Please try again.',
+					: "Failed to load data. Please try again.",
 			);
 		} finally {
 			setLoading(false);
@@ -80,10 +80,10 @@ export default function RouteVisualizerPage() {
 
 	const handleLogout = async () => {
 		try {
-			await fetch('/api/auth/logout', { method: 'POST' });
-			router.push('/login');
+			await fetch("/api/auth/logout", { method: "POST" });
+			router.push("/login");
 		} catch (error) {
-			console.error('Logout error:', error);
+			console.error("Logout error:", error);
 		}
 	};
 
@@ -101,7 +101,7 @@ export default function RouteVisualizerPage() {
 	const transformPickupPoints = pickupPoints.map((pp) => ({
 		id: pp.id,
 		name: pp.name,
-		address: pp.address || '',
+		address: pp.address || "",
 		latitude: pp.y || 0,
 		longitude: pp.x || 0,
 		zone: pp.zone,
@@ -160,7 +160,9 @@ export default function RouteVisualizerPage() {
 			{error ? (
 				<div className="flex-1 flex items-center justify-center p-4">
 					<div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md text-center">
-						<div className="text-red-600 font-semibold mb-2">Error Loading Data</div>
+						<div className="text-red-600 font-semibold mb-2">
+							Error Loading Data
+						</div>
 						<p className="text-red-600 text-sm mb-4">{error}</p>
 						<button
 							onClick={fetchData}
@@ -185,12 +187,18 @@ export default function RouteVisualizerPage() {
 
 			{/* Footer Stats */}
 			<div className="bg-white border-t border-gray-200 px-4 py-3 text-center text-sm text-gray-600">
-				Last updated: {new Date().toLocaleTimeString()} | Total Employees:{' '}
-				<span className="font-semibold text-blue-600">{transformEmployees.length}</span> |
-				Pickup Points:{' '}
-				<span className="font-semibold text-green-600">{transformPickupPoints.length}</span> |
-				Vehicles:{' '}
-				<span className="font-semibold text-purple-600">{transformVehicles.length}</span>
+				Last updated: {new Date().toLocaleTimeString()} | Total Employees:{" "}
+				<span className="font-semibold text-blue-600">
+					{transformEmployees.length}
+				</span>{" "}
+				| Pickup Points:{" "}
+				<span className="font-semibold text-green-600">
+					{transformPickupPoints.length}
+				</span>{" "}
+				| Vehicles:{" "}
+				<span className="font-semibold text-purple-600">
+					{transformVehicles.length}
+				</span>
 			</div>
 		</div>
 	);

@@ -345,7 +345,13 @@ export default function PickupMapView({
 						{/* Employees at this pickup */}
 						<div className="border-t pt-3">
 							<div className="text-xs font-semibold text-gray-700 mb-2">
-								Employees ({employees.filter((e) => e.pickupPoint?.id === selectedPoint.id).length})
+								Employees (
+								{
+									employees.filter(
+										(e) => e.pickupPoint?.id === selectedPoint.id,
+									).length
+								}
+								)
 							</div>
 							<div className="space-y-1 max-h-40 overflow-y-auto">
 								{employees
