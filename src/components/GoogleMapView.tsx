@@ -206,6 +206,34 @@ function driverStartSvg(size: number, color: string): string {
   `);
 }
 
+/**
+ * Pin/teardrop marker for pickup points.
+ * The tip of the pin is at the bottom-center of the bounding box.
+ * fillColor: main pin color
+ * selected: when true, use a green accent
+ */
+function pickupPinSvg(w: number, h: number, fillColor: string, selected: boolean): string {
+	// Pin shape: rounded top, pointed bottom tip
+	const cx = w / 2;
+	const r = w * 0.42; // radius of the round part
+	const ry = r + 2;    // center y of the round part
+	const tipY = h - 2;  // Y of the pointed tip
+	const strokeColor = selected ? "#059669" : "#ffffff";
+	const strokeW = selected ? "2.5" : "1.5";
+	const accentColor = selected ? "#ecfdf5" : "#ffffff";
+	// Teardrop path: circle top + triangle pointing down
+	const path = `M ${cx} ${tipY} C ${cx - r * 0.7} ${ry + r * 0.5}, ${cx - r * 1.1} ${ry - r * 0.5}, ${cx - r} ${ry} A ${r} ${r} 0 1 1 ${cx + r} ${ry} C ${cx + r * 1.1} ${ry - r * 0.5}, ${cx + r * 0.7} ${ry + r * 0.5}, ${cx} ${tipY} Z`;
+	return svgToUri(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <filter id="shadow" x="-30%" y="-10%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="rgba(0,0,0,0.35)"/>
+      </filter>
+      <path d="${path}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="${strokeW}" filter="url(#shadow)"/>
+      <circle cx="${cx}" cy="${ry}" r="${r * 0.35}" fill="${accentColor}" opacity="0.9"/>
+    </svg>
+  `);
+}
+
 interface GoogleMapViewProps {
 	routes: Route[];
 	selectedRouteId: string | null;
@@ -237,6 +265,7 @@ interface GoogleMapViewProps {
 		markerCount: number;
 		polylineCount: number;
 	}) => void;
+	searchQuery?: string;
 }
 
 export default function GoogleMapView({
@@ -256,6 +285,7 @@ export default function GoogleMapView({
 	autoFitRoutes = true,
 	osrmGeometry,
 	onPerformanceMetrics,
+	searchQuery,
 }: GoogleMapViewProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const mapRef = useRef<any | null>(null);
@@ -540,18 +570,19 @@ export default function GoogleMapView({
 				clusterMarker.addListener("click", () =>
 					clusterInfo.open({ map, anchor: clusterMarker }),
 				);
-			} else if (cluster.length === 1) {
+		} else if (cluster.length === 1) {
 				const pp = cluster[0];
+				const pinW = pp.selected ? 32 : 26;
+				const pinH = pp.selected ? 44 : 36;
+				const pinColor = pp.selected ? "#059669" : "#7c3aed";
 				const ppMarker = new google.maps.Marker({
 					position: { lat, lng },
 					map,
 					icon: {
-						path: google.maps.SymbolPath.CIRCLE,
-						scale: pp.selected ? 12 : 9,
-						fillColor: pp.selected ? "#059669" : "#7c3aed",
-						fillOpacity: 1,
-						strokeColor: "#ffffff",
-						strokeWeight: 2,
+						url: pickupPinSvg(pinW, pinH, pinColor, pp.selected ?? false),
+						scaledSize: new google.maps.Size(pinW, pinH),
+						// Anchor the tip of the pin at the location (bottom-center)
+						anchor: new google.maps.Point(pinW / 2, pinH - 2),
 					},
 					title: pp.name,
 					zIndex: 500,
@@ -559,7 +590,7 @@ export default function GoogleMapView({
 				overlays.push(ppMarker);
 				markerCount++;
 				const ppInfo = new google.maps.InfoWindow({
-					content: `<div style="padding:4px 8px;font-size:12px;font-weight:bold;">${pp.name}</div>`,
+					content: `<div style="padding:6px 10px;border-left:4px solid ${pinColor};font-size:12px;font-weight:bold;">${pp.name}</div>`,
 				});
 				infoWindows.push(ppInfo);
 				ppMarker.addListener("click", () =>
@@ -570,6 +601,14 @@ export default function GoogleMapView({
 
 		const overviewSeenCoords: Record<string, number> = {};
 		const shiftColorMap = buildShiftColorMap(routes);
+
+		const getStopLatLng = (stop: any) => {
+			const emp = stop.employee;
+			if (emp?.pickupPointId && emp?.pickupPoint) {
+				return { lat: emp.pickupPoint.y, lng: emp.pickupPoint.x };
+			}
+			return { lat: emp?.y ?? stop.y ?? 21.0625, lng: emp?.x ?? stop.x ?? 79.0526 };
+		};
 
 		// Overview pass: all routes (or just selected)
 		routes.forEach((route, idx) => {
@@ -590,17 +629,18 @@ export default function GoogleMapView({
 
 			// Employee dot markers (overview — dim, no label)
 			sortedStops.forEach((stop) => {
-				if (isWithinBounds(stop.employee.y, stop.employee.x)) {
-					fitCoords.push({ lat: stop.employee.y, lng: stop.employee.x });
+				const pos = getStopLatLng(stop);
+				if (isWithinBounds(pos.lat, pos.lng)) {
+					fitCoords.push(pos);
 				}
 				if (isSelectedOverview) return; // selected route gets its own detailed markers below
 
-				const coordKey = `${stop.employee.y.toFixed(5)}_${stop.employee.x.toFixed(5)}`;
+				const coordKey = `${pos.lat.toFixed(5)}_${pos.lng.toFixed(5)}`;
 				const overlapCount = overviewSeenCoords[coordKey] || 0;
 				overviewSeenCoords[coordKey] = overlapCount + 1;
 
-				let markerY = stop.employee.y;
-				let markerX = stop.employee.x;
+				let markerY = pos.lat;
+				let markerX = pos.lng;
 				if (overlapCount > 0) {
 					const offsetDist = 0.0002;
 					const angle = overlapCount * (Math.PI / 3);
@@ -632,8 +672,9 @@ export default function GoogleMapView({
 			if (!isSelectedOverview) {
 				const overviewPath: any[] = [routeStart];
 				sortedStops.forEach((stop) => {
-					if (isWithinBounds(stop.employee.y, stop.employee.x)) {
-						overviewPath.push({ lat: stop.employee.y, lng: stop.employee.x });
+					const pos = getStopLatLng(stop);
+					if (isWithinBounds(pos.lat, pos.lng)) {
+						overviewPath.push(pos);
 					}
 				});
 				overviewPath.push({ lat: depotLat, lng: depotLng });
@@ -776,7 +817,6 @@ export default function GoogleMapView({
 				// Auto-open driver card when route is selected
 				startInfo.open({ map, anchor: startMarker });
 
-				// Stop markers with numbered labels
 				orderedStops.forEach((stop, displayIdx) => {
 					const isViolation = selectedRoute.violations.some(
 						(v) =>
@@ -786,12 +826,15 @@ export default function GoogleMapView({
 									stop.stopOrder === selectedRoute.stops.length)),
 					);
 
-					if (isWithinBounds(stop.employee.y, stop.employee.x)) {
-						fitCoords.push({ lat: stop.employee.y, lng: stop.employee.x });
+					const pos = getStopLatLng(stop);
+					if (isWithinBounds(pos.lat, pos.lng)) {
+						fitCoords.push(pos);
 					}
 
 					const empAddress =
-						stop.employee.formattedAddress || stop.employee.address || "";
+						(stop.employee.pickupPointId && stop.employee.pickupPoint)
+							? `${stop.employee.pickupPoint.name} (Pickup Point) | ${stop.employee.address}`
+							: (stop.employee.formattedAddress || stop.employee.address || "");
 					const parts = empAddress.split(" | ");
 					const pickupLabel = parts[0];
 					const homeLabel = parts[1] || parts[0];
@@ -803,12 +846,12 @@ export default function GoogleMapView({
 						? `<span title="Alt: ${secondaryPhone}">${primaryPhone} ℹ</span>`
 						: primaryPhone;
 
-					const coordKey = `${stop.employee.y.toFixed(5)}_${stop.employee.x.toFixed(5)}`;
+					const coordKey = `${pos.lat.toFixed(5)}_${pos.lng.toFixed(5)}`;
 					const overlapCount = seenCoords[coordKey] || 0;
 					seenCoords[coordKey] = overlapCount + 1;
 
-					let markerY = stop.employee.y;
-					let markerX = stop.employee.x;
+					let markerY = pos.lat;
+					let markerX = pos.lng;
 					if (overlapCount > 0) {
 						const offsetDist = 0.0002;
 						const angle = overlapCount * (Math.PI / 3);
@@ -875,8 +918,9 @@ export default function GoogleMapView({
 					isApproximateRoute = true;
 					polyPath = [routeStart];
 					orderedStops.forEach((stop) => {
-						if (isWithinBounds(stop.employee.y, stop.employee.x)) {
-							polyPath.push({ lat: stop.employee.y, lng: stop.employee.x });
+						const pos = getStopLatLng(stop);
+						if (isWithinBounds(pos.lat, pos.lng)) {
+							polyPath.push(pos);
 						}
 					});
 					polyPath.push({ lat: depotLat, lng: depotLng });
@@ -941,7 +985,7 @@ export default function GoogleMapView({
 			? `selected:${selectedRouteId}`
 			: `all:${routes.map((r) => `${r.id}:${r.stops.length}`).join("|")}`;
 
-		if (lastFitKeyRef.current !== fitKey && autoFitRoutes !== false) {
+		if (lastFitKeyRef.current !== fitKey && autoFitRoutes !== false && !searchQuery?.trim()) {
 			lastFitKeyRef.current = fitKey;
 			if (fitCoords.length > 1) {
 				const bounds = new google.maps.LatLngBounds();

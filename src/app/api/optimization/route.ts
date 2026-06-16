@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 				cab: true,
 				shift: true,
 				stops: {
-					include: { employee: true },
+					include: { employee: { include: { pickupPoint: true } } },
 					orderBy: { stopOrder: "asc" },
 				},
 				violations: true,
@@ -134,7 +134,7 @@ async function fetchOptimizationInputs(
 		routes: {
 			where: { date: currentDateStr },
 			include: {
-				stops: { include: { employee: true } },
+				stops: { include: { employee: { include: { pickupPoint: true } } } },
 				locations: { orderBy: { timestamp: "desc" as const }, take: 1 },
 			},
 		},
@@ -148,20 +148,21 @@ async function fetchOptimizationInputs(
 		include: cabInclude,
 	});
 
-	if (dbCabs.length === 0 && availableEmployees.length > 0) {
+	const activeEmployeeCount = availableEmployees.length;
+	const cabCapacity = dbCabs[0]?.capacity ?? 6;
+	const minCabsNeeded =
+		activeEmployeeCount > 0 ? Math.ceil(activeEmployeeCount / cabCapacity) : 0;
+
+	// If no cabs linked to shift, or fewer than needed to cover employees → use full fleet
+	if ((dbCabs.length === 0 || dbCabs.length < minCabsNeeded) && availableEmployees.length > 0) {
 		console.warn(
-			`No cabs linked to shift ${fallbackShiftId}; using full available fleet for ${availableEmployees.length} employees`,
+			`Shift ${fallbackShiftId}: ${dbCabs.length} cabs linked but ${minCabsNeeded} needed for ${availableEmployees.length} employees; expanding to full available fleet`,
 		);
 		dbCabs = await prisma.cab.findMany({
 			where: { status: "AVAILABLE" },
 			include: cabInclude,
 		});
 	}
-
-	const activeEmployeeCount = availableEmployees.length;
-	const cabCapacity = dbCabs[0]?.capacity ?? 6;
-	const minCabsNeeded =
-		activeEmployeeCount > 0 ? Math.ceil(activeEmployeeCount / cabCapacity) : 0;
 
 	// ── DISABLED: Excel cab filter ──
 	// Database cabs are source of truth
@@ -254,9 +255,11 @@ async function fetchOptimizationInputs(
 			Math.max(minCabsNeededFinal, activeEmployeeCountFinal > 0 ? 1 : 0),
 		);
 
-	console.log(
-		`Fleet sized: ${activeCabs.length} of ${optCabs.length} cabs active for ${activeEmployeeCountFinal} employees`,
-	);
+	if (process.env.BUG_OPTIMIZATION === "true") {
+		console.log(
+			`Fleet sized: ${activeCabs.length} of ${optCabs.length} cabs active for ${activeEmployeeCountFinal} employees`,
+		);
+	}
 
 	const shiftStartTime = shiftStartTimes.get(fallbackShiftId) || "09:00";
 	const dbLeaveCount = dbEmployees.filter(
@@ -565,16 +568,7 @@ export async function POST(req: NextRequest) {
 		} = body;
 		const currentDateStr = date || new Date().toISOString().split("T")[0];
 
-		const PROTECTED_SHIFTS = ["shift-0800"];
-		if (shiftId && PROTECTED_SHIFTS.includes(shiftId)) {
-			return NextResponse.json(
-				{
-					error:
-						"8:00 AM shift routes are protected and cannot be modified by optimization. Use 'Rebuild 8:00 AM Baseline' to update these routes.",
-				},
-				{ status: 403 },
-			);
-		}
+
 
 		const holiday = await prisma.holiday.findUnique({
 			where: { date: currentDateStr },

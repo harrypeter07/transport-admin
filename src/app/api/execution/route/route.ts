@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const route = await prisma.route.findUnique({
     where: { id: routeId },
     include: {
-      stops: { include: { employee: true }, orderBy: { stopOrder: "asc" } },
+      stops: { include: { employee: { include: { pickupPoint: true } } }, orderBy: { stopOrder: "asc" } },
       cab: true
     }
   });
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
       routes: {
         where: { date: route.date },
         include: {
-          stops: { include: { employee: true } },
+          stops: { include: { employee: { include: { pickupPoint: true } } } },
           locations: { orderBy: { timestamp: "desc" }, take: 1 }
         }
       }
@@ -91,7 +91,10 @@ export async function POST(req: Request) {
         })),
         stops: historicalRoute.stops.map((stop) => ({
           stopOrder: stop.stopOrder,
-          employee: stop.employee ? { x: stop.employee.x, y: stop.employee.y } : null,
+          employee: stop.employee ? {
+            x: stop.employee.pickupPointId && stop.employee.pickupPoint ? stop.employee.pickupPoint.x : stop.employee.x,
+            y: stop.employee.pickupPointId && stop.employee.pickupPoint ? stop.employee.pickupPoint.y : stop.employee.y,
+          } : null,
         })),
       })),
     };
@@ -167,7 +170,10 @@ export async function POST(req: Request) {
       locations: [],
       stops: route.stops.map((stop) => ({
         stopOrder: stop.stopOrder,
-        employee: stop.employee ? { x: stop.employee.x, y: stop.employee.y } : null,
+        employee: stop.employee ? {
+          x: stop.employee.pickupPointId && stop.employee.pickupPoint ? stop.employee.pickupPoint.x : stop.employee.x,
+          y: stop.employee.pickupPointId && stop.employee.pickupPoint ? stop.employee.pickupPoint.y : stop.employee.y,
+        } : null,
       })),
     }) || { x: route.currentLat ?? settings.defaultDepotLat, y: route.currentLng ?? settings.defaultDepotLng };
 

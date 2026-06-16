@@ -1,7 +1,7 @@
-const XLSX = require("xlsx");
-const fs = require("fs");
-const path = require("path");
-const { PrismaClient } = require("@prisma/client");
+import XLSX from "xlsx";
+import fs from "fs";
+import path from "path";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -30,8 +30,6 @@ async function analyzeGTPLData() {
 	// Extract cab/driver data
 	const vehicles = new Set();
 	const drivers = new Set();
-	const vehiclesByNumber = new Map(); // vehicle number -> {count, routes, drivers}
-	const driversByName = new Map(); // driver name -> {count, routes, vehicles}
 	const routes = new Set();
 
 	// Helper to detect if string is a vehicle number
@@ -43,7 +41,7 @@ async function analyzeGTPLData() {
 	}
 
 	// Helper to extract driver name
-	function extractDriverName(driverDetails) {
+	function extractDriverName(driverDetails: unknown) {
 		if (!driverDetails) return null;
 		const str = String(driverDetails).trim();
 		// Extract driver name patterns like "DRIVER-NAME" or "NAME"
@@ -57,7 +55,7 @@ async function analyzeGTPLData() {
 	}
 
 	// Helper to extract phone
-	function extractPhone(driverDetails) {
+	function extractPhone(driverDetails: unknown) {
 		if (!driverDetails) return null;
 		const str = String(driverDetails).trim();
 		if (str.includes("MOB-")) {
@@ -177,7 +175,7 @@ async function analyzeGTPLData() {
 	console.log("\n\n2. DUPLICATE EMPLOYEE ANALYSIS - DAILY SHEETS");
 	console.log("-".repeat(100));
 
-	const dailySheets = wb.SheetNames.filter((name) =>
+	const dailySheets = wb.SheetNames.filter((name: string) =>
 		/^\d{1,2}-\d{1,2}-\d{2}$/.test(name.trim()),
 	);
 
@@ -228,7 +226,7 @@ async function analyzeGTPLData() {
 		console.log(`\nDatabase Cabs: ${dbCabs.length}`);
 		console.log(
 			"Sample DB cabs:",
-			dbCabs.slice(0, 5).map((c) => c.cabNumber),
+			dbCabs.slice(0, 5).map((c: any) => c.cabNumber),
 		);
 
 		// Get all drivers from database
@@ -239,13 +237,13 @@ async function analyzeGTPLData() {
 		console.log(`\nDatabase Drivers: ${dbDrivers.length}`);
 		console.log(
 			"Sample DB drivers:",
-			dbDrivers.slice(0, 5).map((d) => `${d.name} (${d.phone})`),
+			dbDrivers.slice(0, 5).map((d: any) => `${d.name} (${d.phone})`),
 		);
 
 		// Compare
 		console.log("\n\nVehicle Comparison:");
 		console.log("-".repeat(100));
-		const dbCabNumbers = new Set(dbCabs.map((c) => c.cabNumber));
+		const dbCabNumbers = new Set(dbCabs.map((c: any) => c.cabNumber));
 		const workbookVehicles = new Set(vehicles);
 
 		const missingInDb = Array.from(workbookVehicles).filter(
@@ -278,10 +276,10 @@ async function analyzeGTPLData() {
 		console.log("\n\nDriver Comparison:");
 		console.log("-".repeat(100));
 		const dbDriverNames = new Set(
-			dbDrivers.map((d) => d.name.trim().toUpperCase()),
+			dbDrivers.map((d: any) => d.name.trim().toUpperCase()),
 		);
 		const workbookDrivers = new Set(
-			Array.from(drivers).map((d) => d.toUpperCase()),
+			Array.from(drivers).map((d: unknown) => String(d).toUpperCase()),
 		);
 
 		const matchingDrivers = Array.from(workbookDrivers).filter((d) =>
@@ -311,7 +309,7 @@ async function analyzeGTPLData() {
 			);
 		}
 	} catch (err) {
-		console.log("Error querying database:", err.message);
+		console.log("Error querying database:", (err as any).message);
 	}
 
 	// Save diagnostics

@@ -18,10 +18,7 @@ export async function POST(req: Request) {
 	return NextResponse.json({ error: "Date is required" }, { status: 400 });
 	}
 
-	const PROTECTED_SHIFTS = ["shift-0800"];
-	if (shiftId && PROTECTED_SHIFTS.includes(shiftId)) {
-	return NextResponse.json({ error: "8:00 AM shift routes are protected and cannot be modified by publishing. Use 'Rebuild 8:00 AM Baseline' to update these routes." }, { status: 403 });
-	}
+
 
 	// MANUAL ROUTING BYPASS
 	if (isManual) {

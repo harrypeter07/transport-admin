@@ -13,17 +13,19 @@ import { requireApiRole } from "@/lib/apiAuth";
 import { audit } from "@/lib/audit";
 
 function toOptimizeEmployee(stop: {
-  employee: { id: string; name: string; gender: string; x: number; y: number; address: string; department?: string; phone?: string };
+  employee: { id: string; name: string; gender: string; x: number; y: number; address: string; department?: string; phone?: string; pickupPointId?: string | null; pickupPoint?: any };
 }): OptimizeEmployee {
+  const emp = stop.employee;
+  const usePickup = emp.pickupPointId && emp.pickupPoint;
   return {
-    id: stop.employee.id,
-    name: stop.employee.name,
-    gender: stop.employee.gender as "MALE" | "FEMALE",
-    x: stop.employee.x,
-    y: stop.employee.y,
-    address: stop.employee.address,
-    department: stop.employee.department || "",
-    phone: stop.employee.phone || "",
+    id: emp.id,
+    name: emp.name,
+    gender: emp.gender as "MALE" | "FEMALE",
+    x: usePickup ? emp.pickupPoint.x : emp.x,
+    y: usePickup ? emp.pickupPoint.y : emp.y,
+    address: usePickup ? (emp.pickupPoint.address || emp.pickupPoint.name) : emp.address,
+    department: emp.department || "",
+    phone: emp.phone || "",
   };
 }
 
@@ -134,11 +136,11 @@ export async function POST(req: NextRequest) {
     const [fromRoute, toRoute] = await Promise.all([
       prisma.route.findUnique({
         where: { id: fromRouteId },
-        include: { cab: true, stops: { include: { employee: true }, orderBy: { stopOrder: "asc" } } },
+        include: { cab: true, stops: { include: { employee: { include: { pickupPoint: true } } }, orderBy: { stopOrder: "asc" } } },
       }),
       prisma.route.findUnique({
         where: { id: toRouteId },
-        include: { cab: true, stops: { include: { employee: true }, orderBy: { stopOrder: "asc" } } },
+        include: { cab: true, stops: { include: { employee: { include: { pickupPoint: true } } }, orderBy: { stopOrder: "asc" } } },
       }),
     ]);
 
@@ -222,7 +224,7 @@ export async function POST(req: NextRequest) {
       include: {
         cab: true,
         shift: true,
-        stops: { include: { employee: true }, orderBy: { stopOrder: "asc" } },
+        stops: { include: { employee: { include: { pickupPoint: true } } }, orderBy: { stopOrder: "asc" } },
         violations: true,
       },
     });

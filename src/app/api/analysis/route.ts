@@ -194,7 +194,7 @@ export async function GET(req: Request) {
         status: { in: ["ASSIGNED", "IN_PROGRESS", "COMPLETED"] },
       },
       include: {
-        stops: { include: { employee: true } },
+        stops: { include: { employee: { include: { pickupPoint: true } } } },
         cab: true,
       },
     });

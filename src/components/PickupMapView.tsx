@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/rules-of-hooks */
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -27,6 +27,7 @@ interface Employee {
 	email: string;
 	phone: string;
 	address: string;
+	zone?: string;
 	pickupPoint?: PickupPoint;
 	vehicle?: Vehicle;
 }
@@ -68,6 +69,10 @@ export default function PickupMapView({
 	const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
 	const [shifts, setShifts] = useState<any[]>([]);
 
+	// Function declarations with proper typing
+	const initializeMapRef = useRef<() => void>(() => {});
+	const updateMapContentRef = useRef<() => void>(() => {});
+
 	// Initialize map
 	useEffect(() => {
 		if (!containerRef.current || mapRef.current) return;
@@ -78,8 +83,8 @@ export default function PickupMapView({
 		script.defer = true;
 
 		script.onload = () => {
-			if (window.google) {
-				initializeMap();
+			if ((window as any).google) {
+				initializeMapRef.current();
 			}
 		};
 
@@ -109,7 +114,7 @@ export default function PickupMapView({
 	// Update map when data changes
 	useEffect(() => {
 		if (mapRef.current) {
-			updateMapContent();
+			updateMapContentRef.current();
 		}
 	}, [
 		employees,
@@ -126,43 +131,48 @@ export default function PickupMapView({
 			totalEmployees: employees.length,
 			totalPickupPoints: pickupPoints.length,
 			totalVehicles: vehicles.length,
-			activeRoutes: vehicles.filter((v) => v.status === "ACTIVE").length,
+			activeRoutes: vehicles.filter((v: Vehicle) => v.status === "ACTIVE").length,
 		});
 	}, [employees, pickupPoints, vehicles]);
 
-	const initializeMap = () => {
-		if (!window.google || !containerRef.current) return;
+	// Define initializeMap function
+	useEffect(() => {
+		initializeMapRef.current = () => {
+			if (!(window as any).google || !containerRef.current) return;
 
-		mapRef.current = new window.google.maps.Map(containerRef.current, {
-			center: NAGPUR_CENTER,
-			zoom: 12,
-			mapTypeControl: true,
-			fullscreenControl: true,
-			zoomControl: true,
-			streetViewControl: false,
-			styles: [
-				{
-					featureType: "poi.business",
-					stylers: [{ visibility: "off" }],
-				},
-				{
-					featureType: "transit",
-					stylers: [{ visibility: "off" }],
-				},
-				{
-					featureType: "landscape",
-					stylers: [{ color: "#f2eee9" }],
-				},
-			],
-		});
-	};
+			mapRef.current = new (window as any).google.maps.Map(containerRef.current, {
+				center: NAGPUR_CENTER,
+				zoom: 12,
+				mapTypeControl: true,
+				fullscreenControl: true,
+				zoomControl: true,
+				streetViewControl: false,
+				styles: [
+					{
+						featureType: "poi.business",
+						stylers: [{ visibility: "off" }],
+					},
+					{
+						featureType: "transit",
+						stylers: [{ visibility: "off" }],
+					},
+					{
+						featureType: "landscape",
+						stylers: [{ color: "#f2eee9" }],
+					},
+				],
+			});
+		};
+	}, []);
 
-	const updateMapContent = () => {
-		if (!mapRef.current) return;
+	// Define updateMapContent function
+	useEffect(() => {
+		updateMapContentRef.current = () => {
+			if (!mapRef.current) return;
 
-		// Clear existing markers
-		markersRef.current.forEach((marker) => marker.setMap(null));
-		markersRef.current = [];
+			// Clear existing markers
+			markersRef.current.forEach((marker: any) => marker.setMap(null));
+			markersRef.current = [];
 
 		// Clear polyline
 		if (polylineRef.current) {
@@ -171,7 +181,7 @@ export default function PickupMapView({
 		}
 
 		// Add pickup point markers
-		const bounds = new window.google.maps.LatLngBounds();
+		const bounds = new (window as any).google.maps.LatLngBounds();
 		const zoneColors: Record<string, string> = {
 			N: "#3b82f6",
 			S: "#ef4444",
@@ -180,7 +190,7 @@ export default function PickupMapView({
 		};
 
 		pickupPoints.forEach((point) => {
-			const latlng = new window.google.maps.LatLng(
+			const latlng = new (window as any).google.maps.LatLng(
 				point.latitude,
 				point.longitude,
 			);
@@ -219,14 +229,14 @@ export default function PickupMapView({
 
 			const iconUrl = canvas.toDataURL("image/png");
 
-			const marker = new window.google.maps.Marker({
+			const marker = new (window as any).google.maps.Marker({
 				position: latlng,
 				map: mapRef.current,
 				title: `${point.name} (${empCount} employees)`,
 				icon: {
 					url: iconUrl,
-					scaledSize: new window.google.maps.Size(32, 45),
-					anchor: new window.google.maps.Point(16, 45),
+					scaledSize: new (window as any).google.maps.Size(32, 45),
+					anchor: new (window as any).google.maps.Point(16, 45),
 				},
 				clickable: true,
 			});
@@ -236,7 +246,7 @@ export default function PickupMapView({
 			});
 
 			// Info window
-			const infoWindow = new window.google.maps.InfoWindow({
+			const infoWindow = new (window as any).google.maps.InfoWindow({
 				content: `
           <div class="p-3 max-w-xs">
             <div class="font-bold text-sm">${point.name}</div>
@@ -269,7 +279,7 @@ export default function PickupMapView({
 
 		employees.forEach((emp) => {
 			if (emp.pickupPoint?.latitude && emp.pickupPoint?.longitude) {
-				const latlng = new window.google.maps.LatLng(
+				const latlng = new (window as any).google.maps.LatLng(
 					emp.pickupPoint.latitude,
 					emp.pickupPoint.longitude,
 				);
@@ -280,7 +290,7 @@ export default function PickupMapView({
 				const empZone = emp.zone || "N";
 				const baseColor = zoneEmpColors[empZone];
 
-				const marker = new window.google.maps.Marker({
+				const marker = new (window as any).google.maps.Marker({
 					position: latlng,
 					map: mapRef.current,
 					title: emp.name,
@@ -295,7 +305,7 @@ export default function PickupMapView({
 					clickable: true,
 				});
 
-				const infoWindow = new window.google.maps.InfoWindow({
+				const infoWindow = new (window as any).google.maps.InfoWindow({
 					content: `
           <div class="p-3 max-w-xs text-sm bg-white rounded shadow-lg border-l-4" style="border-color: ${baseColor}">
             <div class="font-bold text-gray-900 text-base">${emp.name}</div>
@@ -325,7 +335,7 @@ export default function PickupMapView({
 
 		// Auto-zoom to selected employee
 		if (selectedEmployee?.lat && selectedEmployee?.lng) {
-			const empLatlng = new window.google.maps.LatLng(
+			const empLatlng = new (window as any).google.maps.LatLng(
 				selectedEmployee.lat,
 				selectedEmployee.lng,
 			);
@@ -335,15 +345,14 @@ export default function PickupMapView({
 
 		// Add vehicle/driver markers
 		vehicles.forEach((vehicle) => {
-			const driver_emoji = "🚕";
 			const isHovered = hoveredVehicle === vehicle.id;
 			const driverLat = 21.14 + Math.random() * 0.05;
 			const driverLng = 79.09 + Math.random() * 0.05;
 
-			const latlng = new window.google.maps.LatLng(driverLat, driverLng);
+			const latlng = new (window as any).google.maps.LatLng(driverLat, driverLng);
 			bounds.extend(latlng);
 
-			const marker = new window.google.maps.Marker({
+			const marker = new (window as any).google.maps.Marker({
 				position: latlng,
 				map: mapRef.current,
 				title: `${vehicle.vehicleNumber} - ${vehicle.driverName}`,
@@ -358,7 +367,7 @@ export default function PickupMapView({
 				clickable: true,
 			});
 
-			const infoWindow = new window.google.maps.InfoWindow({
+			const infoWindow = new (window as any).google.maps.InfoWindow({
 				content: `
           <div class="p-2 max-w-xs text-sm bg-orange-50">
             <div class="font-bold text-orange-700">${vehicle.vehicleNumber}</div>
@@ -391,7 +400,7 @@ export default function PickupMapView({
 
 		if (routePoints.length > 1) {
 			const polylineColors = ["#00bcd4", "#2196f3", "#9c27b0", "#f44336"];
-			const polyline = new window.google.maps.Polyline({
+			const polyline = new (window as any).google.maps.Polyline({
 				path: routePoints,
 				geodesic: true,
 				strokeColor: polylineColors[0],
@@ -417,7 +426,8 @@ export default function PickupMapView({
 		if (autoZoom && markersRef.current.length > 0) {
 			mapRef.current.fitBounds(bounds);
 		}
-	};
+		};
+	}, [employees, pickupPoints, vehicles, selectedPoint, hoveredEmployee, selectedEmployee, autoZoom]);
 
 	return (
 		<div className="w-full h-full flex flex-col bg-gray-50">

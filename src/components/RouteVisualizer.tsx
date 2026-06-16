@@ -18,6 +18,7 @@ interface RouteVisualizerProps {
   onSelectEmployee?: (id: string | null) => void;
   showZoneOverlay?: boolean;
   pickupPointMarkers?: { id: string; name: string; lat: number; lng: number; selected?: boolean }[];
+  searchQuery?: string;
 }
 
 const GoogleMapView = dynamic(() => import("./GoogleMapView"), {
@@ -43,6 +44,7 @@ export default function RouteVisualizer({
   onSelectEmployee,
   showZoneOverlay,
   pickupPointMarkers,
+  searchQuery,
 }: RouteVisualizerProps) {
  const [settings, setSettings] = useState<any>(null);
  const [apiKey, setApiKey] = useState<string>("");
@@ -88,6 +90,7 @@ export default function RouteVisualizer({
     onSelectEmployee={onSelectEmployee}
     showZoneOverlay={showZoneOverlay}
     pickupPointMarkers={pickupPointMarkers}
+    searchQuery={searchQuery}
     />
   </div>
   </div>

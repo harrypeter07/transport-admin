@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       const dbRoutes = await prisma.route.findMany({
         where: shiftId ? { date, shiftId } : { date },
         include: {
-          stops: { include: { employee: true } },
+          stops: { include: { employee: { include: { pickupPoint: true } } } },
           violations: true,
           cab: true,
         },

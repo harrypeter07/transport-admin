@@ -76,8 +76,8 @@ async function performReassignment(
 
     const centroid = route.stops.length > 0
       ? {
-          x: route.stops.reduce((s: number, stop: any) => s + stop.employee.x, 0) / route.stops.length,
-          y: route.stops.reduce((s: number, stop: any) => s + stop.employee.y, 0) / route.stops.length,
+          x: route.stops.reduce((s: number, stop: any) => s + (stop.employee.pickupPointId && stop.employee.pickupPoint ? stop.employee.pickupPoint.x : stop.employee.x), 0) / route.stops.length,
+          y: route.stops.reduce((s: number, stop: any) => s + (stop.employee.pickupPointId && stop.employee.pickupPoint ? stop.employee.pickupPoint.y : stop.employee.y), 0) / route.stops.length,
         }
       : depot;
 
@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
         routes: {
           where: { date: today, status: { in: ["PENDING", "PLANNED"] } },
           include: {
-            stops: { include: { employee: true }, orderBy: { stopOrder: "asc" } },
+            stops: { include: { employee: { include: { pickupPoint: true } } }, orderBy: { stopOrder: "asc" } },
             shift: true,
           },
           orderBy: { tripSequence: "asc" },

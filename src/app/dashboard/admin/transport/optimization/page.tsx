@@ -459,14 +459,6 @@ export default function TransitAdminSPA() {
 		setOptimizing(true);
 		setOptimizeError(null);
 		setApplySuccess(false);
-		const PROTECTED = ["shift-0800"];
-		if (PROTECTED.includes(activeShiftId)) {
-			setOptimizeError(
-				"8:00 AM shift routes are protected. Use 'Rebuild 8:00 AM Baseline' to update these routes.",
-			);
-			setOptimizing(false);
-			return;
-		}
 		try {
 			await fetchInitialData();
 			const result = await previewOptimization(isPickup);
@@ -506,14 +498,6 @@ export default function TransitAdminSPA() {
 		setApplyingStrategy(strategy);
 		setOptimizeError(null);
 		setApplySuccess(false);
-		const PROTECTED = ["shift-0800"];
-		if (PROTECTED.includes(activeShiftId)) {
-			setOptimizeError(
-				"8:00 AM shift routes are protected. Use 'Rebuild 8:00 AM Baseline' to update these routes.",
-			);
-			setApplyingStrategy(null);
-			return;
-		}
 		try {
 			const result = await applyOptimizationPlan(strategy, isPickup);
 			if (!result.success) {
@@ -912,11 +896,45 @@ export default function TransitAdminSPA() {
 			mapShiftFilter === "ALL"
 				? activeRoutes
 				: activeRoutes.filter((r) => (r as any).shiftId === mapShiftFilter);
-		if (!manifestSearchQuery.trim()) return shiftFiltered;
-		return shiftFiltered.filter((r) =>
-			routeMatchesEmployeeSearch(r, manifestSearchQuery),
-		);
-	}, [activeRoutes, mapShiftFilter, manifestSearchQuery]);
+		return shiftFiltered;
+	}, [activeRoutes, mapShiftFilter]);
+
+	// Build pickup point markers from employee pickup points in visible routes
+	const pickupPointMarkers = useMemo(() => {
+		const seen = new Map<string, { id: string; name: string; lat: number; lng: number; selected?: boolean }>();
+		for (const route of mapVisibleRoutes) {
+			for (const stop of route.stops) {
+				const emp = stop.employee as any;
+				if (!emp) continue;
+				// Use pickup point if available, otherwise employee coords
+				const pp = emp.pickupPoint;
+				if (pp && pp.x && pp.y && (Math.abs(pp.x) > 0.01 || Math.abs(pp.y) > 0.01)) {
+					if (!seen.has(pp.id)) {
+						seen.set(pp.id, {
+							id: pp.id,
+							name: pp.name,
+							lat: pp.y,  // y = lat
+							lng: pp.x,  // x = lng
+							selected: selectedRouteId === route.id,
+						});
+					}
+				} else if (emp.x && emp.y && (Math.abs(emp.x) > 0.01 || Math.abs(emp.y) > 0.01)) {
+					// fallback to employee home coords if no pickup point
+					const key = `emp_${emp.id}`;
+					if (!seen.has(key)) {
+						seen.set(key, {
+							id: key,
+							name: emp.name || 'Employee',
+							lat: emp.y,
+							lng: emp.x,
+							selected: selectedRouteId === route.id,
+						});
+					}
+				}
+			}
+		}
+		return Array.from(seen.values());
+	}, [mapVisibleRoutes, selectedRouteId]);
 
 	const selectedRoute = activeRoutes.find((r: any) => r.id === selectedRouteId);
 	const totalViolations = activeRoutes.reduce(
@@ -1585,26 +1603,24 @@ export default function TransitAdminSPA() {
 													<div className="inline-flex px-2 py-0.5 bg-amber-100 text-amber-900 text-[9px] font-bold uppercase">
 														{iso.suggestedAction.replace(/_/g, " ")}
 													</div>
-													{iso.suggestedAction === "ASSIGN_PICKUP_POINT" &&
-														emp &&
-														!emp.pickupPoint && (
-															<button
-																type="button"
-																onClick={() =>
-																	setAssigningEmployee({
-																		id: emp.id,
-																		name: emp.name,
-																		address: emp.address,
-																		x: emp.x,
-																		y: emp.y,
-																		shiftId: emp.shiftId,
-																	})
-																}
-																className="px-2 py-0.5 bg-[#1c1b1f] text-white text-[9px] font-bold uppercase"
-															>
-																Assign Pickup Point
-															</button>
-														)}
+													{emp && (
+														<button
+															type="button"
+															onClick={() =>
+																setAssigningEmployee({
+																	id: emp.id,
+																	name: emp.name,
+																	address: emp.address,
+																	x: emp.x,
+																	y: emp.y,
+																	shiftId: emp.shiftId,
+																})
+															}
+															className="px-2 py-0.5 bg-[#1c1b1f] text-white text-[9px] font-bold uppercase hover:bg-[#333] transition-colors cursor-pointer"
+														>
+															{emp.pickupPoint ? "Change Pickup Point" : "Assign Pickup Point"}
+														</button>
+													)}
 												</div>
 											</div>
 										);
@@ -1646,7 +1662,6 @@ export default function TransitAdminSPA() {
 									{shifts.map((shift) => (
 										<option key={shift.id} value={shift.id}>
 											{shift.name}
-											{["shift-0800"].includes(shift.id) ? " 🔒" : ""}
 										</option>
 									))}
 								</select>
@@ -1910,6 +1925,12 @@ export default function TransitAdminSPA() {
 									>
 										{showZones ? "Hide Zones" : "Show Zones"}
 									</button>
+									{pickupPointMarkers.length > 0 && (
+										<div className="flex items-center gap-1.5 text-[9px] text-[#6b6b6b] font-bold uppercase tracking-wide">
+											<span style={{ display: 'inline-block', width: 10, height: 14, background: '#7c3aed', clipPath: 'polygon(50% 100%, 0% 0%, 100% 0%)', borderRadius: 1 }} />
+											{pickupPointMarkers.length} Pickup Points
+										</div>
+									)}
 								</div>
 								<select
 									value={mapShiftFilter}
@@ -1926,7 +1947,6 @@ export default function TransitAdminSPA() {
 										return (
 											<option key={shift.id} value={shift.id}>
 												{shift.name} ({count})
-												{["shift-0800"].includes(shift.id) ? " 🔒" : ""}
 											</option>
 										);
 									})}
@@ -1940,6 +1960,8 @@ export default function TransitAdminSPA() {
 								selectedEmployeeId={selectedEmployeeId}
 								onSelectEmployee={setSelectedEmployeeId}
 								showZoneOverlay={showZones}
+								pickupPointMarkers={pickupPointMarkers}
+								searchQuery={manifestSearchQuery}
 							/>
 						</div>
 

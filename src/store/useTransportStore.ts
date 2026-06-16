@@ -16,6 +16,8 @@ export interface Employee {
 	shiftId: string | null;
 	status: string;
 	shift?: Shift;
+	pickupPointId?: string | null;
+	pickupPoint?: any;
 }
 
 export interface Cab {
@@ -520,12 +522,10 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 				);
 
 				if (shiftEmployees.length === 0) {
-					if (DEBUG_OPTIMIZATION) {
-						storeLog("previewOptimization — shift skipped", {
-							shift: shift.name,
-							reason: "no_employees",
-						});
-					}
+					console.log("[store] previewOptimization — skipped", {
+						shift: shift.name,
+						reason: "no_employee",
+					});
 					continue;
 				}
 

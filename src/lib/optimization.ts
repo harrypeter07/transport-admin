@@ -3140,7 +3140,9 @@ export function flagIsolatedEmployees(
 	const empById = new Map(allEmployees.map((e) => [e.id, e]));
 	const isolatedCandidates: OptimizeEmployee[] = [];
 
-	console.log("[ISOLATED] Total employees passed in:", allEmployees.length);
+	if (process.env.BUG_OPTIMIZATION === "true") {
+		console.log("[ISOLATED] Total employees passed in:", allEmployees.length);
+	}
 	// ── Reduced verbose logging ──
 
 	for (const { cab, cluster } of assignments) {
@@ -3149,6 +3151,7 @@ export function flagIsolatedEmployees(
 		const { x: endX, y: endY } = depot;
 
 		for (const emp of cluster) {
+			if (emp.pickupPointId) continue;
 			const corridorDist = perpendicularDistanceKm(
 				emp.x,
 				emp.y,
@@ -4265,7 +4268,9 @@ export async function optimizeAllStrategies(
 		},
 		{} as Record<string, number>,
 	);
-	console.log("[ZONES] Employee distribution:", zoneDistribution);
+	if (process.env.BUG_OPTIMIZATION === "true") {
+		console.log("[ZONES] Employee distribution:", zoneDistribution);
+	}
 
 	// Build global road matrix once: [cab_0_start, ..., cab_{M-1}_start, emp_0, ..., emp_{N-1}, depot]
 	const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);

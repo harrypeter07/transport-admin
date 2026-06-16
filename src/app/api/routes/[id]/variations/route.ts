@@ -22,10 +22,10 @@ export async function GET(
  const route = await prisma.route.findUnique({
  where: { id: routeId },
  include: {
- stops: {
- include: { employee: true },
- orderBy: { stopOrder: "asc" },
- },
+  stops: {
+  include: { employee: { include: { pickupPoint: true } } },
+  orderBy: { stopOrder: "asc" },
+  },
  },
  });
 
@@ -37,17 +37,22 @@ export async function GET(
  return NextResponse.json([]);
  }
 
- // Map to Optimizer employees
- const optEmployees: OptimizeEmployee[] = route.stops.map((stop) => ({
- id: stop.employee.id,
- name: stop.employee.name,
- gender: stop.employee.gender as "MALE" | "FEMALE",
- x: stop.employee.x,
- y: stop.employee.y,
- address: stop.employee.address,
- department: stop.employee.department,
- phone: stop.employee.phone,
- }));
+  // Map to Optimizer employees
+  const optEmployees: OptimizeEmployee[] = route.stops.map((stop) => {
+    const emp = stop.employee;
+    const usePickup = !!(emp.pickupPointId && emp.pickupPoint);
+    const pp = emp.pickupPoint;
+    return {
+      id: emp.id,
+      name: emp.name,
+      gender: emp.gender as "MALE" | "FEMALE",
+      x: (usePickup && pp) ? pp.x : emp.x,
+      y: (usePickup && pp) ? pp.y : emp.y,
+      address: (usePickup && pp) ? (pp.address || pp.name) : emp.address,
+      department: emp.department,
+      phone: emp.phone,
+    };
+  });
 
  const apiKeyHeader = req.headers.get("x-google-maps-key") || "";
  const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
