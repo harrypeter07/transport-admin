@@ -1,0 +1,492 @@
+{
+  "timestamp": "2026-06-16T07:54:00.132Z",
+  "date": "2026-06-16",
+  "employeesToCreate": [],
+  "employeesToUpdate": [
+    {
+      "name": "Akansha Khode",
+      "code": "2571613",
+      "matchType": "CODE",
+      "dbRecord": "Akansha Khode (2571613)"
+    },
+    {
+      "name": "Anshul Tyagi",
+      "code": "2524080",
+      "matchType": "CODE",
+      "dbRecord": "Anshul Tyagi (2524080)"
+    },
+    {
+      "name": "Ritesh Kothawade",
+      "code": "2573850",
+      "matchType": "CODE",
+      "dbRecord": "Ritesh Kothawade (2573850)"
+    },
+    {
+      "name": "Cheparthi Vasanthi",
+      "code": "2575077",
+      "matchType": "CODE",
+      "dbRecord": "Cheparthi Vasanthi (2575077)"
+    },
+    {
+      "name": "Anima Dixit",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Anima Dixit (EXCEL-ANIMA-DIXIT)"
+    },
+    {
+      "name": "Mohammed Farshad Chenganakkattil",
+      "code": "2571735",
+      "matchType": "CODE",
+      "dbRecord": "Mohammed Farshad Chenganakkattil (2571735)"
+    },
+    {
+      "name": "B Prashanth",
+      "code": "2575313",
+      "matchType": "CODE",
+      "dbRecord": "B Prashanth (2575313)"
+    },
+    {
+      "name": "sohit mishra",
+      "code": "2575102",
+      "matchType": "CODE",
+      "dbRecord": "sohit mishra (2575102)"
+    },
+    {
+      "name": "Aniket Anand",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Aniket Anand (EXCEL-ANIKET-ANAND)"
+    },
+    {
+      "name": "Dipali Sharma",
+      "code": "2574375",
+      "matchType": "CODE",
+      "dbRecord": "Dipali Sharma (2574375)"
+    },
+    {
+      "name": "Anushri Bhise",
+      "code": "2572955",
+      "matchType": "CODE",
+      "dbRecord": "Anushri Bhise (2572955)"
+    },
+    {
+      "name": "Devalla Sudheer Kumar",
+      "code": "2563927",
+      "matchType": "CODE",
+      "dbRecord": "Devalla Sudheer Kumar (2563927)"
+    },
+    {
+      "name": "Minal Ninawe",
+      "code": "2572249",
+      "matchType": "CODE",
+      "dbRecord": "Minal Ninawe (2572249)"
+    },
+    {
+      "name": "Siddheshwar Raghunath Raut",
+      "code": "2572827",
+      "matchType": "CODE",
+      "dbRecord": "Siddheshwar Raghunath Raut (2572827)"
+    },
+    {
+      "name": "Abhay Marwade",
+      "code": "2574323",
+      "matchType": "CODE",
+      "dbRecord": "Abhay Marwade (2574323)"
+    },
+    {
+      "name": "Kashmeni Sanjana",
+      "code": "2573885",
+      "matchType": "CODE",
+      "dbRecord": "Kashmeni Sanjana (2573885)"
+    },
+    {
+      "name": "Soma Lohitha",
+      "code": "2574997",
+      "matchType": "CODE",
+      "dbRecord": "Soma Lohitha (2574997)"
+    },
+    {
+      "name": "Aparna Khadatkar",
+      "code": "2573662",
+      "matchType": "CODE",
+      "dbRecord": "Aparna Khadatkar (2573662)"
+    },
+    {
+      "name": "Pavani",
+      "code": "2574857",
+      "matchType": "CODE",
+      "dbRecord": "Pavani (2574857)"
+    },
+    {
+      "name": "Anand Ram Kumar",
+      "code": "2563946",
+      "matchType": "CODE",
+      "dbRecord": "Anand Ram Kumar (2563946)"
+    },
+    {
+      "name": "Manjiri Dombale",
+      "code": "2576690",
+      "matchType": "CODE",
+      "dbRecord": "Manjiri Dombale (2576690)"
+    },
+    {
+      "name": "Girivardhan",
+      "code": "2577282",
+      "matchType": "CODE",
+      "dbRecord": "Girivardhan (2577282)"
+    },
+    {
+      "name": "sakshi",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "sakshi (EXCEL-SAKSHI)"
+    },
+    {
+      "name": "Sagar",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Sagar (EXCEL-SAGAR)"
+    },
+    {
+      "name": "Monika Jeswani",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Monika Jeswani (EXCEL-MONIKA-JESWANI)"
+    },
+    {
+      "name": "Tanuja",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Tanuja (EXCEL-TANUJA)"
+    },
+    {
+      "name": "Ayush Thakre",
+      "code": "2577959",
+      "matchType": "CODE",
+      "dbRecord": "Ayush Thakre (2577959)"
+    },
+    {
+      "name": "Krunal Wath",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Krunal Wath (EXCEL-KRUNAL-WATH)"
+    },
+    {
+      "name": "John",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "John (EXCEL-JOHN)"
+    },
+    {
+      "name": "Ethel Delphine Collins",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Ethel Delphine Collins (EXCEL-ETHEL-DELPHINE-COLLINS)"
+    },
+    {
+      "name": "Sejal Shahare",
+      "code": "2576808",
+      "matchType": "CODE",
+      "dbRecord": "Sejal Shahare (2576808)"
+    },
+    {
+      "name": "Shravan Meshram",
+      "code": "2517958",
+      "matchType": "CODE",
+      "dbRecord": "Shravan Meshram (2517958)"
+    },
+    {
+      "name": "Pushpak Sakhare",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Pushpak Sakhare (EXCEL-PUSHPAK-SAKHARE)"
+    },
+    {
+      "name": "Likesh Barve",
+      "code": "2576887",
+      "matchType": "CODE",
+      "dbRecord": "Likesh Barve (2576887)"
+    },
+    {
+      "name": "Geeta Rajput",
+      "code": "2577311",
+      "matchType": "CODE",
+      "dbRecord": "Geeta Rajput (2577311)"
+    },
+    {
+      "name": "Pranav Nachankar",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Pranav Nachankar (EXCEL-PRANAV-NACHANKAR)"
+    },
+    {
+      "name": "Mahesh Upadhyay",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Mahesh Upadhyay (EXCEL-MAHESH-UPADHYAY)"
+    },
+    {
+      "name": "Prachi jain",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Prachi jain (EXCEL-PRACHI-JAIN)"
+    },
+    {
+      "name": "Aryan Shende",
+      "code": "2577886",
+      "matchType": "CODE",
+      "dbRecord": "Aryan Shende (2577886)"
+    },
+    {
+      "name": "Deepak singh kushwah",
+      "code": "2576584",
+      "matchType": "CODE",
+      "dbRecord": "yash karambe (2576584)"
+    },
+    {
+      "name": "Pulipati Krishna",
+      "code": "2563939",
+      "matchType": "CODE",
+      "dbRecord": "Pulipati Krishna (2563939)"
+    },
+    {
+      "name": "Prashant Pathlavat",
+      "code": "2574190",
+      "matchType": "CODE",
+      "dbRecord": "Prashant Pathlavat (2574190)"
+    },
+    {
+      "name": "Vansh Rewaskar",
+      "code": "2576558",
+      "matchType": "CODE",
+      "dbRecord": "Vansh Rewaskar (2576558)"
+    },
+    {
+      "name": "Vishal Singh",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Vishal Singh (EXCEL-VISHAL-SINGH)"
+    },
+    {
+      "name": "Sayata Chakraborty",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Sayata Chakraborty (EXCEL-SAYATA-CHAKRABORTY)"
+    },
+    {
+      "name": "yash karambe",
+      "code": "2576584",
+      "matchType": "CODE",
+      "dbRecord": "yash karambe (2576584)"
+    },
+    {
+      "name": "Azad Bhasme",
+      "code": "2576692",
+      "matchType": "CODE",
+      "dbRecord": "Azad Bhasme (2576692)"
+    },
+    {
+      "name": "Shreya karale",
+      "code": "2576563",
+      "matchType": "CODE",
+      "dbRecord": "Shreya karale (2576563)"
+    },
+    {
+      "name": "Uday Tiwari",
+      "code": "2563945",
+      "matchType": "CODE",
+      "dbRecord": "Uday Tiwari (2563945)"
+    },
+    {
+      "name": "Brej Kishore",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Brej Kishore (EXCEL-BREJ-KISHORE)"
+    },
+    {
+      "name": "Naga Praveen Matta",
+      "code": "2563944",
+      "matchType": "CODE",
+      "dbRecord": "Naga Praveen Matta (2563944)"
+    },
+    {
+      "name": "Pranay Wekhande",
+      "code": "#######",
+      "matchType": "CODE",
+      "dbRecord": "Pranay Wekhande (#######)"
+    },
+    {
+      "name": "Sayali Padole",
+      "code": "2574809",
+      "matchType": "CODE",
+      "dbRecord": "Sayali Padole (2574809)"
+    },
+    {
+      "name": "Poorvi",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Poorvi (EXCEL-POORVI)"
+    },
+    {
+      "name": "Rushabh Bhagate",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Rushabh Bhagate (EXCEL-RUSHABH-BHAGATE)"
+    },
+    {
+      "name": "Prabhat Priydarshi",
+      "code": "2573661",
+      "matchType": "CODE",
+      "dbRecord": "Prabhat Priydarshi (2573661)"
+    },
+    {
+      "name": "Vajja Bhanu Prakash",
+      "code": "2560101",
+      "matchType": "CODE",
+      "dbRecord": "Vajja Bhanu Prakash (2560101)"
+    },
+    {
+      "name": "Nikhil Ambule",
+      "code": "2572172",
+      "matchType": "CODE",
+      "dbRecord": "Nikhil Ambule (2572172)"
+    },
+    {
+      "name": "Yash Dubey",
+      "code": "2573846",
+      "matchType": "CODE",
+      "dbRecord": "Yash Dubey (2573846)"
+    },
+    {
+      "name": "Kumar Adarsh",
+      "code": "2564448",
+      "matchType": "CODE",
+      "dbRecord": "Kumar Adarsh (2564448)"
+    },
+    {
+      "name": "Abhijit Zade",
+      "code": "2575523",
+      "matchType": "CODE",
+      "dbRecord": "Abhijit Zade (2575523)"
+    },
+    {
+      "name": "Nisha Shyamsukha",
+      "code": "2573568",
+      "matchType": "CODE",
+      "dbRecord": "Nisha Shyamsukha (2573568)"
+    },
+    {
+      "name": "Kartik Ukhalkar",
+      "code": "2572738",
+      "matchType": "CODE",
+      "dbRecord": "Kartik Ukhalkar (2572738)"
+    },
+    {
+      "name": "Pranay Haste",
+      "code": "2564924",
+      "matchType": "CODE",
+      "dbRecord": "Pranay Haste (2564924)"
+    },
+    {
+      "name": "Atharva Deo",
+      "code": "2573901",
+      "matchType": "CODE",
+      "dbRecord": "Atharva Deo (2573901)"
+    },
+    {
+      "name": "Ravindra Farkade",
+      "code": "2572338",
+      "matchType": "CODE",
+      "dbRecord": "Ravindra Farkade (2572338)"
+    },
+    {
+      "name": "Lavakumar Khanapur",
+      "code": "2532274",
+      "matchType": "CODE",
+      "dbRecord": "Lavakumar Khanapur (2532274)"
+    },
+    {
+      "name": "Shubhankar Das",
+      "code": "NA",
+      "matchType": "NAME_NORMALIZED",
+      "dbRecord": "Shubhankar Das (EXCEL-SHUBHANKAR-DAS)"
+    },
+    {
+      "name": "Meghana B U",
+      "code": "2573848",
+      "matchType": "CODE",
+      "dbRecord": "Meghana B U (2573848)"
+    }
+  ],
+  "employeesToMarkNoShow": [
+    {
+      "name": "Tanuja K S",
+      "code": "Tanuja"
+    },
+    {
+      "name": "Sushant Kodam",
+      "code": "Sushant-Kodam"
+    },
+    {
+      "name": "John Moses",
+      "code": "John"
+    },
+    {
+      "name": "G S Prasad",
+      "code": "2563928"
+    },
+    {
+      "name": "Nitin Gujar",
+      "code": "2573886"
+    },
+    {
+      "name": "Kumkum Sahoo",
+      "code": "2571734"
+    },
+    {
+      "name": "Adarsh Kumar",
+      "code": "2559327"
+    },
+    {
+      "name": "Himanshu",
+      "code": "2566752"
+    },
+    {
+      "name": "Pethanan Raj Kumar",
+      "code": "2574174"
+    },
+    {
+      "name": "Navneel Purohit",
+      "code": "2563922"
+    }
+  ],
+  "vehiclesUpdated": [
+    "MH31FC8407",
+    "MH31FC8592",
+    "MH40CT4542",
+    "MH40DC0486",
+    "MH49CW0078",
+    "MH49CW0139",
+    "MH49CW0218",
+    "MH49CW0876",
+    "MH49CW1305"
+  ],
+  "driversUpdated": [
+    " ANIKET",
+    "NIKHIL",
+    "PRASHANT",
+    "SANDEEP",
+    "SHAFIQUE",
+    "SHANTANU",
+    "SHREEKANT",
+    "SURAJ",
+    "TAPAN"
+  ],
+  "safetyChecks": {
+    "creates": 0,
+    "createsThreshold": 5,
+    "deactivations": 0,
+    "deactivationsThreshold": 5,
+    "passed": true
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "timestamp": "2026-06-16T06:53:40.267Z",
+  "applyMode": false,
+  "task1_employeeDuplication": [
+    "AKANSHA KHODE",
+    "PRABHAT PRIYDARSHI",
+    "PULIPATI KRISHNA"
+  ],
+  "task2_headerPollution": {
+    "1-6-26": {
+      "totalRows": 147,
+      "headerRows": 0,
+      "cleanRows": 147,
+      "headerPercentage": "0.0"
+    },
+    "2-6-26": {
+      "totalRows": 149,
+      "headerRows": 0,
+      "cleanRows": 149,
+      "headerPercentage": "0.0"
+    },
+    "3-6-26": {
+      "totalRows": 151,
+      "headerRows": 0,
+      "cleanRows": 151,
+      "headerPercentage": "0.0"
+    },
+    "4-6-26": {
+      "totalRows": 154,
+      "headerRows": 0,
+      "cleanRows": 154,
+      "headerPercentage": "0.0"
+    },
+    "5-6-26": {
+      "totalRows": 147,
+      "headerRows": 0,
+      "cleanRows": 147,
+      "headerPercentage": "0.0"
+    },
+    "8-6-26": {
+      "totalRows": 138,
+      "headerRows": 0,
+      "cleanRows": 138,
+      "headerPercentage": "0.0"
+    },
+    "9-6-26": {
+      "totalRows": 143,
+      "headerRows": 0,
+      "cleanRows": 143,
+      "headerPercentage": "0.0"
+    },
+    "10-6-26": {
+      "totalRows": 148,
+      "headerRows": 0,
+      "cleanRows": 148,
+      "headerPercentage": "0.0"
+    },
+    "11-6-26": {
+      "totalRows": 150,
+      "headerRows": 0,
+      "cleanRows": 150,
+      "headerPercentage": "0.0"
+    },
+    "12-6-26": {
+      "totalRows": 146,
+      "headerRows": 0,
+      "cleanRows": 146,
+      "headerPercentage": "0.0"
+    },
+    "15-6-26": {
+      "totalRows": 143,
+      "headerRows": 0,
+      "cleanRows": 143,
+      "headerPercentage": "0.0"
+    },
+    "16-6-26": {
+      "totalRows": 78,
+      "headerRows": 0,
+      "cleanRows": 78,
+      "headerPercentage": "0.0"
+    }
+  },
+  "task3_vehicleMapping": {
+    "totalVehicles": 17,
+    "totalMappings": 36,
+    "sampleMappings": [
+      {
+        "routeNo": "P1",
+        "vehicle": "MH49CW0078",
+        "driver": "N/A",
+        "phone": "Escort"
+      },
+      {
+        "routeNo": "P1",
+        "vehicle": "N/A",
+        "driver": "SURAJ",
+        "phone": "7773902239"
+      },
+      {
+        "routeNo": "P2",
+        "vehicle": "MH40CT4542",
+        "driver": "N/A",
+        "phone": "9846412647"
+      },
+      {
+        "routeNo": "P2",
+        "vehicle": "N/A",
+        "driver": "Driver-Tapan",
+        "phone": "8359938339"
+      },
+      {
+        "routeNo": "P3",
+        "vehicle": "MH31FC8592",
+        "driver": "N/A",
+        "phone": "9096408407"
+      },
+      {
+        "routeNo": "P3",
+        "vehicle": "N/A",
+        "driver": "Driver-Sandeep",
+        "phone": "7089023911"
+      },
+      {
+        "routeNo": "P4",
+        "vehicle": "MH49CW0218",
+        "driver": "N/A",
+        "phone": "Escort"
+      },
+      {
+        "routeNo": "P4",
+        "vehicle": "N/A",
+        "driver": "ANIKET",
+        "phone": "9130920752"
+      },
+      {
+        "routeNo": "P5",
+        "vehicle": "MH40DC0486",
+        "driver": "N/A",
+        "phone": "9175576069"
+      },
+      {
+        "routeNo": "P5",
+        "vehicle": "N/A",
+        "driver": "SHAFIQUE",
+        "phone": "7670995675"
+      }
+    ]
+  },
+  "task5_safetyChecks": {
+    "applyModeEnabled": false,
+    "vehicleCountValid": true,
+    "employeeCountValid": true,
+    "headerPollutionPresent": false,
+    "shouldAbort": false,
+    "vehicleCount": 17,
+    "employeeCount": 71
+  }
+}

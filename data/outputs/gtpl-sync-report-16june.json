@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-06-16T07:41:17.208Z",
+  "date": "2026-06-16",
+  "dryRun": true,
+  "phase3": {
+    "transportRosterUpdates": {
+      "presentCount": 65,
+      "noShowCount": 10,
+      "presentEmployees": [
+        "AKANSHA KHODE",
+        "RITESH KOTHAWADE",
+        "CHEPARTHI VASANTHI",
+        "ANIMA DIXIT",
+        "MOHAMMED FARSHAD CHENGANAKKATTIL"
+      ],
+      "noShowEmployees": [
+        "TANUJA K S",
+        "SUSHANT KODAM",
+        "JOHN MOSES",
+        "G S PRASAD",
+        "NITIN GUJAR"
+      ]
+    }
+  },
+  "phase4": {
+    "cabStatusUpdates": {
+      "activeCount": 0,
+      "inactiveCount": 27,
+      "activeVehicles": [],
+      "inactiveVehicles": [
+        "MH49-DUMMY-PRAS",
+        "MH40CT4542",
+        "MH49BZ0910",
+        "MH49CW0218",
+        "MH49-DUMMY-SURA"
+      ]
+    }
+  },
+  "phase5": {
+    "driverAssignments": {
+      "updated": 0,
+      "assignments": []
+    }
+  }
+}

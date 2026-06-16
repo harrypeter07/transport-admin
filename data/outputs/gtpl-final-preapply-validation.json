@@ -1,0 +1,349 @@
+{
+  "timestamp": "2026-06-16T07:16:23.559Z",
+  "report1_employees": {
+    "total": 69,
+    "statusCount": {
+      "PRESENT": 63,
+      "NO_SHOW": 0,
+      "LEAVE": 6,
+      "MEDICAL_LEAVE": 0
+    },
+    "employees": [
+      {
+        "employeeName": "Abhay Marwade",
+        "employeeCode": "2574323",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Abhijit Zade",
+        "employeeCode": "2575523",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Akansha Khode",
+        "employeeCode": "2571613",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Anand Ram Kumar",
+        "employeeCode": "2563946",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Aniket Anand",
+        "employeeCode": "NA",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Anima Dixit",
+        "employeeCode": "NA",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Anshul Tyagi",
+        "employeeCode": "2524080",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Anushri Bhise",
+        "employeeCode": "2572955",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Aparna Khadatkar",
+        "employeeCode": "2573662",
+        "status": "LEAVE"
+      },
+      {
+        "employeeName": "Aryan Shende",
+        "employeeCode": "2577886",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Atharva Deo",
+        "employeeCode": "2573901",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Ayush Thakre",
+        "employeeCode": "2577959",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Azad Bhasme",
+        "employeeCode": "2576692",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "B Prashanth",
+        "employeeCode": "2575313",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Brej Kishore",
+        "employeeCode": "NA",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Cheparthi Vasanthi",
+        "employeeCode": "2575077",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Deepak singh kushwah",
+        "employeeCode": "2576584",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Devalla Sudheer Kumar",
+        "employeeCode": "2563927",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Dipali Sharma",
+        "employeeCode": "2574375",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Escort",
+        "employeeCode": "Escort",
+        "status": "PRESENT"
+      }
+    ]
+  },
+  "report2_vehicles": {
+    "total": 9,
+    "vehicles": [
+      {
+        "vehicle": "MH31FC8407",
+        "routes": [
+          "P11",
+          "P15"
+        ]
+      },
+      {
+        "vehicle": "MH31FC8592",
+        "routes": [
+          "P3"
+        ]
+      },
+      {
+        "vehicle": "MH40CT4542",
+        "routes": [
+          "P2",
+          "P10"
+        ]
+      },
+      {
+        "vehicle": "MH40DC0486",
+        "routes": [
+          "P5"
+        ]
+      },
+      {
+        "vehicle": "MH49CW0078",
+        "routes": [
+          "P1",
+          "P7",
+          "P17"
+        ]
+      },
+      {
+        "vehicle": "MH49CW0139",
+        "routes": [
+          "P6",
+          "P13"
+        ]
+      },
+      {
+        "vehicle": "MH49CW0218",
+        "routes": [
+          "P4",
+          "P9"
+        ]
+      },
+      {
+        "vehicle": "MH49CW0876",
+        "routes": [
+          "P12",
+          "P16"
+        ]
+      },
+      {
+        "vehicle": "MH49CW1305",
+        "routes": [
+          "P8",
+          "P14"
+        ]
+      }
+    ]
+  },
+  "report3_drivers": {
+    "total": 17,
+    "drivers": [
+      {
+        "driverName": "ANIKET",
+        "phone": "9130920752",
+        "routes": "P4",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "ANIKET",
+        "phone": "9545635896",
+        "routes": "P9",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Driver Details",
+        "phone": "Contact No",
+        "routes": "Rout No",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Nikhil",
+        "phone": "9096028331",
+        "routes": "P13",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Prashant",
+        "phone": "7249582964",
+        "routes": "P11",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Prashant",
+        "phone": "7903956186",
+        "routes": "P15",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Sandeep",
+        "phone": "7089023911",
+        "routes": "P3",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "SHAFIQUE",
+        "phone": "7670995675",
+        "routes": "P5",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Shantanu",
+        "phone": "9356684307",
+        "routes": "P8",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Shantanu",
+        "phone": "82372 63979",
+        "routes": "P14",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Shreekant",
+        "phone": "83569 58653",
+        "routes": "P12",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Shreekant",
+        "phone": "7903567319",
+        "routes": "P16",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "SURAJ",
+        "phone": "7773902239",
+        "routes": "P1",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "SURAJ",
+        "phone": "9502542885",
+        "routes": "P7",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "SURAJ",
+        "phone": "7888182312",
+        "routes": "P17",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Tapan",
+        "phone": "8359938339",
+        "routes": "P2",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Tapan",
+        "phone": "7385021801",
+        "routes": "P10",
+        "vehicle": "TBD"
+      }
+    ]
+  },
+  "report4_database_matching": {
+    "employees": {
+      "matched": 47,
+      "missing": 22,
+      "extra": 29
+    },
+    "vehicles": {
+      "matched": 9,
+      "missing": 0,
+      "extra": 18
+    },
+    "drivers": {
+      "matched": 0,
+      "missing": 17,
+      "extra": 23
+    }
+  },
+  "report5_apply_impact": {
+    "wouldCreate": {
+      "employees": 22,
+      "vehicles": 0,
+      "drivers": 17
+    },
+    "wouldUpdate": {
+      "employees": 47,
+      "vehicles": 9,
+      "drivers": 0
+    },
+    "wouldDisable": {
+      "vehicles": 18,
+      "drivers": 23
+    }
+  },
+  "success_criteria": [
+    {
+      "name": "1. Employee counts consistent",
+      "pass": true,
+      "detail": "69 statuses = 69 employees"
+    },
+    {
+      "name": "2. Exactly 9 vehicles",
+      "pass": true,
+      "detail": "Found 9 unique vehicles"
+    },
+    {
+      "name": "3. Drivers normalized",
+      "pass": false,
+      "detail": "All 17 driver names cleaned"
+    },
+    {
+      "name": "4. No cab mass-deactivation",
+      "pass": false,
+      "detail": "18 vehicles would be disabled (threshold: ≤10)"
+    },
+    {
+      "name": "5. Apply simulation passes",
+      "pass": true,
+      "detail": "Would create: 22 employees, 0 vehicles, 17 drivers"
+    }
+  ],
+  "all_pass": false
+}

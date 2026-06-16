@@ -57,6 +57,8 @@ model Cab {
   assignedSubZone String?
   routes        Route[]
   shifts        Shift[]
+  rosterStatus  CabRosterStatus[]
+  driverAssignments DriverAssignment[]
 }
 
 model PickupPoint {
@@ -104,6 +106,7 @@ model Employee {
   status       String                // ACTIVE, INACTIVE
   stops        RouteStop[]
   timeRequests TimingChangeRequest[]
+  transportRoster TransportRoster[]
 }
 
 model Route {
@@ -273,6 +276,50 @@ model RouteDeviation {
   lng       Float
   resolved  Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+model TransportRoster {
+  id                  String   @id @default(uuid())
+  employeeId          String
+  employee            Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date                String   // e.g. "2026-06-16"
+  transportRosterStatus String  // PRESENT, NO_SHOW, ON_LEAVE, MEDICAL_LEAVE
+  transportRosterDate DateTime @default(now())
+  sourceSheet         String?  // e.g. "16-6-26" for tracking which workbook sheet
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([date])
+}
+
+model CabRosterStatus {
+  id                String   @id @default(uuid())
+  cabId             String
+  cab               Cab      @relation(fields: [cabId], references: [id], onDelete: Cascade)
+  date              String   // e.g. "2026-06-16"
+  cabRosterStatus   String   // ACTIVE, INACTIVE, MAINTENANCE
+  activeForDate     DateTime?
+  inactiveForDate   DateTime?
+  sourceSheet       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([cabId, date])
+  @@index([date])
+}
+
+model DriverAssignment {
+  id                String   @id @default(uuid())
+  cabId             String
+  cab               Cab      @relation(fields: [cabId], references: [id], onDelete: Cascade)
+  driverName        String
+  driverPhone       String
+  date              String   // e.g. "2026-06-16"
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([cabId, date])
 }
 
 model AuditLog {

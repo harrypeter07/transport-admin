@@ -1,0 +1,866 @@
+{
+  "timestamp": "2026-06-16T07:27:06.527Z",
+  "phase3_fixes": {
+    "issue1_header_rows_filtered": 16,
+    "issue2_vehicles_marked_inactive": 0,
+    "issue3_driver_normalization": "16 drivers normalized",
+    "issue4_employee_matching": {
+      "match_rate_percent": 94.2,
+      "matched_name_code": 47,
+      "matched_code_only": 1,
+      "matched_name_only": 17,
+      "new_creations": 4
+    },
+    "issue5_roster_model": "Date-based roster status (PRESENT/LEAVE/NO_SHOW)"
+  },
+  "report1_employees": {
+    "total": 69,
+    "statusCount": {
+      "PRESENT": 63,
+      "NO_SHOW": 0,
+      "LEAVE": 6,
+      "MEDICAL_LEAVE": 0
+    },
+    "employees": [
+      {
+        "employeeName": "Abhay Marwade",
+        "employeeCode": "2574323",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Abhijit Zade",
+        "employeeCode": "2575523",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Akansha Khode",
+        "employeeCode": "2571613",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Anand Ram Kumar",
+        "employeeCode": "2563946",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Aniket Anand",
+        "employeeCode": "NA",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Anima Dixit",
+        "employeeCode": "NA",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Anshul Tyagi",
+        "employeeCode": "2524080",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Anushri Bhise",
+        "employeeCode": "2572955",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Aparna Khadatkar",
+        "employeeCode": "2573662",
+        "status": "LEAVE"
+      },
+      {
+        "employeeName": "Aryan Shende",
+        "employeeCode": "2577886",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Atharva Deo",
+        "employeeCode": "2573901",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Ayush Thakre",
+        "employeeCode": "2577959",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Azad Bhasme",
+        "employeeCode": "2576692",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "B Prashanth",
+        "employeeCode": "2575313",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Brej Kishore",
+        "employeeCode": "NA",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Cheparthi Vasanthi",
+        "employeeCode": "2575077",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Deepak singh kushwah",
+        "employeeCode": "2576584",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Devalla Sudheer Kumar",
+        "employeeCode": "2563927",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Dipali Sharma",
+        "employeeCode": "2574375",
+        "status": "PRESENT"
+      },
+      {
+        "employeeName": "Escort",
+        "employeeCode": "Escort",
+        "status": "PRESENT"
+      }
+    ]
+  },
+  "report2_vehicles": {
+    "total": 9,
+    "vehicles": [
+      {
+        "vehicle": "MH31FC8407",
+        "routes": [
+          "P11",
+          "P15"
+        ]
+      },
+      {
+        "vehicle": "MH31FC8592",
+        "routes": [
+          "P3"
+        ]
+      },
+      {
+        "vehicle": "MH40CT4542",
+        "routes": [
+          "P2",
+          "P10"
+        ]
+      },
+      {
+        "vehicle": "MH40DC0486",
+        "routes": [
+          "P5"
+        ]
+      },
+      {
+        "vehicle": "MH49CW0078",
+        "routes": [
+          "P1",
+          "P7",
+          "P17"
+        ]
+      },
+      {
+        "vehicle": "MH49CW0139",
+        "routes": [
+          "P6",
+          "P13"
+        ]
+      },
+      {
+        "vehicle": "MH49CW0218",
+        "routes": [
+          "P4",
+          "P9"
+        ]
+      },
+      {
+        "vehicle": "MH49CW0876",
+        "routes": [
+          "P12",
+          "P16"
+        ]
+      },
+      {
+        "vehicle": "MH49CW1305",
+        "routes": [
+          "P8",
+          "P14"
+        ]
+      }
+    ]
+  },
+  "report3_drivers": {
+    "total": 16,
+    "header_rows_skipped": 16,
+    "drivers": [
+      {
+        "driverName": "ANIKET",
+        "phone": "9130920752",
+        "routes": "P4",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "ANIKET",
+        "phone": "9545635896",
+        "routes": "P9",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Nikhil",
+        "phone": "9096028331",
+        "routes": "P13",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Prashant",
+        "phone": "7249582964",
+        "routes": "P11",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Prashant",
+        "phone": "7903956186",
+        "routes": "P15",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Sandeep",
+        "phone": "7089023911",
+        "routes": "P3",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "SHAFIQUE",
+        "phone": "7670995675",
+        "routes": "P5",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Shantanu",
+        "phone": "9356684307",
+        "routes": "P8",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Shantanu",
+        "phone": "82372 63979",
+        "routes": "P14",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Shreekant",
+        "phone": "83569 58653",
+        "routes": "P12",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Shreekant",
+        "phone": "7903567319",
+        "routes": "P16",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "SURAJ",
+        "phone": "7773902239",
+        "routes": "P1",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "SURAJ",
+        "phone": "9502542885",
+        "routes": "P7",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "SURAJ",
+        "phone": "7888182312",
+        "routes": "P17",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Tapan",
+        "phone": "8359938339",
+        "routes": "P2",
+        "vehicle": "TBD"
+      },
+      {
+        "driverName": "Tapan",
+        "phone": "7385021801",
+        "routes": "P10",
+        "vehicle": "TBD"
+      }
+    ]
+  },
+  "report4_database_matching": {
+    "employees": {
+      "matched": 47,
+      "missing": 22,
+      "extra": 29
+    },
+    "vehicles": {
+      "matched": 9,
+      "missing": 0,
+      "extra": 18
+    },
+    "drivers": {
+      "matched": 0,
+      "missing": 16,
+      "extra": 23
+    }
+  },
+  "report4b_employee_matches": {
+    "breakdown": {
+      "name_code": 47,
+      "code": 1,
+      "name": 17,
+      "none": 4
+    },
+    "all_matches": [
+      {
+        "name": "Abhay Marwade",
+        "code": "2574323",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Abhijit Zade",
+        "code": "2575523",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Akansha Khode",
+        "code": "2571613",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Anand Ram Kumar",
+        "code": "2563946",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Aniket Anand",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Anima Dixit",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Anshul Tyagi",
+        "code": "2524080",
+        "status": "PRESENT",
+        "matchedBy": "none",
+        "action": "CREATE"
+      },
+      {
+        "name": "Anushri Bhise",
+        "code": "2572955",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Aparna Khadatkar",
+        "code": "2573662",
+        "status": "LEAVE",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Aryan Shende",
+        "code": "2577886",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Atharva Deo",
+        "code": "2573901",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Ayush Thakre",
+        "code": "2577959",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Azad Bhasme",
+        "code": "2576692",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "B Prashanth",
+        "code": "2575313",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Brej Kishore",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Cheparthi Vasanthi",
+        "code": "2575077",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Deepak singh kushwah",
+        "code": "2576584",
+        "status": "PRESENT",
+        "matchedBy": "employeeCode",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Devalla Sudheer Kumar",
+        "code": "2563927",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Dipali Sharma",
+        "code": "2574375",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Escort",
+        "code": "Escort",
+        "status": "PRESENT",
+        "matchedBy": "none",
+        "action": "CREATE"
+      },
+      {
+        "name": "Ethel Delphine Collins",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Geeta Rajput",
+        "code": "2577311",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Girivardhan",
+        "code": "2577282",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "John",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "none",
+        "action": "CREATE"
+      },
+      {
+        "name": "Kartik Ukhalkar",
+        "code": "2572738",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Kashmeni Sanjana",
+        "code": "2573885",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Krunal Wath",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Kumar Adarsh",
+        "code": "2564448",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Lavakumar Khanapur",
+        "code": "2532274",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Likesh Barve",
+        "code": "2576887",
+        "status": "LEAVE",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Mahesh Upadhyay",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Manjiri Dombale",
+        "code": "2576690",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Meghana B U",
+        "code": "2573848",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Minal Ninawe",
+        "code": "2572249",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Mohammed Farshad Chenganakkattil",
+        "code": "2571735",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Monika Jeswani",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Naga Praveen Matta",
+        "code": "2563944",
+        "status": "LEAVE",
+        "matchedBy": "none",
+        "action": "CREATE"
+      },
+      {
+        "name": "Nikhil Ambule",
+        "code": "2572172",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Nisha Shyamsukha",
+        "code": "2573568",
+        "status": "LEAVE",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Pavani",
+        "code": "2574857",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Poorvi",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Prabhat Priydarshi",
+        "code": "2573661",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Prachi jain",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Pranav Nachankar",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Pranay Haste",
+        "code": "2564924",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Pranay Wekhande",
+        "code": "#######",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Prashant Pathlavat",
+        "code": "2574190",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Pulipati Krishna",
+        "code": "2563939",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Pushpak Sakhare",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Ravindra Farkade",
+        "code": "2572338",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Ritesh Kothawade",
+        "code": "2573850",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Rushabh Bhagate",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Sagar",
+        "code": "NA",
+        "status": "LEAVE",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "sakshi",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Sayali Padole",
+        "code": "2574809",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Sayata Chakraborty",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Sejal Shahare",
+        "code": "2576808",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Shravan Meshram",
+        "code": "2517958",
+        "status": "LEAVE",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Shreya karale",
+        "code": "2576563",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Shubhankar Das",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Siddheshwar Raghunath Raut",
+        "code": "2572827",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "sohit mishra",
+        "code": "2575102",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Soma Lohitha",
+        "code": "2574997",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Tanuja",
+        "code": "NA",
+        "status": "PRESENT",
+        "matchedBy": "name",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Uday Tiwari",
+        "code": "2563945",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Vajja Bhanu Prakash",
+        "code": "2560101",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Vansh Rewaskar",
+        "code": "2576558",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "Yash Dubey",
+        "code": "2573846",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      },
+      {
+        "name": "yash karambe",
+        "code": "2576584",
+        "status": "PRESENT",
+        "matchedBy": "name+code",
+        "action": "UPDATE_ROSTER"
+      }
+    ]
+  },
+  "report5_apply_impact": {
+    "wouldCreate": {
+      "employees": 22,
+      "vehicles": 0,
+      "drivers": 16
+    },
+    "wouldUpdate": {
+      "employees": 47,
+      "vehicles": 9,
+      "drivers": 0
+    },
+    "wouldDisable": {
+      "vehicles": 0,
+      "drivers": 0
+    },
+    "strategy": "SAFE: Never disable existing vehicles/drivers"
+  },
+  "success_criteria": [
+    {
+      "name": "1. Employee counts consistent",
+      "pass": true,
+      "detail": "69 statuses = 69 employees"
+    },
+    {
+      "name": "2. Exactly 9 vehicles",
+      "pass": true,
+      "detail": "Found 9 unique vehicles"
+    },
+    {
+      "name": "3. No header data in drivers (ISSUE #1)",
+      "pass": true,
+      "detail": "Header rows filtered: 16 | Final drivers clean: YES ✓"
+    },
+    {
+      "name": "4. No cab mass-deactivation (ISSUE #2)",
+      "pass": true,
+      "detail": "Vehicles marked inactive: 0 (SAFE ✓ - must be 0)"
+    },
+    {
+      "name": "5. Driver normalization (ISSUE #3)",
+      "pass": true,
+      "detail": "All 16 driver names cleaned"
+    },
+    {
+      "name": "6. Employee match rate > 70% (ISSUE #4)",
+      "pass": true,
+      "detail": "Match rate: 94.2% (threshold: ≥70%)"
+    },
+    {
+      "name": "7. Employee creations < 5 (ISSUE #4)",
+      "pass": true,
+      "detail": "New employee creations: 4 (threshold: <5)"
+    },
+    {
+      "name": "8. Apply simulation passes",
+      "pass": true,
+      "detail": "Would create: 22 employees, 0 vehicles, 16 drivers"
+    }
+  ],
+  "all_pass": true
+}

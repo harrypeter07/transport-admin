@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-06-16T06:39:16.060Z",
+  "processArgs": [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "C:\\Users\\ASUS\\Documents\\SECOND SEMISTER\\INTERNSHIP\\arsen\\scripts\\debug-apply-flag.js"
+  ],
+  "customArgs": [],
+  "isApplyMode": false,
+  "nodeVersion": "v22.14.0",
+  "platform": "win32"
+}
