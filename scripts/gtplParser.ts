@@ -69,7 +69,8 @@ export type GtplSheetParseResult = {
 		| "DATE_COLUMN"
 		| "WORKBOOK_METADATA"
 		| "INFERRED"
-		| "SYSTEM_DATE";
+		| "SYSTEM_DATE"
+		| "INVALID";
 	totalManifestRows: number;
 	presentRowCount: number;
 	absentRowCount: number;
@@ -257,7 +258,6 @@ export function parseGtlpSheetRows(
 	},
 ): GtplSheetParseResult {
 	const underfillThreshold = options?.underfillThreshold ?? 3;
-	const availableShifts = options?.availableShifts || [];
 	const validationWarnings: string[] = [];
 
 	let date = "";
@@ -266,7 +266,8 @@ export function parseGtlpSheetRows(
 		| "DATE_COLUMN"
 		| "WORKBOOK_METADATA"
 		| "INFERRED"
-		| "SYSTEM_DATE" = "SYSTEM_DATE";
+		| "SYSTEM_DATE"
+		| "INVALID" = "SYSTEM_DATE";
 	const parsedRows: GtplEmployeeRow[] = [];
 
 	for (const row of rows) {
