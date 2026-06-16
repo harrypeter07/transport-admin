@@ -132,7 +132,7 @@ async function main() {
 			},
 		});
 
-		console.log(`   ✅ Database employees: ${dbEmployees.size}`);
+		console.log(`   ✅ Database employees: ${dbEmployees.length}`);
 
 		// Audit: Find employees in workbook but not in database
 		console.log(`\n🔍 AUDIT: Comparing Workbook vs Database\n`);
@@ -205,7 +205,7 @@ async function main() {
 		console.log(`   Vehicles: 0 (correct - no vehicle data in source)`);
 
 		console.log(`\nDatabase:`);
-		console.log(`   Employees: ${dbEmployees.size}`);
+		console.log(`   Employees: ${dbEmployees.length}`);
 
 		console.log(`\nData Quality:`);
 		console.log(`   Missing from DB: ${missingFromDb.length} (need to add)`);
