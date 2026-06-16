@@ -68,7 +68,7 @@ function parseWorkbookSheet(
 	const columns = detectColumns(headerRow);
 
 	const employees = new Map();
-	const emails = new Set();
+	const emails = new Set<string>();
 
 	for (let i = 1; i < rows.length; i++) {
 		const row = rows[i] as any[];
