@@ -41,6 +41,9 @@ export default function AdminSidebar() {
  icon: ShieldAlert,
  badge: totalViolations > 0 ? totalViolations : undefined,
  },
+ // TODO: Commented out - Shifts and Hierarchy modules
+ // { name: "Shifts", href: "/admin/shifts", icon: Clock },
+ // { name: "Hierarchy", href: "/admin/hierarchy", icon: Network },
  ];
 
  return (
