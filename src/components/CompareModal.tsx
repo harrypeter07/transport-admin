@@ -1110,6 +1110,10 @@ export default function CompareModal({ isOpen, onClose, date, optimizationPlans,
                             .map((s, i) => (
                             <div key={s.id} className="flex items-start gap-1.5 text-[10px] text-[#6b6b6b]">
                               <span className="text-[#9a9a9a] mt-0.5 shrink-0">{i + 1}.</span>
+
+
+
+                              
                               <span className="truncate">{s.employee?.name || s.employee?.email}</span>
                             </div>
                           ))}
