@@ -235,7 +235,11 @@ export default function CabsPage() {
                 ) : (
                   processedCabs.map((cab) => (
                     <tr key={cab.id} className="hover:bg-[#f7f7f7] transition-colors">
-                      <td className="px-5 py-3.5 font-mono font-black text-[#1c1b1f] text-sm">{cab.vehicleNumber}</td>
+                      <td className="px-5 py-3.5 font-mono font-black text-sm">
+                        <Link href={`/dashboard/admin/operations/cabs/${cab.id}`} className="text-[#ff4f00] hover:underline">
+                          {cab.vehicleNumber}
+                        </Link>
+                      </td>
                       <td className="px-5 py-3.5 font-semibold text-[#4a4a4a]">{cab.capacity} seats</td>
                       <td className="px-5 py-3.5">{cab.vendor}</td>
                       <td className="px-5 py-3.5">
@@ -259,11 +263,36 @@ export default function CabsPage() {
                       <td className="px-5 py-3.5 font-semibold">
                         {cab.driverName ? (
                           <>
-                            <div className="text-[#1c1b1f]">{cab.driverName}</div>
+                            <div className="text-[#1c1b1f]">
+                              <Link href={`/dashboard/admin/operations/cabs/${cab.id}`} className="hover:underline text-[#ff4f00] font-black">
+                                {cab.driverName}
+                              </Link>
+                            </div>
                             <div className="text-[10px] text-[#6b6b6b] font-mono">{cab.driverPhone}</div>
                             {cab.driverAddress && <div className="text-[10px] text-[#9a9a9a] font-normal truncate max-w-[120px]" title={cab.formattedAddress || cab.driverAddress}>{cab.formattedAddress || cab.driverAddress}</div>}
+                            
+                            {/* Overall Compliance Status Badge */}
+                            {cab.documents && cab.documents.length > 0 ? (() => {
+                              const hasExpired = cab.documents.some(doc => new Date(doc.expiryDate) < new Date());
+                              const hasExpiringSoon = cab.documents.some(doc => {
+                                const isExpired = new Date(doc.expiryDate) < new Date();
+                                const warningDate = new Date(doc.expiryDate);
+                                warningDate.setDate(warningDate.getDate() - 14);
+                                return !isExpired && new Date() >= warningDate;
+                              });
+                              if (hasExpired) {
+                                return <div className="mt-1 text-[9px] text-red-600 font-extrabold uppercase tracking-wider bg-red-50 border border-red-200 px-1.5 py-0.5 rounded inline-block">❌ EXPIRED DOCS</div>;
+                              }
+                              if (hasExpiringSoon) {
+                                return <div className="mt-1 text-[9px] text-amber-600 font-extrabold uppercase tracking-wider bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded inline-block">⚠️ RENEW SOON</div>;
+                              }
+                              return <div className="mt-1 text-[9px] text-emerald-600 font-extrabold uppercase tracking-wider bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded inline-block">✅ COMPLIANT</div>;
+                            })() : (
+                              <div className="mt-1 text-[9px] text-amber-600 font-bold uppercase tracking-wider bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded inline-block">⚠ NO DOCUMENTS</div>
+                            )}
+
                             {/* Compliance / Expiry Section */}
-                            {cab.documents && cab.documents.length > 0 ? (
+                            {cab.documents && cab.documents.length > 0 && (
                               <div className="mt-2 space-y-1 border-t border-slate-100 pt-1">
                                 <div className="text-[9px] uppercase font-black tracking-wider text-[#9a9a9a]">Driver Compliance</div>
                                 {cab.documents.map(doc => {
@@ -286,8 +315,6 @@ export default function CabsPage() {
                                   );
                                 })}
                               </div>
-                            ) : (
-                              <div className="mt-2 text-[9px] text-amber-600 font-bold uppercase tracking-wider">⚠ No documents uploaded</div>
                             )}
                           </>
                         ) : <span className="font-normal text-[#9a9a9a] text-[11px]">Unassigned</span>}
@@ -330,6 +357,9 @@ export default function CabsPage() {
               {formError && (
                 <div className="rounded-none border border-[#e8e8e8] bg-[#f7f7f7]/80 p-4 text-sm font-semibold text-[#1c1b1f] backdrop-blur-sm">{formError}</div>
               )}
+              <div className="text-xs text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] p-3 rounded-none">
+                💡 <strong>Tip:</strong> You can upload and manage driver compliance documents (License, Insurance, RC, Police Verification) by clicking on the cab's vehicle number or driver's name in the Cabs Directory table after saving.
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <CField label="Vehicle Number" name="vehicleNumber" required placeholder="MH31 AB1234" defaultValue={editingCab?.vehicleNumber} />
                 <CField label="Capacity (seats)" name="capacity" required type="number" placeholder="6" defaultValue={editingCab?.capacity} />

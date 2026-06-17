@@ -32,6 +32,7 @@ import { ZONE_COLORS } from "@/lib/zones";
 import {
 	Compass,
 	Users,
+	User,
 	Truck,
 	ShieldAlert,
 	Calendar,
@@ -780,7 +781,6 @@ export default function TransitAdminSPA() {
 
 	const getRouteStartAddress = (route: Route): string => {
 		const cab = route.cab;
-		if ((route.tripSequence || 1) > 1) return "MIHAN Depot";
 		if (cab?.driverAddress?.trim()) return cab.driverAddress;
 		if (typeof cab?.driverX === "number" && typeof cab?.driverY === "number")
 			return "Driver Location";
@@ -2251,19 +2251,20 @@ export default function TransitAdminSPA() {
 										</div>
 
 										<div className="relative pl-6 flex flex-col gap-4 text-left max-h-[220px] overflow-y-auto pr-1 select-none scrollbar-thin">
-											{/* Connecting Line */}
-											<div className="absolute left-[10px] top-2 bottom-2 w-px border-l-2 border-dashed border-[#e8e8e8]"></div>
+													<div className="absolute left-[10px] top-2 bottom-2 w-px border-l-2 border-dashed border-[#e8e8e8]"></div>
 
 											{/* Origin Node — always shown */}
 											<div className="relative flex items-start gap-3">
 												<span className="absolute -left-6 w-5 h-5 rounded-none bg-[#1c1b1f] border border-slate-700 text-white flex items-center justify-center z-10">
 													<Truck className="w-3 h-3" />
 												</span>
-												<div className="flex-1 p-2 bg-[#f7f7f7]/80 border border-[#e8e8e8] rounded-none text-[11px] font-semibold text-[#1c1b1f]">
+												<div className="flex-grow p-2.5 bg-[#f7f7f7]/80 border border-[#e8e8e8] rounded-none text-[11px] font-semibold text-[#1c1b1f]">
 													<div className="flex justify-between items-center">
 														<span>
 															{getEffectiveMode(selectedRoute) === "pickup"
-																? getRouteStartAddress(selectedRoute)
+																? (selectedRoute.cab?.driverName && selectedRoute.cab.driverName !== selectedRoute.cab.vehicleNumber
+																	? `${selectedRoute.cab.driverName}'s Home`
+																	: "Driver's Home")
 																: "MIHAN Depot"}
 														</span>
 														<span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
@@ -2272,7 +2273,7 @@ export default function TransitAdminSPA() {
 													</div>
 													<p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">
 														{getEffectiveMode(selectedRoute) === "pickup"
-															? "Route Origin"
+															? (selectedRoute.cab?.driverAddress || "Driver Home Location")
 															: "Central Corporate Hub"}
 													</p>
 												</div>
@@ -2431,12 +2432,16 @@ export default function TransitAdminSPA() {
 												<span className="absolute -left-6 w-5 h-5 rounded-none bg-[#1c1b1f] border border-slate-700 text-white flex items-center justify-center z-10">
 													<Truck className="w-3 h-3" />
 												</span>
-												<div className="flex-1 p-2 bg-[#f7f7f7]/80 border border-[#e8e8e8] rounded-none text-[11px] font-semibold text-[#1c1b1f]">
+												<div className="flex-grow p-2.5 bg-[#f7f7f7]/80 border border-[#e8e8e8] rounded-none text-[11px] font-semibold text-[#1c1b1f]">
 													<div className="flex justify-between items-center">
 														<span>
 															{getEffectiveMode(selectedRoute) === "pickup"
 																? "MIHAN Depot"
-																: getRouteEndAddress(selectedRoute)}
+																: (isLastTripForCab(selectedRoute)
+																	? (selectedRoute.cab?.driverName && selectedRoute.cab.driverName !== selectedRoute.cab.vehicleNumber
+																		? `${selectedRoute.cab.driverName}'s Home`
+																		: "Driver's Home")
+																	: "MIHAN Depot")}
 														</span>
 														<span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.2 rounded font-bold tracking-wider uppercase font-mono">
 															Arrive At
@@ -2446,7 +2451,7 @@ export default function TransitAdminSPA() {
 														{getEffectiveMode(selectedRoute) === "pickup"
 															? "Central Corporate Hub"
 															: isLastTripForCab(selectedRoute)
-																? "Driver End Location"
+																? (selectedRoute.cab?.driverAddress || "Driver Home Location")
 																: "Central Corporate Hub"}
 													</p>
 												</div>
@@ -2938,8 +2943,7 @@ export default function TransitAdminSPA() {
 																			<div className="flex justify-between items-start border-b border-slate-100 pb-3">
 																				<div className="flex flex-col gap-0.5 text-left">
 																					<h3 className="text-lg font-bold text-[#1c1b1f] tracking-tight flex items-center gap-1.5">
-																						{route.cab?.driverName ||
-																							"Unknown Driver"}
+																						{route.cab?.vehicleNumber || "No Vehicle"}
 																						{route.cabId && (
 																							<span className="font-mono text-[9px] font-bold bg-[#e8e8e8] text-[#4a4a4a] px-1.5 py-0.5 rounded-none ml-1">
 																								{getDriverTripCount(
@@ -2954,16 +2958,15 @@ export default function TransitAdminSPA() {
 																							</span>
 																						)}
 																					</h3>
-																					<div className="flex items-center gap-2 mt-0.5">
+																					<div className="flex items-center gap-2 mt-0.5 flex-wrap">
 																						<span className="text-xs font-semibold text-[#6b6b6b] flex items-center gap-1">
-																							<Truck className="w-3.5 h-3.5 text-[#9a9a9a]" />
-																							{route.cab?.vehicleNumber ||
-																								"No Vehicle"}
+																							<User className="w-3.5 h-3.5 text-[#9a9a9a]" />
+																							Driver: {route.cab?.driverName && route.cab.driverName !== route.cab.vehicleNumber ? route.cab.driverName : "N/A"}
 																						</span>
 																						<span className="text-[10px] text-[#9a9a9a] font-mono font-medium">
-																							{route.cab?.driverPhone || "N/A"}
+																							{route.cab?.driverPhone && route.cab.driverPhone !== "0000000000" ? route.cab.driverPhone : "No Phone"}
 																						</span>
-																						{route.cab?.driverPhone && (
+																						{route.cab?.driverPhone && route.cab.driverPhone !== "0000000000" && (
 																							<a
 																								href={getWhatsAppShareLink(route, selectedDate)}
 																								target="_blank"
@@ -2979,6 +2982,11 @@ export default function TransitAdminSPA() {
 																							</a>
 																						)}
 																					</div>
+																					{route.cab?.driverAddress && (
+																						<div className="text-[10px] text-[#6b6b6b] mt-1 italic border-t border-slate-100/60 pt-1">
+																							<span className="font-bold">Home:</span> {route.cab.driverAddress}
+																						</div>
+																					)}
 
 																					<div className="flex items-center gap-2 mt-2">
 																						<span className="text-[10px] font-mono font-bold text-[#6b6b6b] bg-[#f7f7f7] border border-[#e8e8e8] px-1.5 py-0.5">
@@ -3290,13 +3298,15 @@ export default function TransitAdminSPA() {
 																								<span className="text-[#1c1b1f]">
 																									{getEffectiveMode(route) ===
 																									"pickup"
-																										? getRouteStartAddress(
-																												route,
-																											)
+																										? (route.cab?.driverName && route.cab.driverName !== route.cab.vehicleNumber
+																											? `${route.cab.driverName}'s Home`
+																											: "Driver's Home")
 																										: "MIHAN Depot"}
 																								</span>
 																								<p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">
-																									Depart From
+																									{getEffectiveMode(route) === "pickup"
+																										? (route.cab?.driverAddress || "Driver Home Location")
+																										: "Depart From"}
 																								</p>
 																							</div>
 																							<span className="text-[8px] bg-slate-200 text-[#6b6b6b] px-1.5 py-0.5 rounded font-black uppercase font-mono">
@@ -3459,10 +3469,18 @@ export default function TransitAdminSPA() {
 																									{getEffectiveMode(route) ===
 																									"pickup"
 																										? "MIHAN Depot"
-																										: getRouteEndAddress(route)}
+																										: (isLastTripForCab(route)
+																											? (route.cab?.driverName && route.cab.driverName !== route.cab.vehicleNumber
+																												? `${route.cab.driverName}'s Home`
+																												: "Driver's Home")
+																											: "MIHAN Depot")}
 																								</span>
 																								<p className="text-[9px] text-[#9a9a9a] font-mono mt-0.5">
-																									Arrive At
+																									{getEffectiveMode(route) === "pickup"
+																										? "Arrive At"
+																										: (isLastTripForCab(route)
+																											? (route.cab?.driverAddress || "Driver Home Location")
+																											: "Arrive At")}
 																								</p>
 																							</div>
 																							<span className="text-[8px] bg-slate-200 text-slate-650 px-1.5 py-0.5 rounded font-black uppercase font-mono">

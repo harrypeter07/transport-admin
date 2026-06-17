@@ -10,6 +10,35 @@ function reqIp(req: NextRequest | Request): string {
   return (req as any).headers?.get?.("x-forwarded-for") || (req as any).headers?.get?.("x-real-ip") || "unknown";
 }
 
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await verifySession();
+  const ip = reqIp(req);
+  if (session.role !== "ADMIN" && session.role !== "MANAGER") {
+    console.warn("[api] 🔒 GET /api/cabs/[id] — UNAUTHORIZED", { role: session.role, ip });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await params;
+    const cab = await prisma.cab.findUnique({
+      where: { id },
+      include: {
+        shifts: true,
+        documents: true,
+      },
+    });
+
+    if (!cab) {
+      return NextResponse.json({ error: "Cab not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(cab);
+  } catch (error: any) {
+    console.error("[api] ❌ GET /api/cabs/[id] — Failed", { ip }, error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await verifySession();
   const ip = reqIp(req);

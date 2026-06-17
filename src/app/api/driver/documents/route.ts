@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/session";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session || (session.role !== "DRIVER" && session.role !== "ADMIN")) {
@@ -17,9 +17,15 @@ export async function GET() {
         include: { documents: true },
       });
     } else {
-      // Admin can fetch documents for all cabs/drivers or pass query params
-      // Default: return empty or search by cabId if provided
-      return NextResponse.json({ error: "Method not supported for ADMIN without cabId" }, { status: 400 });
+      const { searchParams } = new URL(req.url);
+      const cabId = searchParams.get("cabId");
+      if (!cabId) {
+        return NextResponse.json({ error: "cabId query parameter is required for admin" }, { status: 400 });
+      }
+      cab = await prisma.cab.findUnique({
+        where: { id: cabId },
+        include: { documents: true },
+      });
     }
 
     if (!cab) {
@@ -91,5 +97,44 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("[api] ❌ POST /api/driver/documents", error);
     return NextResponse.json({ error: "Failed to update document" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session || (session.role !== "ADMIN" && session.role !== "DRIVER")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const docId = searchParams.get("id");
+    if (!docId) {
+      return NextResponse.json({ error: "Document ID is required" }, { status: 400 });
+    }
+
+    if (session.role === "DRIVER") {
+      const cab = await prisma.cab.findUnique({
+        where: { userId: session.userId },
+      });
+      if (!cab) {
+        return NextResponse.json({ error: "Cab profile not found" }, { status: 404 });
+      }
+      const doc = await prisma.driverDocument.findUnique({
+        where: { id: docId }
+      });
+      if (!doc || doc.cabId !== cab.id) {
+        return NextResponse.json({ error: "Unauthorized to delete this document" }, { status: 401 });
+      }
+    }
+
+    await prisma.driverDocument.delete({
+      where: { id: docId }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[api] ❌ DELETE /api/driver/documents", error);
+    return NextResponse.json({ error: "Failed to delete document" }, { status: 500 });
   }
 }

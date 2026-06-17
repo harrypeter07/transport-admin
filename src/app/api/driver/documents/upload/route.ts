@@ -8,22 +8,33 @@ import path from "path";
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "DRIVER") {
+    if (!session || (session.role !== "DRIVER" && session.role !== "ADMIN")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const cab = await prisma.cab.findUnique({
-      where: { userId: session.userId },
-    });
-
-    if (!cab) {
-      return NextResponse.json({ error: "Driver profile/cab not found" }, { status: 404 });
     }
 
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const type = formData.get("type") as string;
     const expiryDateStr = formData.get("expiryDate") as string;
+    const cabId = formData.get("cabId") as string;
+
+    let cab;
+    if (session.role === "DRIVER") {
+      cab = await prisma.cab.findUnique({
+        where: { userId: session.userId },
+      });
+    } else {
+      if (!cabId) {
+        return NextResponse.json({ error: "cabId is required for admins" }, { status: 400 });
+      }
+      cab = await prisma.cab.findUnique({
+        where: { id: cabId },
+      });
+    }
+
+    if (!cab) {
+      return NextResponse.json({ error: "Driver profile/cab not found" }, { status: 404 });
+    }
 
     if (!file || !type || !expiryDateStr) {
       return NextResponse.json({ error: "Missing required fields: file, type, expiryDate" }, { status: 400 });
