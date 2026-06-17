@@ -549,8 +549,35 @@ export async function POST(req: NextRequest) {
 			cabSequenceCounts,
 			absentEmployeeIds,
 			absentEmployeeCodes,
+			forceOverride = false,
 		} = body;
 		const currentDateStr = date || new Date().toISOString().split("T")[0];
+
+		// ── CANONICAL LOCK GUARD ─────────────────────────────────────────
+		// If routes already exist from the canonical import (optimizationMode=CANONICAL),
+		// refuse to overwrite them unless forceOverride=true is explicitly set.
+		// This prevents the optimization engine from scrambling hand-crafted transport assignments.
+		if (!forceOverride) {
+			const canonicalRoutes = await prisma.route.findMany({
+				where: {
+					date: currentDateStr,
+					optimizationMode: "CANONICAL",
+					...(shiftId ? { shiftId } : {}),
+				},
+				select: { id: true },
+			});
+			if (canonicalRoutes.length > 0) {
+				console.warn(`[api] ⚠️ POST /api/optimization blocked — ${canonicalRoutes.length} CANONICAL routes exist for ${currentDateStr}. Set forceOverride=true to override.`);
+				return NextResponse.json(
+					{
+						error: "CANONICAL_LOCK",
+						message: `This date (${currentDateStr}) has ${canonicalRoutes.length} canonical route(s) imported from the official transport sheet. Dynamic optimization is disabled to protect driver-employee mappings. Use forceOverride=true only if you intend to discard canonical assignments.`,
+						canonicalCount: canonicalRoutes.length,
+					},
+					{ status: 409 },
+				);
+			}
+		}
 
 
 

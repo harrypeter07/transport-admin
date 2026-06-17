@@ -995,7 +995,17 @@ export default function TransitAdminSPA() {
 	const assignedEmployeeIds = new Set(
 		activeRoutes.flatMap((r) => r.stops.map((s) => s.employeeId)),
 	);
+
+	// Detect if current routes are from the canonical transport import.
+	// Canonical routes have optimizationMode="CANONICAL" — they are hand-crafted
+	// from the official transport sheet and should not trigger overflow warnings.
+	const isCanonicalDate = routes.length > 0 && routes.every((r: any) => r.optimizationMode === "CANONICAL");
+
 	const unassignedEmployees = (() => {
+		// Suppress overflow alert entirely for canonical dates — all assignments
+		// are intentional from the official transport sheet.
+		if (isCanonicalDate) return [];
+
 		const optimizedIds = optimizationPlans?.optimizedEmployeeIds;
 		if (optimizedIds && optimizedIds.length > 0) {
 			// Only count employees that were actually in the optimizer’s scope
@@ -1948,7 +1958,19 @@ export default function TransitAdminSPA() {
 						</div>
 					) : null}
 
-					{/* Split View Map + Sidebar */}
+					{isCanonicalDate ? (
+						<div className="p-4 bg-[#f0faf4] border border-[#22c55e] rounded-none flex items-start gap-2.5 text-xs text-[#166534] animate-fadeIn">
+							<svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+							<div className="flex flex-col text-left">
+								<span className="font-bold">Canonical Routes Active — Official Transport Sheet</span>
+								<span className="mt-0.5 font-medium">
+									All {routes.length} routes for this date are imported from the official transport sheet and are protected. Dynamic optimization is disabled. All employee-driver mappings are locked as per the transport manifest.
+								</span>
+							</div>
+						</div>
+					) : null}
+
+				{/* Split View Map + Sidebar */}
 					<div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
 						{/* Map */}
 						<div

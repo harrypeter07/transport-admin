@@ -346,7 +346,7 @@ async function main() {
         totalDuration: Math.round(cumDur),
         status: "PLANNED",
         optimizationScore: 0,
-        optimizationMode: "FASTEST_TRAVEL",
+        optimizationMode: "CANONICAL",
         routeNumber: routeIdx + 1,
         zone: isPickup ? "N" : null,
         subZone: isPickup ? "NE" : null,
