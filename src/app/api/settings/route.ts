@@ -36,12 +36,17 @@ export async function GET(req: NextRequest) {
 			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 		}
 
-		// Upsert ensures defaults always exist on first read
-		const settings = await prisma.systemSettings.upsert({
+		// Try to read first. If it doesn't exist, create it.
+		// This avoids writing database logs/locks on every single dashboard/page load.
+		let settings = await prisma.systemSettings.findUnique({
 			where: { id: "default" },
-			update: {},
-			create: DEFAULT_SETTINGS,
 		});
+
+		if (!settings) {
+			settings = await prisma.systemSettings.create({
+				data: DEFAULT_SETTINGS,
+			});
+		}
 
 		return NextResponse.json(settings);
 	} catch (e) {

@@ -1,0 +1,39 @@
+{
+  "duplicate_employee_ids": [
+    "NA"
+  ],
+  "employee_id_multiple_names": [
+    {
+      "employeeId": "NA",
+      "names": [
+        "sakshi",
+        "Sagar",
+        "Krunal Wath",
+        "Brej Kishore",
+        "Prachi jain",
+        "Rushabh Bhagate",
+        "Aniket Anand",
+        "Mahesh Upadhyay",
+        "Ethel Delphine Collins",
+        "Tanuja",
+        "Poorvi",
+        "Pushpak Sakhare",
+        "Sayata Chakraborty",
+        "Pranav Nachankar",
+        "Monika Jeswani",
+        "Anima Dixit",
+        "Shubhankar Das"
+      ]
+    }
+  ],
+  "missing_driver_routes": [
+    "P6"
+  ],
+  "missing_vehicle_routes": [],
+  "missing_shift_routes": [],
+  "missing_pickup_point_employees": [],
+  "driver_parsed_as_employee": [],
+  "employee_name_contains_driver": [],
+  "employee_name_contains_mob": [],
+  "routes_with_zero_employees": []
+}

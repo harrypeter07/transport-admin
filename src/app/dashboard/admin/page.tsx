@@ -145,16 +145,22 @@ export default function AdminDashboardPage() {
 
    setCurrentStage("Fetching metrics");
 
-   const metricsRes = await fetchWithRetry("/api/execution/dashboard");
-   setCompletedStages(prev => new Set(prev).add("fetch"));
+   const fetchMetricsPromise = fetchWithRetry("/api/execution/dashboard").then(async res => {
+     setCompletedStages(prev => new Set(prev).add("fetch"));
+     return res ? await res.json() : null;
+   });
 
-   if (metricsRes) {
-     const metricsData = await metricsRes.json();
-     setCurrentStage("Loading configuration");
-     const settingsRes = await fetchWithRetry("/api/settings");
+   const fetchSettingsPromise = fetchWithRetry("/api/settings").then(async res => {
      setCompletedStages(prev => new Set(prev).add("settings"));
+     return res ? await res.json() : null;
+   });
 
-     const settingsData = settingsRes ? await settingsRes.json() : null;
+   const [metricsData, settingsData] = await Promise.all([
+     fetchMetricsPromise,
+     fetchSettingsPromise
+   ]);
+
+   if (metricsData) {
      applyData(metricsData, settingsData);
    }
 

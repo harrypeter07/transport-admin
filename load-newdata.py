@@ -255,7 +255,7 @@ try:
                 '',
                 4,
                 'FT',
-                'ACTIVE'
+                'AVAILABLE'
             ))
             cabs_created += 1
         except Exception as e:

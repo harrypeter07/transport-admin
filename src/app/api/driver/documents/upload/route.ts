@@ -48,19 +48,11 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Ensure local directory exists
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "driver-documents");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
+    let fileUrl = "";
+    let uploadedToSupabase = false;
 
     const ext = path.extname(file.name) || ".pdf";
     const filename = `${cab.id}-${type.toLowerCase()}-${Date.now()}${ext}`;
-    const filepath = path.join(uploadDir, filename);
-
-    // Save locally
-    fs.writeFileSync(filepath, buffer);
-    let fileUrl = `/uploads/driver-documents/${filename}`;
 
     // Try uploading to Supabase bucket if configured
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -84,13 +76,33 @@ export async function POST(req: NextRequest) {
 
         if (uploadRes.ok) {
           fileUrl = `${cleanSupabaseUrl}/storage/v1/object/public/${bucket}/${filename}`;
+          uploadedToSupabase = true;
           console.log(`[SUPABASE_UPLOAD] Successfully uploaded ${filename} to Supabase bucket.`);
         } else {
           const errMsg = await uploadRes.text();
-          console.warn(`[SUPABASE_UPLOAD] Failed, falling back to local storage. Details: ${errMsg}`);
+          console.warn(`[SUPABASE_UPLOAD] Failed, status ${uploadRes.status}, fallback to local. Details: ${errMsg}`);
         }
       } catch (err) {
-        console.error("[SUPABASE_UPLOAD] Exception encountered, falling back to local storage:", err);
+        console.error("[SUPABASE_UPLOAD] Exception encountered, fallback to local:", err);
+      }
+    }
+
+    // Fallback to local storage only if it wasn't successfully uploaded to Supabase
+    if (!uploadedToSupabase) {
+      try {
+        const uploadDir = path.join(process.cwd(), "public", "uploads", "driver-documents");
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const filepath = path.join(uploadDir, filename);
+        fs.writeFileSync(filepath, buffer);
+        fileUrl = `/uploads/driver-documents/${filename}`;
+        console.log(`[LOCAL_UPLOAD] Successfully saved ${filename} locally.`);
+      } catch (localErr) {
+        console.error("[LOCAL_UPLOAD] Failed to save locally:", localErr);
+        return NextResponse.json({
+          error: "Failed to upload document. Supabase upload failed and local filesystem is read-only."
+        }, { status: 500 });
       }
     }
 

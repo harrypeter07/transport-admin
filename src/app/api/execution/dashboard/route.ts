@@ -11,7 +11,9 @@ export async function GET(req: Request) {
     if (session.role !== "ADMIN" && session.role !== "MANAGER") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const today = new Date().toISOString().split("T")[0];
+    const url = new URL(req.url);
+    const dateParam = url.searchParams.get("date");
+    const today = dateParam || new Date().toISOString().split("T")[0];
     let routesFilter: any = { date: today };
 
     // Manager-specific state

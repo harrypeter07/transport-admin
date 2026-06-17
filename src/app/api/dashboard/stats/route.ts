@@ -16,7 +16,8 @@ export async function GET() {
   totalRoutes,
   employeesByDesignation,
   employeesByShift,
-  activeCabs
+  activeCabs,
+  shifts
   ] = await Promise.all([
   prisma.employee.count({ where: { status: "ACTIVE" } }),
   prisma.cab.count({ where: { status: { not: "INACTIVE" } } }),
@@ -32,10 +33,9 @@ export async function GET() {
   _count: { id: true }
   }),
   prisma.cab.count({ where: { status: 'ACTIVE' } }),
+  prisma.shift.findMany(),
   ]);
 
- // Fetch shift names for the employeesByShift mapping
- const shifts = await prisma.shift.findMany();
  const shiftMap = shifts.reduce((acc, s) => ({ ...acc, [s.id]: s.name }), {} as Record<string, string>);
 
  const formattedEmployeesByShift = employeesByShift.map(item => ({
