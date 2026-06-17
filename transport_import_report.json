@@ -1,0 +1,37 @@
+{
+  "routes_processed": 18,
+  "routes_created": 18,
+  "routes_updated": 0,
+  "drivers_created": 0,
+  "drivers_updated": 9,
+  "vehicles_created": 0,
+  "assignments_created": 67,
+  "validation_errors": [],
+  "frontend_verification_results": {
+    "success": true,
+    "details": {
+      "deepak_singh_kushwah": {
+        "passed": true,
+        "details": {
+          "routeId": "P11",
+          "shift": "09:00",
+          "pickupPoint": "Baidyashakti Lifecare Pvt. Ltd Ramdaspeth",
+          "driver": "Prashant",
+          "vehicle": "MH31FC8407",
+          "status": "YES"
+        }
+      },
+      "yash_karambe": {
+        "passed": true,
+        "details": {
+          "routeId": "P12",
+          "shift": "09:00",
+          "pickupPoint": "NOTARY & ADV. SHILA GHAGRE Lokmanya Nagar",
+          "driver": "Shreekant",
+          "vehicle": "MH49CW0876",
+          "status": "YES"
+        }
+      }
+    }
+  }
+}

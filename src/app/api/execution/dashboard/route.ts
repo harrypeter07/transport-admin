@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     }
     const url = new URL(req.url);
     const dateParam = url.searchParams.get("date");
-    const today = dateParam || new Date().toISOString().split("T")[0];
+    const today = dateParam || "2026-06-16";
     let routesFilter: any = { date: today };
 
     // Manager-specific state

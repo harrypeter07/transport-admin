@@ -1,0 +1,948 @@
+{
+  "date": "2026-06-16",
+  "vendor": "FT",
+  "routes": [
+    {
+      "routeId": "P1",
+      "shiftTime": "05:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0078"
+      },
+      "driver": {
+        "name": "SURAJ",
+        "phone": null
+      },
+      "escort": true,
+      "employees": [
+        {
+          "employeeId": "2571613",
+          "name": "Akansha Khode",
+          "gender": "F",
+          "contactNo": "7773902239",
+          "email": "akansha.khode@globallogic.com",
+          "pickupPoint": "Vijaya Nagar Main Gate",
+          "pickupTime": "04:00",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2524080",
+          "name": "Anshul Tyagi",
+          "gender": "M",
+          "contactNo": "7387683567",
+          "email": "anshul.tyagi@globallogic.com",
+          "pickupPoint": "Majestic Manor",
+          "pickupTime": "04:10",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2573850",
+          "name": "Ritesh Kothawade",
+          "gender": "M",
+          "contactNo": "9970609200",
+          "email": "ritesh.kothawade@globallogic.com",
+          "pickupPoint": "Bloomdale",
+          "pickupTime": "04:30",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2575077",
+          "name": "Cheparthi Vasanthi",
+          "gender": "F",
+          "contactNo": "7386270468",
+          "email": "cheparthi.vasanthi@globallogic.com",
+          "pickupPoint": "Moraj Apartments",
+          "pickupTime": "04:35",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Anima Dixit",
+          "gender": "F",
+          "contactNo": "9717123008",
+          "email": "anima.dixit@globallogic.com",
+          "pickupPoint": "Shiv Kailasa",
+          "pickupTime": "04:40",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P2",
+      "shiftTime": "05:00",
+      "vehicle": {
+        "vehicleNumber": "MH40CT4542"
+      },
+      "driver": {
+        "name": "Tapan",
+        "phone": "8208223602"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2571735",
+          "name": "Mohammed Farshad Chenganakkattil",
+          "gender": "M",
+          "contactNo": "9846412647",
+          "email": "m.f.k@globallogic.com",
+          "pickupPoint": "Narendra Nagar",
+          "pickupTime": "04:20",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2575313",
+          "name": "B Prashanth",
+          "gender": "M",
+          "contactNo": "8359938339",
+          "email": "b.p.kumar2@globallogic.com",
+          "pickupPoint": "Apollo Pharmacy",
+          "pickupTime": "04:30",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P3",
+      "shiftTime": "05:00",
+      "vehicle": {
+        "vehicleNumber": "MH31FC8592"
+      },
+      "driver": {
+        "name": "Sandeep",
+        "phone": "9021863195"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2575102",
+          "name": "Sohit Mishra",
+          "gender": "M",
+          "contactNo": "9096408407",
+          "email": "sohit.mishra@globallogic.com",
+          "pickupPoint": "Saiba Towers Gorewada",
+          "pickupTime": "03:45",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Aniket Anand",
+          "gender": "M",
+          "contactNo": "7089023911",
+          "email": null,
+          "pickupPoint": "Highway Glory Restaurant",
+          "pickupTime": "04:00",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P4",
+      "shiftTime": "05:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0218"
+      },
+      "driver": {
+        "name": "ANIKET",
+        "phone": "9325911859"
+      },
+      "escort": true,
+      "employees": [
+        {
+          "employeeId": "2574375",
+          "name": "Dipali Sharma",
+          "gender": "F",
+          "contactNo": "9130920752",
+          "email": "dipali.sharma@globallogic.com",
+          "pickupPoint": "Nirvana Residency, Kalamna Market Rd",
+          "pickupTime": "03:50",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2572955",
+          "name": "Anushri Bhise",
+          "gender": "F",
+          "contactNo": "9075483466",
+          "email": "anushri.bhise@globallogic.com",
+          "pickupPoint": "Soham and Aluminium",
+          "pickupTime": "04:05",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2563927",
+          "name": "Devalla Sudheer Kumar",
+          "gender": "M",
+          "contactNo": "9963809283",
+          "email": "devalla.kumar@globallogic.com",
+          "pickupPoint": "St. Vincent Pallotti School",
+          "pickupTime": "04:25",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2572249",
+          "name": "Minal Ninawe",
+          "gender": "F",
+          "contactNo": "7887610598",
+          "email": "minal.ninawe@globallogic.com",
+          "pickupPoint": "Puma Showroom Manish Nagar",
+          "pickupTime": "04:35",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2572827",
+          "name": "Siddheshwar Raghunath Raut",
+          "gender": "M",
+          "contactNo": "9067067716",
+          "email": "raut.raghunath@globallogic.com",
+          "pickupPoint": "Maitree Nagar, Beltarodi",
+          "pickupTime": "04:40",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P5",
+      "shiftTime": "05:00",
+      "vehicle": {
+        "vehicleNumber": "MH40DC0486"
+      },
+      "driver": {
+        "name": "SHAFIQUE",
+        "phone": "9595420800"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2574323",
+          "name": "Abhay Marwade",
+          "gender": "M",
+          "contactNo": "9175576069",
+          "email": "abhay.marwade@globallogic.com",
+          "pickupPoint": "SOMWARI QUARTER",
+          "pickupTime": "03:40",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2573885",
+          "name": "Kashmeni Sanjana",
+          "gender": "F",
+          "contactNo": "7670995675",
+          "email": "kashameni.sanjana@globallogic.com",
+          "pickupPoint": "Behind Rahul Daily Needs",
+          "pickupTime": "03:55",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2574997",
+          "name": "Soma Lohitha",
+          "gender": "F",
+          "contactNo": "6300844626",
+          "email": "soma.lohitha@globallogic.com",
+          "pickupPoint": "Behind Rahul Daily Needs",
+          "pickupTime": "03:55",
+          "status": "NO SHOW"
+        },
+        {
+          "employeeId": "2573662",
+          "name": "Aparna Khadatkar",
+          "gender": "F",
+          "contactNo": "7498457590",
+          "email": "aparna.khadatkar@globallogic.com",
+          "pickupPoint": "Behind Rahul Daily Needs",
+          "pickupTime": "03:55",
+          "status": "NO SHOW"
+        },
+        {
+          "employeeId": "2574857",
+          "name": "Pavani",
+          "gender": "F",
+          "contactNo": "9059284958",
+          "email": null,
+          "pickupPoint": "Shilpa Nagpur Society, Manish Nagar",
+          "pickupTime": "04:00",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P6",
+      "shiftTime": "07:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0139"
+      },
+      "driver": {
+        "name": "Nikhil",
+        "phone": "9764325500"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2563946",
+          "name": "Anand Ram Kumar",
+          "gender": "M",
+          "contactNo": "9494240460",
+          "email": "pulavarthy.kumar@globallogic.com",
+          "pickupPoint": "Landmar: Jagannath Mandir",
+          "pickupTime": "06:00",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P7",
+      "shiftTime": "09:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0078"
+      },
+      "driver": {
+        "name": "SURAJ",
+        "phone": "9561326459"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2576690",
+          "name": "Manjiri Dombale",
+          "gender": "F",
+          "contactNo": "7888281289",
+          "email": null,
+          "pickupPoint": "Mauli Apartment",
+          "pickupTime": "07:40",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2577282",
+          "name": "Girivardhan",
+          "gender": "M",
+          "contactNo": "9502542885",
+          "email": null,
+          "pickupPoint": "New Amarnagar",
+          "pickupTime": "07:55",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Sakshi",
+          "gender": "F",
+          "contactNo": "8999187443",
+          "email": null,
+          "pickupPoint": "The I-school by edumeta besa",
+          "pickupTime": "08:05",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Sagar",
+          "gender": "M",
+          "contactNo": "6206701306",
+          "email": null,
+          "pickupPoint": "Apollo Pharmacy",
+          "pickupTime": "08:10",
+          "status": "NO SHOW"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Monika Jeswani",
+          "gender": "F",
+          "contactNo": "7218617533",
+          "email": null,
+          "pickupPoint": "Gandhi Automation Pvt Ltd Guest House Manish Nagar",
+          "pickupTime": "08:15",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Tanuja",
+          "gender": "F",
+          "contactNo": "8217018607",
+          "email": null,
+          "pickupPoint": "OYO Hotel Olive Stay Inn",
+          "pickupTime": "08:20",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P8",
+      "shiftTime": "09:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW1305"
+      },
+      "driver": {
+        "name": "Shantanu",
+        "phone": "8261990745"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2577959",
+          "name": "Ayush Thakre",
+          "gender": "M",
+          "contactNo": "7507841006",
+          "email": "ayush.thakre@globallogic.com",
+          "pickupPoint": "Cafe Junglee Kt Nagar",
+          "pickupTime": "07:50",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Krunal Wath",
+          "gender": "M",
+          "contactNo": "9356684307",
+          "email": "krunal.wath@globallogic.com",
+          "pickupPoint": "Friends Colony",
+          "pickupTime": "08:00",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "John",
+          "gender": "M",
+          "contactNo": "7893324948",
+          "email": null,
+          "pickupPoint": "Pandurang Gawande Nagar Khamla",
+          "pickupTime": "08:20",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Ethel Delphine Collins",
+          "gender": "F",
+          "contactNo": "9985802277",
+          "email": null,
+          "pickupPoint": "Parate Nagar, Khamla",
+          "pickupTime": "08:25",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2576808",
+          "name": "Sejal Shahare",
+          "gender": "F",
+          "contactNo": "7517972498",
+          "email": "sejal.shahare@globallogic.com",
+          "pickupPoint": "Zade Child Clinic Chinchbhawan",
+          "pickupTime": "08:40",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P9",
+      "shiftTime": "09:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0218"
+      },
+      "driver": {
+        "name": "ANIKET",
+        "phone": "9325911859"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2517958",
+          "name": "Shravan Meshram",
+          "gender": "M",
+          "contactNo": "8888938203",
+          "email": "shravan.meshram@globallogic.com",
+          "pickupPoint": "Grampanchayat School Bhilgaon Kamptee",
+          "pickupTime": "07:30",
+          "status": "NO SHOW"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Pushpak Sakhare",
+          "gender": "M",
+          "contactNo": "9545635896",
+          "email": null,
+          "pickupPoint": "Sugat Nagar",
+          "pickupTime": "07:50",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2576887",
+          "name": "Likesh Barve",
+          "gender": "M",
+          "contactNo": "9763879173",
+          "email": "likesh.barve@globallogic.com",
+          "pickupPoint": "Om Nagar Koradi Road",
+          "pickupTime": "08:00",
+          "status": "NO SHOW"
+        },
+        {
+          "employeeId": "2577311",
+          "name": "Geeta Rajput",
+          "gender": "F",
+          "contactNo": "9545517502",
+          "email": "geeta.rajput@globallogic.com",
+          "pickupPoint": "Amma PG Karve Nagar Somalvada",
+          "pickupTime": "08:30",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Pranav Nachankar",
+          "gender": "M",
+          "contactNo": "9623958699",
+          "email": null,
+          "pickupPoint": "Chinchbhuvan",
+          "pickupTime": "08:30",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P10",
+      "shiftTime": "09:00",
+      "vehicle": {
+        "vehicleNumber": "MH40CT4542"
+      },
+      "driver": {
+        "name": "Tapan",
+        "phone": "8208223602"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2576558",
+          "name": "Vansh Rewaskar",
+          "gender": "M",
+          "contactNo": "9325990464",
+          "email": null,
+          "pickupPoint": "NARENDRA NAGAR",
+          "pickupTime": "08:10",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Mahesh Upadhyay",
+          "gender": "M",
+          "contactNo": "7385021801",
+          "email": null,
+          "pickupPoint": "NARENDRA NAGAR",
+          "pickupTime": "08:10",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Prachi Jain",
+          "gender": "F",
+          "contactNo": "8700451673",
+          "email": null,
+          "pickupPoint": "New Manishnagar, Near Jayanti Mansion 9",
+          "pickupTime": "08:20",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P11",
+      "shiftTime": "09:00",
+      "vehicle": {
+        "vehicleNumber": "MH31FC8407"
+      },
+      "driver": {
+        "name": "Prashant",
+        "phone": "7620971911"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2577886",
+          "name": "Aryan Shende",
+          "gender": "M",
+          "contactNo": "7057117995",
+          "email": "aryan.shende@globallogic.com",
+          "pickupPoint": "Santra Market",
+          "pickupTime": "07:45",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2576584",
+          "name": "Deepak Singh Kushwah",
+          "gender": "M",
+          "contactNo": "7249582964",
+          "email": null,
+          "pickupPoint": "Baidyashakti Lifecare Pvt. Ltd Ramdaspeth",
+          "pickupTime": "07:55",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2574190",
+          "name": "Prashant Pathlavat",
+          "gender": "M",
+          "contactNo": "9700451452",
+          "email": "Prashanth.pathlavath@globallogic.com",
+          "pickupPoint": "Telecom Nagar",
+          "pickupTime": "08:10",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P12",
+      "shiftTime": "09:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0876"
+      },
+      "driver": {
+        "name": "Shreekant",
+        "phone": "9326604708"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2563939",
+          "name": "Pulipati Krishna",
+          "gender": "M",
+          "contactNo": "9440400155",
+          "email": "pulipati.krishna@globallogic.com",
+          "pickupPoint": "Shubhash Nagar",
+          "pickupTime": "08:05",
+          "status": "YES"
+        },
+        {
+          "employeeId": null,
+          "name": "Vishal Singh",
+          "gender": "F",
+          "contactNo": "8356958653",
+          "email": null,
+          "pickupPoint": "Bhoge Layout Near NIT Garden",
+          "pickupTime": "08:00",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Sayata Chakraborty",
+          "gender": "F",
+          "contactNo": "9774766950",
+          "email": null,
+          "pickupPoint": "Creative Minds Art Academ NIT Garden",
+          "pickupTime": "08:00",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2576564",
+          "name": "Yash Karambe",
+          "gender": "M",
+          "contactNo": "9767612622",
+          "email": null,
+          "pickupPoint": "NOTARY & ADV. SHILA GHAGRE Lokmanya Nagar",
+          "pickupTime": "08:10",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2576692",
+          "name": "Azad Bhasme",
+          "gender": "M",
+          "contactNo": "8530465461",
+          "email": null,
+          "pickupPoint": "Madhuban Colony, Wanadongri",
+          "pickupTime": "08:15",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2576563",
+          "name": "Shreya Karale",
+          "gender": "F",
+          "contactNo": "8767758699",
+          "email": null,
+          "pickupPoint": "Vedanshi Embroidery Hingna",
+          "pickupTime": "08:25",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P13",
+      "shiftTime": "10:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0139"
+      },
+      "driver": {
+        "name": "Nikhil",
+        "phone": "9764325500"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2563945",
+          "name": "Uday Tiwari",
+          "gender": null,
+          "contactNo": "9052594917",
+          "email": null,
+          "pickupPoint": "Besa - Manish Nagar",
+          "pickupTime": "09:20",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Brej Kishore",
+          "gender": null,
+          "contactNo": "9096028331",
+          "email": "NA",
+          "pickupPoint": "Airport Center Hotel",
+          "pickupTime": "09:30",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P14",
+      "shiftTime": "11:00",
+      "vehicle": {
+        "vehicleNumber": "MH31FC8407"
+      },
+      "driver": {
+        "name": "Prashant",
+        "phone": "7620971911"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2563944",
+          "name": "Naga Praveen Matta",
+          "gender": "M",
+          "contactNo": "9156656789",
+          "email": null,
+          "pickupPoint": "Majestic Manor",
+          "pickupTime": "10:30",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P15",
+      "shiftTime": "13:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0218"
+      },
+      "driver": {
+        "name": "ANIKET",
+        "phone": "9325911859"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "########",
+          "name": "Pranay Wekhande",
+          "gender": "M",
+          "contactNo": "8149299596",
+          "email": "pranay.wekhande@globallogic.com",
+          "pickupPoint": "Saibaba Temple, Ayodhya Nagar",
+          "pickupTime": "11:40",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2574809",
+          "name": "Sayali Padole",
+          "gender": "F",
+          "contactNo": "8237263979",
+          "email": "sayali.padole@globallogic.com",
+          "pickupPoint": "Adarsh Lawn & Hall",
+          "pickupTime": "11:55",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Poorvi",
+          "gender": "F",
+          "contactNo": "8458948881",
+          "email": "poorvi.shrivas@globallogic.com",
+          "pickupPoint": "OYO Hotel Olive Stay Inn",
+          "pickupTime": "12:05",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P16",
+      "shiftTime": "13:00",
+      "vehicle": {
+        "vehicleNumber": "MH31FC8407"
+      },
+      "driver": {
+        "name": "Prashant",
+        "phone": "7620971911"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "NA",
+          "name": "Rushabh Bhagate",
+          "gender": "M",
+          "contactNo": "9022023129",
+          "email": "rushabh.bhagate@globallogic.com",
+          "pickupPoint": "Near Neeri School, Towards Ajni Sqr Road",
+          "pickupTime": "12:00",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2573661",
+          "name": "Prabhat Priydarshi",
+          "gender": "M",
+          "contactNo": "7903956186",
+          "email": "prabhat.priydarshi@globallogic.com",
+          "pickupPoint": "CCD IT Park",
+          "pickupTime": "12:10",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2560101",
+          "name": "Vajja Bhanu Prakash",
+          "gender": "M",
+          "contactNo": "9381031939",
+          "email": "vajja.prakash@globallogic.com",
+          "pickupPoint": "Shubhash Nagar",
+          "pickupTime": "12:15",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2572172",
+          "name": "Nikhil Ambule",
+          "gender": "M",
+          "contactNo": "7218518122",
+          "email": "nikhil.ambule@globallogic.com",
+          "pickupPoint": "Sheshrao Kohale Vidhyalaya & Jr College",
+          "pickupTime": "12:30",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P17",
+      "shiftTime": "13:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0876"
+      },
+      "driver": {
+        "name": "Shreekant",
+        "phone": "9326604708"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2573846",
+          "name": "Yash Dubey",
+          "gender": "M",
+          "contactNo": "8815498610",
+          "email": "yash.dubey@globallogic.com",
+          "pickupPoint": "Roshan Mini Transport",
+          "pickupTime": "11:50",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2564448",
+          "name": "Kumar Adarsh",
+          "gender": "M",
+          "contactNo": "7903567319",
+          "email": null,
+          "pickupPoint": "Neelkamal Homes",
+          "pickupTime": "12:00",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2575523",
+          "name": "Abhijit Zade",
+          "gender": "M",
+          "contactNo": "9730462485",
+          "email": null,
+          "pickupPoint": "Krishna Super Mart 2",
+          "pickupTime": "12:20",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2573568",
+          "name": "Nisha Shyamsukha",
+          "gender": "F",
+          "contactNo": "9093931909",
+          "email": "nisha.shyamsukha@globallogic.com",
+          "pickupPoint": "Axis Bank, Manish Nagar",
+          "pickupTime": "12:30",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2572738",
+          "name": "Kartik Ukhalkar",
+          "gender": "M",
+          "contactNo": "7588787601",
+          "email": "kartik.ukhalkar@globallogic.com",
+          "pickupPoint": "Hotel Manomay",
+          "pickupTime": "12:32",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2564924",
+          "name": "Pranay Haste",
+          "gender": "M",
+          "contactNo": "9860582460",
+          "email": "pranay.haste@globallogic.com",
+          "pickupPoint": "REVOLVE FITNESS GYM",
+          "pickupTime": "12:35",
+          "status": "YES"
+        }
+      ]
+    },
+    {
+      "routeId": "P18",
+      "shiftTime": "13:00",
+      "vehicle": {
+        "vehicleNumber": "MH49CW0078"
+      },
+      "driver": {
+        "name": "SURAJ",
+        "phone": "9561326459"
+      },
+      "escort": false,
+      "employees": [
+        {
+          "employeeId": "2573901",
+          "name": "Atharva Deo",
+          "gender": "M",
+          "contactNo": "9881103408",
+          "email": "atharva.deo@globallogic.com",
+          "pickupPoint": "Day 2 Day",
+          "pickupTime": "11:40",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2572338",
+          "name": "Ravindra Farkade",
+          "gender": "M",
+          "contactNo": "7888182312",
+          "email": "ravindra.farkade@globallogic.com",
+          "pickupPoint": "Front of Rajesh Saoji Bhojnalaya",
+          "pickupTime": "12:05",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2532274",
+          "name": "Lavakumar Khanapur",
+          "gender": "M",
+          "contactNo": "6363087687",
+          "email": "lavakumar.khanapur@globallogic.com",
+          "pickupPoint": "Green Relocation",
+          "pickupTime": "12:20",
+          "status": "YES"
+        },
+        {
+          "employeeId": "NA",
+          "name": "Shubhankar Das",
+          "gender": "M",
+          "contactNo": "7001818737",
+          "email": null,
+          "pickupPoint": "Green Relocation",
+          "pickupTime": "12:20",
+          "status": "YES"
+        },
+        {
+          "employeeId": "2573848",
+          "name": "Meghana B U",
+          "gender": "F",
+          "contactNo": "7899130650",
+          "email": "meghana.u@globallogic.com",
+          "pickupPoint": "Kanak Car Center",
+          "pickupTime": "12:40",
+          "status": "YES"
+        }
+      ]
+    }
+  ]
+}

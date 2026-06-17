@@ -377,7 +377,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 	shifts: [],
 	routes: [],
 	activeShiftId: "",
-	selectedDate: "2026-06-12",
+	selectedDate: "2026-06-16",
 	selectedRouteId: null,
 	loading: false,
 	optimizationPlans: null,
