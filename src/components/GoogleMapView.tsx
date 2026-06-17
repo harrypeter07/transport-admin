@@ -617,6 +617,8 @@ export default function GoogleMapView({
 
 		// Overview pass: all routes (or just selected)
 		routes.forEach((route, idx) => {
+			if (selectedRouteId && route.id !== selectedRouteId) return;
+
 			const isSelectedOverview = selectedRouteId === route.id;
 
 			const overviewMode = routeViewModes?.[route.id]

@@ -248,6 +248,7 @@ export default function CompareModal({
 	const [uploading, setUploading] = useState(false);
 	const [uploadError, setUploadError] = useState<string | null>(null);
 	const [fileKey, setFileKey] = useState("");
+	const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
 	const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
 	const [activeMapType, setActiveMapType] = useState<"BASELINE" | "OPTIMIZED">(
 		"OPTIMIZED",
@@ -319,6 +320,7 @@ export default function CompareModal({
 
 	const handleInspectFile = async (file: File) => {
 		setUploadError(null);
+		setPendingUploadFile(file);
 		const formData = new FormData();
 		formData.append("file", file);
 		const res = await fetch("/api/optimization/excel-routes", {
@@ -344,11 +346,17 @@ export default function CompareModal({
 			},
 		);
 		setSheetOptions(mapped);
-		// Auto-select the first sheet and its inferred date by default
-		const defaultSheet = mapped[0]?.name || "";
+		const rosterSheets = mapped.filter(
+			(s: { routePreviewCount?: number }) => (s.routePreviewCount ?? 0) > 0,
+		);
+		const defaultSheetInfo =
+			rosterSheets.find((s: { inferredDate?: string | null }) => s.inferredDate) ||
+			rosterSheets[0] ||
+			mapped[0];
+		const defaultSheet = defaultSheetInfo?.name || "";
 		setSelectedSheet(defaultSheet);
-		if (mapped[0]?.inferredDate) {
-			setUploadDate(mapped[0].inferredDate);
+		if (defaultSheetInfo?.inferredDate) {
+			setUploadDate(defaultSheetInfo.inferredDate);
 		} else {
 			setUploadDate(date);
 		}
@@ -361,14 +369,32 @@ export default function CompareModal({
 	};
 
 	const handleSaveBaseline = async () => {
-		if (!fileKey || !selectedSheet) return;
+		if ((!fileKey && !pendingUploadFile) || !selectedSheet) return;
+
+		const sheetMeta = sheetOptions.find((s) => s.name === selectedSheet);
+		if (sheetMeta && (sheetMeta.routePreviewCount ?? 0) === 0) {
+			setUploadError(
+				`Sheet "${selectedSheet}" has no P-routes. Choose a daily roster tab (e.g. 12-6-26), not "Routes and Driver details".`,
+			);
+			return;
+		}
+
 		setUploading(true);
 		setUploadError(null);
 
+		const formData = new FormData();
+		if (pendingUploadFile) {
+			formData.append("file", pendingUploadFile);
+		}
+		if (fileKey) {
+			formData.append("fileKey", fileKey);
+		}
+		formData.append("sheetName", selectedSheet);
+		formData.append("date", uploadDate);
+
 		const res = await fetch("/api/optimization/excel-routes/parse", {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ fileKey, sheetName: selectedSheet, date: uploadDate }),
+			body: formData,
 		});
 		const data = await res.json();
 		setUploading(false);
@@ -529,6 +555,21 @@ export default function CompareModal({
 	);
 	const mapOptimizedRoutes = filteredOptimizedRoutes.filter((r) =>
 		routeMatchesEmployeeSearch(r, employeeSearchQuery),
+	);
+
+	const baselineMapRoutes = useMemo(
+		() =>
+			selectedCurrentId
+				? mapCurrentRoutes.filter((r) => r.id === selectedCurrentId)
+				: mapCurrentRoutes,
+		[mapCurrentRoutes, selectedCurrentId],
+	);
+	const optimizedMapRoutes = useMemo(
+		() =>
+			selectedOptimizedId
+				? mapOptimizedRoutes.filter((r) => r.id === selectedOptimizedId)
+				: mapOptimizedRoutes,
+		[mapOptimizedRoutes, selectedOptimizedId],
 	);
 
 	const employeeComparison = useMemo(() => {
@@ -1107,7 +1148,10 @@ export default function CompareModal({
 								}}
 								className="text-xs border border-[#e8e8e8] px-2 py-1 bg-white"
 							>
-								{sheetOptions.map((s) => (
+								{(sheetOptions.some((s) => s.routePreviewCount > 0)
+									? sheetOptions.filter((s) => s.routePreviewCount > 0)
+									: sheetOptions
+								).map((s) => (
 									<option key={s.name} value={s.name}>
 										{s.name} ({s.routePreviewCount} routes)
 									</option>
@@ -1215,7 +1259,7 @@ export default function CompareModal({
 									<div className="flex-1 relative min-h-0">
 										{mapCurrentRoutes.length > 0 ? (
 											<GoogleMapView
-												routes={mapCurrentRoutes}
+												routes={baselineMapRoutes}
 												selectedRouteId={selectedCurrentId}
 												onSelectRoute={handleSelectCurrent}
 												mode="OPTIMIZER"
@@ -1242,7 +1286,7 @@ export default function CompareModal({
 									<div className="flex-1 relative min-h-0">
 										{mapOptimizedRoutes.length > 0 ? (
 											<GoogleMapView
-												routes={mapOptimizedRoutes}
+												routes={optimizedMapRoutes}
 												selectedRouteId={selectedOptimizedId}
 												onSelectRoute={handleSelectOptimized}
 												mode="OPTIMIZER"

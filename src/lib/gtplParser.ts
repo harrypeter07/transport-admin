@@ -1,4 +1,5 @@
 import * as xlsx from "xlsx";
+import { resolveWorkbookSheetName } from "@/lib/excelParser";
 import path from "path";
 import fs from "fs";
 import { inferDateFromSheetName } from "@/lib/excelParser";
@@ -370,19 +371,21 @@ export function parseGtlpWorkbookSheet(
   sheetName: string
 ): GtplSheetParseResult {
   const workbook = xlsx.read(buffer, { type: "buffer" });
-  const sheet = workbook.Sheets[sheetName];
+  const resolvedName = resolveWorkbookSheetName(workbook.SheetNames, sheetName);
+  const sheet = workbook.Sheets[resolvedName];
   if (!sheet) throw new Error(`Sheet "${sheetName}" not found`);
   const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-  return parseGtlpSheetRows(rows, sheetName);
+  return parseGtlpSheetRows(rows, resolvedName);
 }
 
 export function parseGtlpFileSheet(sheetName: string, filePath?: string): GtplSheetParseResult {
   const p = filePath || gtplWorkbookPath();
   const workbook = xlsx.readFile(p);
-  const sheet = workbook.Sheets[sheetName];
+  const resolvedName = resolveWorkbookSheetName(workbook.SheetNames, sheetName);
+  const sheet = workbook.Sheets[resolvedName];
   if (!sheet) throw new Error(`Sheet "${sheetName}" not found in ${p}`);
   const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-  return parseGtlpSheetRows(rows, sheetName);
+  return parseGtlpSheetRows(rows, resolvedName);
 }
 
 export function listGtlpSheets(buffer: Buffer): Array<{

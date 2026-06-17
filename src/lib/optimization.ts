@@ -3039,6 +3039,143 @@ export async function getRouteVariations(
 	return variations;
 }
 
+/** Re-sequence pickup/drop stops by distance while keeping cab, shift, and passenger assignments fixed. */
+export type CanonicalDbRoute = {
+	id: string;
+	cabId: string;
+	shiftId: string;
+	hasEscort: boolean;
+	cab: {
+		vehicleNumber: string;
+		driverName: string | null;
+		driverPhone: string | null;
+		capacity: number;
+		driverX?: number | null;
+		driverY?: number | null;
+	};
+	stops: Array<{
+		employeeId: string;
+		employee: {
+			id: string;
+			name: string;
+			gender: string;
+			x: number;
+			y: number;
+			address: string;
+			pickupPoint?: { x: number; y: number; address?: string | null; name?: string | null } | null;
+			pickupPointId?: string | null;
+		};
+	}>;
+};
+
+export async function sequenceCanonicalRoutes(
+	dbRoutes: CanonicalDbRoute[],
+	isPickup: boolean,
+	apiKey: string,
+	strategy: "DISTANCE" | "TIME" | "BALANCED" = "BALANCED",
+): Promise<(OptimizedRoute & { shiftId: string })[]> {
+	const results: (OptimizedRoute & { shiftId: string })[] = [];
+
+	for (const route of dbRoutes) {
+		if (route.stops.length === 0) continue;
+
+		const optEmployees: OptimizeEmployee[] = route.stops.map((stop) => {
+			const emp = stop.employee;
+			const usePickup = !!(emp.pickupPointId && emp.pickupPoint);
+			const pp = emp.pickupPoint;
+			return {
+				id: emp.id,
+				name: emp.name,
+				gender: emp.gender as "MALE" | "FEMALE",
+				x: usePickup && pp ? pp.x : emp.x,
+				y: usePickup && pp ? pp.y : emp.y,
+				address:
+					usePickup && pp
+						? pp.address || pp.name || emp.address
+						: emp.address,
+				department: "",
+				phone: "",
+			};
+		});
+
+		const variations = await getRouteVariations(
+			optEmployees,
+			isPickup,
+			route.hasEscort,
+			apiKey,
+		);
+		const picked =
+			variations.find((v) => v.strategy === strategy) ||
+			variations.find((v) => v.strategy === "BALANCED") ||
+			variations[0];
+		if (!picked) continue;
+
+		const cab = route.cab;
+		results.push({
+			id: route.id,
+			cabId: route.cabId,
+			shiftId: route.shiftId,
+			vehicleNumber: cab.vehicleNumber,
+			capacity: cab.capacity,
+			driverName: cab.driverName || "Unknown",
+			driverPhone: cab.driverPhone || "",
+			startPoint:
+				typeof cab.driverX === "number" && typeof cab.driverY === "number"
+					? { x: cab.driverX, y: cab.driverY }
+					: DEPOT,
+			stops: picked.stops.map((s) => ({
+				...s,
+				status: "PENDING" as const,
+			})),
+			totalDistance: picked.totalDistance,
+			totalDuration: picked.totalDuration,
+			optimizationScore: picked.optimizationScore,
+			violations: picked.violations.map((v) => ({
+				type: v.type,
+				severity: "MEDIUM" as const,
+				notes: v.type,
+			})),
+			hasEscort: route.hasEscort,
+		});
+	}
+
+	return results;
+}
+
+export function buildPlansFromSequencedRoutes(
+	routes: (OptimizedRoute & { shiftId?: string })[],
+) {
+	const totalEmployeesCovered = routes.reduce((sum, r) => sum + r.stops.length, 0);
+	const totalDistance = routes.reduce((sum, r) => sum + r.totalDistance, 0);
+	const totalViolations = routes.reduce(
+		(sum, r) => sum + (r.violations?.length || 0),
+		0,
+	);
+	const plan = {
+		routes,
+		totalCabsUsed: routes.length,
+		totalEmployeesCovered,
+		totalDistance: Math.round(totalDistance * 10) / 10,
+		avgCommuteMins: routes.length
+			? Math.round(
+					routes.reduce((sum, r) => sum + r.totalDuration, 0) / routes.length,
+				)
+			: 0,
+		totalViolations,
+		unassignedEmployees: [] as OptimizeEmployee[],
+		strategyScore: 85,
+	};
+
+	return {
+		MAXIMIZE_UTILIZATION: plan,
+		MINIMIZE_TIME: plan,
+		BALANCED: plan,
+		optimizedEmployeeIds: routes.flatMap((r) =>
+			r.stops.map((s) => s.employeeId),
+		),
+	};
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MULTI-STRATEGY OPTIMIZATION ENGINE
 // Runs 3 distinct clustering strategies simultaneously, returning all 3 plans

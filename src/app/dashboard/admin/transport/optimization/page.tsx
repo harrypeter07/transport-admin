@@ -230,7 +230,9 @@ export default function TransitAdminSPA() {
 		setSelectedRouteId,
 		runOptimization,
 		previewOptimization,
+		previewCanonicalSequencing,
 		applyOptimizationPlan,
+		applyCanonicalSequence,
 		clearOptimizationPreview,
 		optimizationPlans,
 		isolatedEmployeeIds,
@@ -512,7 +514,9 @@ export default function TransitAdminSPA() {
 		setApplySuccess(false);
 		try {
 			await fetchInitialData();
-			const result = await previewOptimization(isPickup);
+			const result = isCanonicalDate
+				? await previewCanonicalSequencing(isPickup)
+				: await previewOptimization(isPickup);
 			if (!result.success) {
 				setOptimizeError(
 					result.error ||
@@ -525,20 +529,22 @@ export default function TransitAdminSPA() {
 				} catch {}
 				setHasOptimized(true);
 
-			// Auto-save the BALANCED strategy as a draft to the database so it is persistent
-				// NOTE: If canonical routes exist, this will return CANONICAL_LOCK (409) which is expected.
-				const applyRes = await applyOptimizationPlan("BALANCED", isPickup);
+				const applyRes = isCanonicalDate
+					? await applyCanonicalSequence("BALANCED", isPickup)
+					: await applyOptimizationPlan("BALANCED", isPickup);
 				if (applyRes.success) {
 					setApplySuccess(true);
 				} else if ((applyRes as any).canonical === true) {
-					// Canonical lock — routes are already correctly assigned from the official transport sheet.
-					// Optimization preview is still shown for reference but DB is not modified.
-					console.log("[page] 🔒 Canonical routes active — optimization preview generated but DB routes preserved.");
-					setApplySuccess(true); // Treat as success — DB has correct canonical routes
+					console.log(
+						"[page] 🔒 Canonical routes active — full reassignment blocked; DB routes preserved.",
+					);
+					setApplySuccess(true);
 				} else {
 					setOptimizeError(
 						applyRes.error ||
-							"Optimization completed, but failed to auto-save draft routes.",
+							(isCanonicalDate
+								? "Stop order preview generated, but failed to save sequence."
+								: "Optimization completed, but failed to auto-save draft routes."),
 					);
 				}
 			}
@@ -556,7 +562,9 @@ export default function TransitAdminSPA() {
 		setOptimizeError(null);
 		setApplySuccess(false);
 		try {
-			const result = await applyOptimizationPlan(strategy, isPickup);
+			const result = isCanonicalDate
+				? await applyCanonicalSequence(strategy, isPickup)
+				: await applyOptimizationPlan(strategy, isPickup);
 			if (!result.success) {
 				setOptimizeError(result.error || "Failed to apply plan.");
 			} else {
@@ -715,7 +723,7 @@ export default function TransitAdminSPA() {
 
 				return {
 					...r,
-					id: `preview-${routeShiftId}-r${routeNum}-${idx}`,
+					id: r.id || `preview-${routeShiftId}-r${routeNum}-${idx}`,
 					routeNumber: routeNum,
 					shiftId: routeShiftId,
 					shift: routeShift,
@@ -948,17 +956,13 @@ export default function TransitAdminSPA() {
 	}, [optimizationPlans, compareShiftFilter, employees]);
 
 	const mapVisibleRoutes = useMemo(() => {
-		const shiftFiltered =
-			mapShiftFilter === "ALL"
-				? activeRoutes
-				: activeRoutes.filter((r) => (r as any).shiftId === mapShiftFilter);
 		if (selectedRouteId) {
 			const selectedRoute = activeRoutes.find((r) => r.id === selectedRouteId);
-			if (selectedRoute && !shiftFiltered.some((r) => r.id === selectedRouteId)) {
-				return [...shiftFiltered, selectedRoute];
-			}
+			if (selectedRoute) return [selectedRoute];
 		}
-		return shiftFiltered;
+		return mapShiftFilter === "ALL"
+			? activeRoutes
+			: activeRoutes.filter((r) => (r as any).shiftId === mapShiftFilter);
 	}, [activeRoutes, mapShiftFilter, selectedRouteId]);
 
 	// Build pickup point markers from employee pickup points in visible routes
@@ -1979,7 +1983,9 @@ export default function TransitAdminSPA() {
 							<div className="flex flex-col text-left">
 								<span className="font-bold">Canonical Routes Active — Official Transport Sheet</span>
 								<span className="mt-0.5 font-medium">
-									All {routes.length} routes for this date are imported from the official transport sheet and are protected. Dynamic optimization is disabled. All employee-driver mappings are locked as per the transport manifest.
+									All {routes.length} routes for this date are imported from the official transport sheet.
+									Drivers, cabs, shifts, and passenger assignments stay locked.
+									Click Optimize to re-order pickup stops by distance only (same passengers, same driver).
 								</span>
 							</div>
 						</div>
@@ -2799,7 +2805,15 @@ export default function TransitAdminSPA() {
 																						: ""
 																				}`}
 																			>
-																				<tr className="bg-slate-100/50 border-b border-slate-200">
+																				<tr
+																					className="bg-slate-100/50 border-b border-slate-200 cursor-pointer hover:bg-slate-200/60 transition-colors"
+																					onClick={() => {
+																						setSelectedRouteId(
+																							isSelected ? null : route.id,
+																						);
+																						setSelectedEmployeeId(null);
+																					}}
+																				>
 																					<td
 																						colSpan={5}
 																						className="p-2.5 px-3 text-left"
@@ -2857,11 +2871,7 @@ export default function TransitAdminSPA() {
 																							<tr
 																								key={stop.id}
 																								onClick={() => {
-																									setSelectedRouteId(
-																										isSelected
-																											? null
-																											: route.id,
-																									);
+																									setSelectedRouteId(route.id);
 																									setSelectedEmployeeId(
 																										stop.employee.id,
 																									);

@@ -63,6 +63,30 @@ export type ExcelSheetInfo = {
   routePreviewCount: number;
 };
 
+/** Match sheet tab names even when trailing spaces or casing differ. */
+export function resolveWorkbookSheetName(
+  sheetNames: string[],
+  requested?: string | null,
+): string {
+  if (!requested?.trim()) {
+    return sheetNames[0] || "";
+  }
+  if (sheetNames.includes(requested)) {
+    return requested;
+  }
+  const normalized = requested.trim().toLowerCase();
+  const match = sheetNames.find(
+    (name) =>
+      name === requested ||
+      name.trim().toLowerCase() === normalized ||
+      name.toLowerCase() === normalized,
+  );
+  if (match) return match;
+  throw new Error(
+    `Sheet "${requested}" not found in workbook. Available: ${sheetNames.join(", ")}`,
+  );
+}
+
 export function inferDateFromSheetName(name: unknown): string | null {
   if (name == null) return null;
   const trimmed = String(name).trim();
@@ -225,7 +249,10 @@ export async function parseExcelBufferToRoutes(
   options?: { sheetName?: string }
 ): Promise<{ routes: ParsedExcelRoute[]; summary: ExcelParseSummary }> {
   const workbook = xlsx.read(buffer, { type: "buffer" });
-  const sheetName = options?.sheetName || workbook.SheetNames[0];
+  const sheetName = resolveWorkbookSheetName(
+    workbook.SheetNames,
+    options?.sheetName || workbook.SheetNames[0],
+  );
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) {
     throw new Error(`Sheet "${sheetName}" not found in workbook`);

@@ -2,41 +2,119 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/apiAuth";
 import { prisma } from "@/lib/db";
-import fs from "fs";
-import path from "path";
-import { parseExcelBufferToRoutes, haversineKm } from "@/lib/excelParser";
+import { parseExcelBufferToRoutes, haversineKm, resolveWorkbookSheetName } from "@/lib/excelParser";
 import { geocodePlace, makeDepot } from "@/lib/optimization";
 import { invalidateRoutesCache, invalidateMetricsCache } from "@/lib/cache";
+import { resolveUploadBuffer } from "@/lib/uploadStorage";
+import * as xlsx from "xlsx";
+
+async function readUploadBuffer(
+  req: NextRequest,
+): Promise<
+  | { ok: true; buffer: Buffer; sheetName: string; dateOverride?: string }
+  | { ok: false; response: NextResponse }
+> {
+  const contentType = req.headers.get("content-type") || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await req.formData();
+    const sheetName = String(formData.get("sheetName") || "");
+    const dateOverride = String(formData.get("date") || "").trim() || undefined;
+    const fileKey = String(formData.get("fileKey") || "").trim();
+    const file = formData.get("file") as File | null;
+
+    if (!sheetName.trim()) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: "sheetName is required" },
+          { status: 400 },
+        ),
+      };
+    }
+
+    if (file && file.size > 0) {
+      return {
+        ok: true,
+        buffer: Buffer.from(await file.arrayBuffer()),
+        sheetName,
+        dateOverride,
+      };
+    }
+
+    if (fileKey) {
+      const buffer = resolveUploadBuffer(fileKey);
+      if (buffer) {
+        return { ok: true, buffer, sheetName, dateOverride };
+      }
+    }
+
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: "Upload file not found",
+          details:
+            "Re-select the Excel file and save again. Serverless hosts cannot keep uploads between requests.",
+        },
+        { status: 404 },
+      ),
+    };
+  }
+
+  const body = await req.json();
+  const { fileKey, sheetName, date: dateOverride } = body;
+
+  if (!fileKey || !sheetName) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "fileKey and sheetName are required" },
+        { status: 400 },
+      ),
+    };
+  }
+
+  const buffer = resolveUploadBuffer(fileKey);
+  if (!buffer) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: `Upload file with key ${fileKey} not found`,
+          details:
+            "Re-upload the Excel file (multipart) so the server can parse it directly.",
+        },
+        { status: 404 },
+      ),
+    };
+  }
+
+  return { ok: true, buffer, sheetName, dateOverride };
+}
 
 export async function POST(req: NextRequest) {
   try {
     const auth = await requireApiRole(["ADMIN"]);
     if (auth.response) return auth.response;
 
-    const body = await req.json();
-    const { fileKey, sheetName, date: dateOverride } = body;
+    const upload = await readUploadBuffer(req);
+    if (!upload.ok) return upload.response;
 
-    if (!fileKey || !sheetName) {
-      return NextResponse.json(
-        { error: "fileKey and sheetName are required" },
-        { status: 400 },
+    const { buffer, sheetName: requestedSheet, dateOverride } = upload;
+
+    const workbook = xlsx.read(buffer, { type: "buffer" });
+    let resolvedSheetName: string;
+    try {
+      resolvedSheetName = resolveWorkbookSheetName(
+        workbook.SheetNames,
+        requestedSheet,
       );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return NextResponse.json({ error: "Invalid sheet", details: message }, { status: 400 });
     }
 
-    const filePath = path.join(
-      process.cwd(),
-      "data",
-      "uploads",
-      `${fileKey}.xlsx`,
-    );
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json(
-        { error: `Upload file with key ${fileKey} not found` },
-        { status: 404 },
-      );
-    }
-
-    // Fetch database references in parallel before parsing
     const [dbEmployees, dbShifts, settings] = await Promise.all([
       prisma.employee.findMany({ where: { status: "ACTIVE" } }),
       prisma.shift.findMany(),
@@ -47,9 +125,6 @@ export async function POST(req: NextRequest) {
     const depotLng = settings?.defaultDepotLng ?? 79.0526;
     const depot = makeDepot(depotLat, depotLng);
 
-    const buffer = fs.readFileSync(filePath);
-
-    // Call modern parser from excelParser
     const { routes: parsedRoutes, summary } = await parseExcelBufferToRoutes(
       buffer,
       dbEmployees,
@@ -65,7 +140,7 @@ export async function POST(req: NextRequest) {
           data,
         });
       },
-      { sheetName },
+      { sheetName: resolvedSheetName },
     );
 
     // Geocoding pass for unmatched employee coordinates (x ≈ 0, y ≈ 0)
@@ -161,7 +236,7 @@ export async function POST(req: NextRequest) {
 
     const finalSummary = {
       source: "MANUAL_EXCEL",
-      sheetName,
+      sheetName: resolvedSheetName,
       date,
       routeCount: baselineRoutes.length,
       cabsUsed: baselineRoutes.length,

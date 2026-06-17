@@ -11,6 +11,8 @@ import {
 	OptimizedRoute,
 	makeDepot,
 	RouteConstraints,
+	sequenceCanonicalRoutes,
+	buildPlansFromSequencedRoutes,
 } from "@/lib/optimization";
 import { requireApiRole } from "@/lib/apiAuth";
 
@@ -567,6 +569,51 @@ async function persistPreviewRoutes(
 	return { count: validRoutes.length, shiftCount: affectedShiftIds.length };
 }
 
+async function applyCanonicalStopOrder(
+	previewRoutes: Array<{
+		id?: string;
+		totalDistance: number;
+		totalDuration: number;
+		stops: Array<{ employeeId: string; stopOrder: number; etaMinutes: number }>;
+	}>,
+	currentDateStr: string,
+) {
+	let updated = 0;
+	await prisma.$transaction(async (tx) => {
+		for (const pr of previewRoutes) {
+			if (!pr.id) continue;
+			const existing = await tx.route.findFirst({
+				where: {
+					id: pr.id,
+					date: currentDateStr,
+					optimizationMode: "CANONICAL",
+				},
+			});
+			if (!existing) continue;
+
+			await tx.route.update({
+				where: { id: pr.id },
+				data: {
+					totalDistance: pr.totalDistance,
+					totalDuration: pr.totalDuration,
+				},
+			});
+
+			for (const stop of pr.stops) {
+				await tx.routeStop.updateMany({
+					where: { routeId: pr.id, employeeId: stop.employeeId },
+					data: {
+						stopOrder: stop.stopOrder,
+						etaMinutes: stop.etaMinutes,
+					},
+				});
+			}
+			updated++;
+		}
+	});
+	return { updatedRoutes: updated };
+}
+
 // POST: Run optimization
 export async function POST(req: NextRequest) {
 	const ip = reqIp(req);
@@ -644,6 +691,63 @@ export async function POST(req: NextRequest) {
 		};
 		const apiKeyHeader = req.headers.get("x-google-maps-key") || "";
 		const apiKey = apiKeyHeader || process.env.GOOGLE_MAPS_API_KEY || "";
+
+		if (mode === "CANONICAL_SEQUENCE") {
+			const dbRoutes = await prisma.route.findMany({
+				where: {
+					date: currentDateStr,
+					optimizationMode: "CANONICAL",
+					isPickup: isPickup ?? true,
+					...(shiftId ? { shiftId } : {}),
+				},
+				include: {
+					cab: true,
+					stops: {
+						where: { status: { not: "SKIPPED" } },
+						include: {
+							employee: { include: { pickupPoint: true } },
+						},
+						orderBy: { stopOrder: "asc" },
+					},
+				},
+				orderBy: [{ shiftId: "asc" }, { routeNumber: "asc" }],
+			});
+
+			if (dbRoutes.length === 0) {
+				return NextResponse.json({
+					skipped: true,
+					reason: "no_canonical_routes",
+					preview: null,
+				});
+			}
+
+			const sequenced = await sequenceCanonicalRoutes(
+				dbRoutes as any,
+				isPickup ?? true,
+				apiKey,
+				"BALANCED",
+			);
+			const plans = buildPlansFromSequencedRoutes(sequenced);
+
+			return NextResponse.json({
+				preview: plans,
+				canonicalSequence: true,
+				fleetSizing: {
+					activeEmployees: plans.optimizedEmployeeIds.length,
+					activeCabs: sequenced.length,
+				},
+			});
+		}
+
+		if (mode === "APPLY_SEQUENCE" && Array.isArray(previewRoutes)) {
+			const result = await applyCanonicalStopOrder(
+				previewRoutes,
+				currentDateStr,
+			);
+			invalidateRoutesCache();
+			invalidateMetricsCache();
+			return NextResponse.json({ success: true, ...result });
+		}
 
 		if (mode === "ALL") {
 			const inputs = await fetchOptimizationInputs(

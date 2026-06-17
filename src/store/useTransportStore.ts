@@ -321,8 +321,15 @@ interface TransportStore {
 	) => Promise<{ success: boolean; error?: string }>;
 	previewOptimization: (
 		isPickup: boolean,
+	) => Promise<{ success: boolean; error?: string; canonical?: boolean }>;
+	previewCanonicalSequencing: (
+		isPickup: boolean,
 	) => Promise<{ success: boolean; error?: string }>;
 	applyOptimizationPlan: (
+		strategy: keyof OptimizationPlans,
+		isPickup: boolean,
+	) => Promise<{ success: boolean; error?: string; canonical?: boolean }>;
+	applyCanonicalSequence: (
 		strategy: keyof OptimizationPlans,
 		isPickup: boolean,
 	) => Promise<{ success: boolean; error?: string }>;
@@ -579,6 +586,13 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 						continue;
 					}
 
+					if (res.status === 403) {
+						storeLog(`[store] previewOptimization — shift ${shift.name} forbidden, skipping`, {
+							message,
+						});
+						continue;
+					}
+
 					if (!message.toLowerCase().includes("no active employees")) {
 						hardErrors.push(`${shift.name}: ${message}`);
 					}
@@ -824,6 +838,68 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 		}
 	},
 
+	previewCanonicalSequencing: async (isPickup) => {
+		if (get().previewing) {
+			return { success: false, error: "Optimization already in progress" };
+		}
+		set({ previewing: true, optimizationPlans: null });
+		storeLog("previewCanonicalSequencing", { isPickup });
+		try {
+			const state = get();
+			const res = await fetch("/api/optimization", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					date: state.selectedDate,
+					isPickup,
+					mode: "CANONICAL_SEQUENCE",
+					absentEmployeeCodes: state.absentEmployeeCodes,
+				}),
+			});
+
+			if (!res.ok) {
+				const errData = await res.json().catch(() => ({}));
+				set({ previewing: false });
+				return {
+					success: false,
+					error: errData.error || "Failed to sequence canonical routes",
+				};
+			}
+
+			const data = await res.json();
+			if (data.skipped || !data.preview) {
+				set({ previewing: false });
+				return {
+					success: false,
+					error: "No canonical routes found for this date.",
+				};
+			}
+
+			const mergedPlans = {
+				...data.preview,
+				canonicalSequence: true,
+				totalEmployees: data.preview.optimizedEmployeeIds?.length || 0,
+				totalCabCapacity: data.preview.BALANCED?.totalCabsUsed || 0,
+				capacityShortfall: 0,
+			};
+
+			set({
+				optimizationPlans: mergedPlans,
+				isolatedEmployeeIds: [],
+				previewing: false,
+			});
+
+			storeLog("previewCanonicalSequencing — OK", {
+				routes: mergedPlans.BALANCED?.routes?.length || 0,
+			});
+			return { success: true };
+		} catch (e) {
+			set({ previewing: false });
+			console.error("[store] ❌ previewCanonicalSequencing", e);
+			return { success: false, error: "Network error during canonical sequencing" };
+		}
+	},
+
 	applyOptimizationPlan: async (strategy, isPickup) => {
 		const plans = get().optimizationPlans;
 		if (
@@ -925,6 +1001,65 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			set({ loading: false });
 			console.error("[store] ❌ applyOptimizationPlan", e);
 			return { success: false, error: "Network error applying plan" };
+		}
+	},
+
+	applyCanonicalSequence: async (strategy, isPickup) => {
+		const plans = get().optimizationPlans;
+		if (!plans || !(strategy in plans)) {
+			return { success: false, error: "No preview available" };
+		}
+		const plan = (plans as any)[strategy] as { routes: any[] };
+		set({ loading: true });
+		try {
+			const previewRoutes = (plan.routes || [])
+				.filter((route) => route.id && route.stops?.length > 0)
+				.map((route) => ({
+					id: route.id,
+					totalDistance: route.totalDistance,
+					totalDuration: route.totalDuration,
+					stops: route.stops.map((stop: any) => ({
+						employeeId: stop.employeeId,
+						stopOrder: stop.stopOrder,
+						etaMinutes: stop.etaMinutes,
+					})),
+				}));
+
+			if (previewRoutes.length === 0) {
+				set({ loading: false });
+				return { success: false, error: "No sequenced routes to apply" };
+			}
+
+			const res = await fetch("/api/optimization", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					date: get().selectedDate,
+					isPickup,
+					mode: "APPLY_SEQUENCE",
+					previewRoutes,
+				}),
+			});
+
+			if (!res.ok) {
+				const errData = await res.json().catch(() => ({}));
+				set({ loading: false });
+				return { success: false, error: errData.error || "Apply sequence failed" };
+			}
+
+			const dateStr = get().selectedDate;
+			const resRoutes = await fetch(`/api/optimization?date=${dateStr}&refresh=true`);
+			if (resRoutes.ok) {
+				const routes = await resRoutes.json();
+				set({ routes, loading: false, selectedRouteId: null, optimizationPlans: null });
+			} else {
+				set({ loading: false });
+			}
+			return { success: true };
+		} catch (e) {
+			set({ loading: false });
+			console.error("[store] ❌ applyCanonicalSequence", e);
+			return { success: false, error: "Network error applying sequence" };
 		}
 	},
 

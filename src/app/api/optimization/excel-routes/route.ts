@@ -2,9 +2,8 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/apiAuth";
 import { prisma } from "@/lib/db";
-import fs from "fs";
-import path from "path";
 import { listGtlpSheets } from "@/lib/gtplParser";
+import { saveUploadBuffer } from "@/lib/uploadStorage";
 
 import { getCachedOptimizationMetrics } from "@/lib/cache";
 
@@ -93,15 +92,15 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const fileKey = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    const uploadDir = path.join(process.cwd(), "data", "uploads");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    fs.writeFileSync(path.join(uploadDir, `${fileKey}.xlsx`), buffer);
+    const savedPath = saveUploadBuffer(fileKey, buffer);
 
     const sheets = listGtlpSheets(buffer);
 
-    return NextResponse.json({ sheets, fileKey });
+    return NextResponse.json({
+      sheets,
+      fileKey,
+      persisted: !!savedPath,
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[api] ❌ POST /api/optimization/excel-routes", e);
