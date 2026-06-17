@@ -508,12 +508,39 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 		storeLog("previewOptimization", { isPickup });
 		try {
 			const state = get();
+			const absentEmployeeCodes = state.absentEmployeeCodes;
 			const shiftsToOptimize = state.shifts.length > 0 ? state.shifts : [];
+
+			console.log("\n🚀 [ETMS Optimization] Starting Route Optimization Process...");
+			console.log(`📅 Date: ${state.selectedDate} | Type: ${isPickup ? "Pickup" : "Drop"}`);
+			console.log("⏰ Shifts to Optimize:", shiftsToOptimize.map(s => `${s.name} (${s.startTime})`).join(", "));
+			
+			console.log("👥 Employees in Scope (Active & Not on Leave):");
+			let totalScopeCount = 0;
+			for (const shift of shiftsToOptimize) {
+				const shiftEmployees = state.employees.filter(
+					(emp) => emp.shiftId === shift.id && emp.status !== "INACTIVE" && !absentEmployeeCodes.includes(emp.employeeCode)
+				);
+				totalScopeCount += shiftEmployees.length;
+				console.log(`  - Shift ${shift.name}: ${shiftEmployees.length} active employees`);
+				shiftEmployees.forEach(e => {
+					console.log(`    * ${e.name} (${e.employeeCode}) - Location: (${e.x?.toFixed(4)}, ${e.y?.toFixed(4)})`);
+				});
+			}
+			console.log(`  └─ Total employees in optimization scope: ${totalScopeCount}`);
+
+			console.log("🚗 Available Cabs:");
+			state.cabs.forEach(c => {
+				console.log(`  - Vehicle: ${c.vehicleNumber} | Driver: ${c.driverName || "Unassigned"} | Capacity: ${c.capacity}`);
+			});
+
+			console.log("🧠 Solver Processing...");
+
 			const previews: OptimizationPlans[] = [];
 			const hardErrors: string[] = [];
 			const cabSequenceCounts: Record<string, number> = {};
-			const absentEmployeeCodes = state.absentEmployeeCodes;
 			const allOptimizedEmployeeIds: string[] = [];
+			let canonicalLockedCount = 0;
 
 			for (const shift of shiftsToOptimize) {
 				// Count active employees in this shift
@@ -546,6 +573,12 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 					const errData = await res.json().catch(() => ({}));
 					const message = errData.error || `Preview failed for ${shift.name}`;
 
+					if (res.status === 409 && errData.error === "CANONICAL_LOCK") {
+						canonicalLockedCount++;
+						storeLog(`[store] 🔒 previewOptimization — shift ${shift.name} has CANONICAL_LOCK, skipping`);
+						continue;
+					}
+
 					if (!message.toLowerCase().includes("no active employees")) {
 						hardErrors.push(`${shift.name}: ${message}`);
 					}
@@ -558,10 +591,22 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 						shift: shift.name,
 						reason: data.reason,
 					});
+					console.warn(`⚠️ [ETMS Optimization] Shift ${shift.name} skipped: ${data.reason}`);
 					continue;
 				}
 
 				if (data.preview) {
+					console.log(`✅ [ETMS Optimization] Generated preview routes for Shift: ${shift.name}`);
+					for (const strategy of ["MAXIMIZE_UTILIZATION", "MINIMIZE_TIME", "BALANCED"] as const) {
+						const plan = data.preview[strategy];
+						if (plan) {
+							console.log(`   └─ Strategy: ${strategy}`);
+							console.log(`      * Cabs Used: ${plan.totalCabsUsed}`);
+							console.log(`      * Employees Covered: ${plan.totalEmployeesCovered}`);
+							console.log(`      * Unassigned Employees: ${plan.unassignedEmployees?.length || 0}`);
+							console.log(`      * Violations: ${plan.totalViolations}`);
+						}
+					}
 					// Collect optimized employee IDs for accurate overflow calculation
 					if (data.fleetSizing?.optimizedEmployeeIds) {
 						allOptimizedEmployeeIds.push(
@@ -601,6 +646,9 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 
 			if (previews.length === 0) {
 				set({ previewing: false });
+				if (canonicalLockedCount > 0 && hardErrors.length === 0) {
+					return { success: false, error: "CANONICAL_LOCK", canonical: true };
+				}
 				console.error("[store] ❌ previewOptimization — no previews", {
 					hardErrors,
 				});
@@ -731,6 +779,39 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			} catch {
 				/* ignore storage errors */
 			}
+			// ── DETAILED CONSOLE LOGGING FOR THE USER ──
+			console.log("\n📊 [ETMS Optimization] RUN RESULTS SUMMARY:");
+			for (const strategy of ["MAXIMIZE_UTILIZATION", "MINIMIZE_TIME", "BALANCED"] as const) {
+				const plan = mergedPlans[strategy];
+				if (plan) {
+					console.log(`\n✨ Strategy: ${strategy}`);
+					console.log(`   └─ Total Cabs Used: ${plan.totalCabsUsed}`);
+					console.log(`   └─ Total Distance: ${plan.totalDistance.toFixed(2)} km`);
+					console.log(`   └─ Average Commute: ${plan.avgCommuteMins.toFixed(1)} mins`);
+					console.log(`   └─ Violations: ${plan.totalViolations}`);
+					console.log(`   └─ Employees Assigned: ${plan.totalEmployeesCovered}`);
+					console.log(`   └─ Employees Unassigned: ${plan.unassignedEmployees?.length || 0}`);
+					if (plan.unassignedEmployees && plan.unassignedEmployees.length > 0) {
+						console.log(`      ⚠️  Unassigned employees: ${plan.unassignedEmployees.map((e: any) => e.name).join(", ")}`);
+					}
+				}
+			}
+
+			if (mergedPlans.capacityShortfall && mergedPlans.capacityShortfall > 0) {
+				console.warn("\n⚠️ [ETMS Optimization] FLEET CAPACITY EXCEEDED!");
+				console.warn(`   └─ Shortfall: ${mergedPlans.capacityShortfall} seats`);
+				console.warn(`   └─ Total active employees: ${mergedPlans.totalEmployees}`);
+				console.warn(`   └─ Total active seats: ${mergedPlans.totalCabCapacity}`);
+				console.warn(`   └─ Reason: The total capacity of all available cabs linked to the shift is less than the number of active employees.`);
+				console.warn(`   └─ Active Cabs available:`);
+				state.cabs.forEach(c => {
+					console.warn(`      * ${c.vehicleNumber} | Driver: ${c.driverName} | Capacity: ${c.capacity}`);
+				});
+			} else {
+				console.log("\n✅ [ETMS Optimization] Fleet capacity is sufficient. All active employees can be seated.");
+			}
+			console.log("\n🚀 [ETMS Optimization] Process Completed successfully.\n");
+
 			storeLog("previewOptimization — OK", { shiftsCovered: previews.length });
 			return { success: true };
 		} catch (e) {
@@ -808,6 +889,11 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			if (!res.ok) {
 				const errData = await res.json().catch(() => ({}));
 				set({ loading: false });
+				// CANONICAL_LOCK: routes are protected — this is expected, not an error
+				if (res.status === 409 && errData.error === "CANONICAL_LOCK") {
+					console.log("[store] 🔒 applyOptimizationPlan — CANONICAL_LOCK: routes are protected, skipping auto-save.");
+					return { success: false, error: "CANONICAL_LOCK", canonical: true };
+				}
 				console.error("[store] ❌ applyOptimizationPlan — API error", {
 					status: res.status,
 					error: errData.error,

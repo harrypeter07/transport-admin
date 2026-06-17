@@ -255,6 +255,11 @@ export default function TransitAdminSPA() {
 		setAbsentEmployeeCodes,
 	} = useTransportStore();
 
+	// Detect if current routes are from the canonical transport import.
+	// Canonical routes have optimizationMode="CANONICAL" — they are hand-crafted
+	// from the official transport sheet and should not trigger overflow warnings.
+	const isCanonicalDate = routes.length > 0 && routes.every((r: any) => r.optimizationMode === "CANONICAL");
+
 	const router = useRouter();
 
 	const [activeDesk, setActiveDesk] = useState<
@@ -502,6 +507,10 @@ export default function TransitAdminSPA() {
 	}, [shifts]);
 
 	const handleGeneratePlans = async () => {
+		if (isCanonicalDate) {
+			setOptimizeError("Optimization is disabled because canonical routes are active.");
+			return;
+		}
 		setOptimizing(true);
 		setOptimizeError(null);
 		setApplySuccess(false);
@@ -520,10 +529,16 @@ export default function TransitAdminSPA() {
 				} catch {}
 				setHasOptimized(true);
 
-				// Auto-save the BALANCED strategy as a draft to the database so it is persistent
+			// Auto-save the BALANCED strategy as a draft to the database so it is persistent
+				// NOTE: If canonical routes exist, this will return CANONICAL_LOCK (409) which is expected.
 				const applyRes = await applyOptimizationPlan("BALANCED", isPickup);
 				if (applyRes.success) {
 					setApplySuccess(true);
+				} else if ((applyRes as any).canonical === true) {
+					// Canonical lock — routes are already correctly assigned from the official transport sheet.
+					// Optimization preview is still shown for reference but DB is not modified.
+					console.log("[page] 🔒 Canonical routes active — optimization preview generated but DB routes preserved.");
+					setApplySuccess(true); // Treat as success — DB has correct canonical routes
 				} else {
 					setOptimizeError(
 						applyRes.error ||
@@ -996,10 +1011,7 @@ export default function TransitAdminSPA() {
 		activeRoutes.flatMap((r) => r.stops.map((s) => s.employeeId)),
 	);
 
-	// Detect if current routes are from the canonical transport import.
-	// Canonical routes have optimizationMode="CANONICAL" — they are hand-crafted
-	// from the official transport sheet and should not trigger overflow warnings.
-	const isCanonicalDate = routes.length > 0 && routes.every((r: any) => r.optimizationMode === "CANONICAL");
+	// Using component-level isCanonicalDate
 
 	const unassignedEmployees = (() => {
 		// Suppress overflow alert entirely for canonical dates — all assignments
@@ -1207,9 +1219,9 @@ export default function TransitAdminSPA() {
 									{/* Re-Optimize: always available even when plans exist */}
 									<button
 										onClick={handleGeneratePlans}
-										disabled={optimizing || previewing || loading}
+										disabled={optimizing || previewing || loading || isCanonicalDate}
 										className="flex items-center gap-1.5 bg-slate-700 text-white px-3 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
-										title="Run a fresh optimization — replaces the current preview"
+										title={isCanonicalDate ? "Optimization is disabled because canonical routes are active. To override, use the forceOverride API option or clear the current routes." : "Run a fresh optimization — replaces the current preview"}
 									>
 										<RotateCw
 											className={`w-3.5 h-3.5 ${optimizing || previewing ? "animate-spin-fast" : ""}`}
@@ -1246,8 +1258,9 @@ export default function TransitAdminSPA() {
 								<div className="flex items-center gap-2">
 									<button
 										onClick={handleGeneratePlans}
-										disabled={optimizing || previewing || loading}
+										disabled={optimizing || previewing || loading || isCanonicalDate}
 										className="flex items-center gap-1.5 bg-slate-800 text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
+										title={isCanonicalDate ? "Optimization is disabled because canonical routes are active." : undefined}
 									>
 										<RotateCw
 											className={`w-3.5 h-3.5 ${optimizing || previewing ? "animate-spin-fast" : ""}`}

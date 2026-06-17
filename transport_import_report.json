@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-06-17T07:57:52.290Z",
+  "timestamp": "2026-06-17T08:39:34.862Z",
   "source_file": "data/transport_routes_16jun26.json",
   "target_date": "2026-06-16",
-  "duration_seconds": 111.1,
+  "duration_seconds": 94.9,
   "routes_processed": 18,
   "routes_created": 18,
   "routes_updated": 0,

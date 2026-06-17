@@ -101,7 +101,19 @@ async function fetchOptimizationInputs(
 		if (absentCodeSet.has(emp.employeeCode.toLowerCase())) return false;
 		return true;
 	});
-	// ── Reduced verbose logging for performance ──
+
+	// ── DIAGNOSTIC: Log all employees in this optimization scope ──
+	console.log(`\n${'═'.repeat(70)}`);
+	console.log(`[OPT-DIAG] 🚀 OPTIMIZATION STARTED`);
+	console.log(`[OPT-DIAG] Date: ${currentDateStr} | ShiftId: ${shiftId || 'ALL'}`);
+	console.log(`[OPT-DIAG] Total DB employees for shift: ${dbEmployees.length}`);
+	console.log(`[OPT-DIAG] Available (not on leave): ${availableEmployees.length}`);
+	console.log(`[OPT-DIAG] On leave/absent: ${dbEmployees.length - availableEmployees.length}`);
+	console.log(`[OPT-DIAG] Employees in scope:`);
+	for (const emp of availableEmployees) {
+		console.log(`[OPT-DIAG]   - ${emp.name} | Code:${emp.employeeCode} | Shift:${emp.shiftId?.substring(0,8)}...`);
+	}
+	console.log(`${'═'.repeat(70)}\n`);
 
 	const fallbackShiftId = shiftId || availableEmployees[0]?.shiftId || "";
 
@@ -137,15 +149,23 @@ async function fetchOptimizationInputs(
 	const minCabsNeeded =
 		activeEmployeeCount > 0 ? Math.ceil(activeEmployeeCount / cabCapacity) : 0;
 
+	// ── DIAGNOSTIC: Log cabs found for this shift ──
+	console.log(`[OPT-DIAG] 🚗 Cabs linked to shift: ${dbCabs.length}`);
+	for (const c of dbCabs) {
+		console.log(`[OPT-DIAG]   - ${c.vehicleNumber} | Driver: ${c.driverName} | Capacity: ${c.capacity}`);
+	}
+	console.log(`[OPT-DIAG] Min cabs needed for ${activeEmployeeCount} employees (cap=${cabCapacity}): ${minCabsNeeded}`);
+
 	// If no cabs linked to shift, or fewer than needed to cover employees → use full fleet
 	if ((dbCabs.length === 0 || dbCabs.length < minCabsNeeded) && availableEmployees.length > 0) {
 		console.warn(
-			`Shift ${fallbackShiftId}: ${dbCabs.length} cabs linked but ${minCabsNeeded} needed for ${availableEmployees.length} employees; expanding to full available fleet`,
+			`[OPT-DIAG] ⚠️ Shift ${fallbackShiftId}: ${dbCabs.length} cabs linked but ${minCabsNeeded} needed for ${availableEmployees.length} employees; expanding to full available fleet`,
 		);
 		dbCabs = await prisma.cab.findMany({
 			where: { status: "AVAILABLE" },
 			include: cabInclude,
 		});
+		console.log(`[OPT-DIAG] Expanded fleet: ${dbCabs.length} cabs`);
 	}
 
 	// ── DISABLED: Excel cab filter ──
@@ -228,21 +248,32 @@ async function fetchOptimizationInputs(
 	});
 
 	const activeEmployeeCountFinal = optEmployees.length;
-	const minCabsNeededFinal =
-		activeEmployeeCountFinal > 0
-			? Math.ceil(activeEmployeeCountFinal / cabCapacity)
-			: 0;
-	const activeCabs = optCabs
-		.sort((a, b) => b.capacity - a.capacity)
-		.slice(
-			0,
-			Math.max(minCabsNeededFinal, activeEmployeeCountFinal > 0 ? 1 : 0),
-		);
+	// ── FIXED: Use ALL available cabs — do NOT slice based on min needed.
+	// The old logic used cabCapacity of only the first cab to compute minCabsNeeded,
+	// then sliced the cabs array to that count — dropping valid cabs and causing
+	// employees to be unassigned. Now we pass ALL linked cabs to the optimizer.
+	const activeCabs = optCabs.sort((a, b) => b.capacity - a.capacity);
+	const totalSeatsAvailable = activeCabs.reduce((s, c) => s + c.capacity, 0);
+	const minCabsNeededFinal = activeEmployeeCountFinal > 0
+		? Math.ceil(activeEmployeeCountFinal / Math.max(cabCapacity, 1))
+		: 0;
 
-	if (process.env.BUG_OPTIMIZATION === "true") {
-		console.log(
-			`Fleet sized: ${activeCabs.length} of ${optCabs.length} cabs active for ${activeEmployeeCountFinal} employees`,
-		);
+	// ── DIAGNOSTIC: Log fleet sizing decision ──
+	console.log(`[OPT-DIAG] 📦 FLEET SIZING:`);
+	console.log(`[OPT-DIAG]   Active employees: ${activeEmployeeCountFinal}`);
+	console.log(`[OPT-DIAG]   Total seats across all cabs: ${totalSeatsAvailable}`);
+	console.log(`[OPT-DIAG]   Cabs available for this run: ${activeCabs.length}`);
+	if (totalSeatsAvailable < activeEmployeeCountFinal) {
+		console.log(`[OPT-DIAG] ⚠️ FLEET CAPACITY EXCEEDED — ${activeEmployeeCountFinal - totalSeatsAvailable} employees CANNOT be seated even with all cabs!`);
+		for (const c of activeCabs) {
+			console.log(`[OPT-DIAG]   cab: ${c.vehicleNumber} (${c.driverName}) cap=${c.capacity}`);
+		}
+	} else {
+		console.log(`[OPT-DIAG]   ✅ Enough seats (${totalSeatsAvailable}) for all ${activeEmployeeCountFinal} employees`);
+	}
+	console.log(`[OPT-DIAG] Cabs in run:`);
+	for (const c of activeCabs) {
+		console.log(`[OPT-DIAG]   ✓ ${c.vehicleNumber} (${c.driverName}) cap=${c.capacity} tripSeq=${c.tripSequence}`);
 	}
 
 	const shiftStartTime = shiftStartTimes.get(fallbackShiftId) || "09:00";

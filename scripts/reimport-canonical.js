@@ -517,7 +517,30 @@ async function main() {
   console.log(`  Critical checks:       ${allVerificationsPassed ? "✅ ALL PASSED" : "❌ SOME FAILED"}`);
   console.log(`  Time elapsed:          ${elapsed}s`);
   console.log(`\n  Report: ${reportPath}`);
-  
+
+  // ── AUTO-FIX CAB CAPACITIES ──────────────────────────────────────────────
+  // Compute max employees per vehicle across all routes and update DB capacity.
+  // Runs automatically after every import so capacities are always correct.
+  console.log("\n📐 Auto-fixing cab capacities based on actual route occupancy...");
+  const vehicleMaxOccupancy = {};
+  for (const r of canonicalData.routes) {
+    const veh = r.vehicle.vehicleNumber.toUpperCase();
+    const count = r.employees.length;
+    if (!vehicleMaxOccupancy[veh] || count > vehicleMaxOccupancy[veh]) {
+      vehicleMaxOccupancy[veh] = count;
+    }
+  }
+  for (const [veh, maxOcc] of Object.entries(vehicleMaxOccupancy)) {
+    // Round up to next sensible vehicle size: 4, 6, 7, 8
+    let capacity = maxOcc <= 4 ? 4 : maxOcc <= 6 ? 6 : maxOcc <= 7 ? 7 : 8;
+    await prisma.cab.updateMany({
+      where: { vehicleNumber: veh },
+      data: { capacity }
+    });
+    console.log(`   ${veh}: max=${maxOcc} → capacity=${capacity}`);
+  }
+  console.log("   ✅ Capacities updated.");
+
   if (!report.import_successful) {
     console.log("\n⚠️  Import completed but verification failed. Check report for details.");
     process.exit(1);
@@ -532,3 +555,4 @@ main()
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());
+
