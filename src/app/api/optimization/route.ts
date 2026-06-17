@@ -42,6 +42,12 @@ export async function GET(req: NextRequest) {
 
 		const { searchParams } = new URL(req.url);
 		const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
+		const refresh = searchParams.get("refresh") === "true";
+
+		if (refresh) {
+			invalidateRoutesCache();
+			invalidateMetricsCache();
+		}
 
 		const routes = await getCachedRoutes(date);
 
@@ -588,7 +594,7 @@ export async function POST(req: NextRequest) {
 		// If routes already exist from the canonical import (optimizationMode=CANONICAL),
 		// refuse to overwrite them unless forceOverride=true is explicitly set.
 		// This prevents the optimization engine from scrambling hand-crafted transport assignments.
-		if (!forceOverride) {
+		if (!forceOverride && mode === "APPLY") {
 			const canonicalRoutes = await prisma.route.findMany({
 				where: {
 					date: currentDateStr,

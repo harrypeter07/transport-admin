@@ -507,10 +507,6 @@ export default function TransitAdminSPA() {
 	}, [shifts]);
 
 	const handleGeneratePlans = async () => {
-		if (isCanonicalDate) {
-			setOptimizeError("Optimization is disabled because canonical routes are active.");
-			return;
-		}
 		setOptimizing(true);
 		setOptimizeError(null);
 		setApplySuccess(false);

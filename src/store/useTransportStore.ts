@@ -486,7 +486,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			}
 
 			const dateStr = get().selectedDate;
-			const resRoutes = await fetch(`/api/optimization?date=${dateStr}`);
+			const resRoutes = await fetch(`/api/optimization?date=${dateStr}&refresh=true`);
 			const routes = await resRoutes.json();
 			set({ routes, loading: false });
 			storeLog("runOptimization — OK", { mode, routesCount: routes.length });
@@ -743,8 +743,11 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 									),
 									routes: (plan.routes || []).map((r: any, idx: number) => ({
 										routeNumber: idx + 1,
+										cabId: r.cabId,
 										vehicleNumber: r.vehicleNumber,
 										driverName: r.driverName,
+										driverPhone: r.driverPhone,
+										startPoint: r.startPoint,
 										paxCount: r.stops?.length || 0,
 										totalDistanceKm: r.totalDistance,
 										totalDurationMins: r.totalDuration,
@@ -902,7 +905,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			}
 
 			const dateStr = get().selectedDate;
-			const resRoutes = await fetch(`/api/optimization?date=${dateStr}`);
+			const resRoutes = await fetch(`/api/optimization?date=${dateStr}&refresh=true`);
 			if (!resRoutes.ok) {
 				set({ loading: false });
 				return {
@@ -978,7 +981,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			if (res.ok) {
 				const dateToFetch = get().selectedDate;
 				const updatedRoutes = await (
-					await fetch(`/api/optimization?date=${dateToFetch}`)
+					await fetch(`/api/optimization?date=${dateToFetch}&refresh=true`)
 				).json();
 				set({ routes: updatedRoutes });
 				storeLog("reorderRouteStops — OK", { routeId, direction });
@@ -1009,7 +1012,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			}
 			const dateToFetch = get().selectedDate;
 			const updatedRoutes = await (
-				await fetch(`/api/optimization?date=${dateToFetch}`)
+				await fetch(`/api/optimization?date=${dateToFetch}&refresh=true`)
 			).json();
 			set({ routes: updatedRoutes });
 			return { success: true };
@@ -1030,7 +1033,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			if (res.ok) {
 				const dateToFetch = get().selectedDate;
 				const updatedRoutes = await (
-					await fetch(`/api/optimization?date=${dateToFetch}`)
+					await fetch(`/api/optimization?date=${dateToFetch}&refresh=true`)
 				).json();
 				set({ routes: updatedRoutes });
 				storeLog("overrideViolation — OK", { violationId });
@@ -1231,7 +1234,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			});
 			if (res.ok) {
 				const dateToFetch = get().selectedDate;
-				const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
+				const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}&refresh=true`);
 				const routes = await resRoutes.json();
 				set({ routes, loading: false });
 				storeLog("applyRouteSequence — OK", { routeId });
@@ -1277,7 +1280,7 @@ export const useTransportStore = create<TransportStore>((set, get) => ({
 			}
 			if (res.ok) {
 				const dateToFetch = get().selectedDate;
-				const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}`);
+				const resRoutes = await fetch(`/api/optimization?date=${dateToFetch}&refresh=true`);
 				const routes = await resRoutes.json();
 				set({ routes, loading: false });
 				storeLog("swapRouteCab — OK", { routeId, cabId });
