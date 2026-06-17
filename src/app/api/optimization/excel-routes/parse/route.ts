@@ -57,10 +57,12 @@ export async function POST(req: NextRequest) {
       depotLat,
       depotLng,
       async (data) => {
-        return prisma.shift.upsert({
+        const existing = await prisma.shift.findFirst({
           where: { startTime: data.startTime },
-          update: {},
-          create: data,
+        });
+        if (existing) return existing;
+        return prisma.shift.create({
+          data,
         });
       },
       { sheetName },

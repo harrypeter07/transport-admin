@@ -124,7 +124,7 @@ function excelFractionToHHMM(value: unknown): string | null {
   return null;
 }
 
-function haversineKm(a: { x: number; y: number }, b: { x: number; y: number }): number {
+export function haversineKm(a: { x: number; y: number }, b: { x: number; y: number }): number {
   const R = 6371;
   const dLat = ((b.y - a.y) * Math.PI) / 180;
   const dLon = ((b.x - a.x) * Math.PI) / 180;
