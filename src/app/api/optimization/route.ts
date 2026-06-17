@@ -16,6 +16,7 @@ import { requireApiRole } from "@/lib/apiAuth";
 
 import { audit } from "@/lib/audit";
 import { getExcelFilterForDate } from "@/lib/excelFilter";
+import { getCachedRoutes, invalidateRoutesCache, invalidateMetricsCache } from "@/lib/cache";
 
 function reqIp(req: NextRequest | Request): string {
 	if (req instanceof NextRequest) {
@@ -40,26 +41,9 @@ export async function GET(req: NextRequest) {
 		if (auth.response) return auth.response;
 
 		const { searchParams } = new URL(req.url);
-		const date = searchParams.get("date");
+		const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
 
-		const whereClause: any = {
-			date: date || new Date().toISOString().split("T")[0],
-			cab: { status: { not: "INACTIVE" } },
-		};
-
-		const routes = await prisma.route.findMany({
-			where: whereClause,
-			include: {
-				cab: true,
-				shift: true,
-				stops: {
-					include: { employee: { include: { pickupPoint: true } } },
-					orderBy: { stopOrder: "asc" },
-				},
-				violations: true,
-			},
-			orderBy: { tripSequence: "asc" },
-		});
+		const routes = await getCachedRoutes(date);
 
 		return NextResponse.json(routes);
 	} catch (e) {
@@ -658,6 +642,32 @@ export async function POST(req: NextRequest) {
 					`[DIAG] Result | shiftId=${shiftId} | strategy=${strategy} | covered=${coveredIds.size} | routes=${plan.routes.length} | unassigned=${unassignedNames.length} | unassignedNames=[${unassignedNames.join(", ")}]`,
 				);
 			}
+
+			// Persist strategic plans to OptimizationRun history
+			const strategies = ["MAXIMIZE_UTILIZATION", "MINIMIZE_TIME", "BALANCED"] as const;
+			for (const strategy of strategies) {
+				const plan = plans[strategy];
+				if (plan) {
+					await prisma.optimizationRun.create({
+						data: {
+							date: currentDateStr,
+							strategy,
+							employeeCount: plan.totalEmployeesCovered,
+							cabCount: plan.totalCabsUsed,
+							distance: plan.totalDistance,
+							duration: plan.avgCommuteMins,
+							metrics: {
+								strategyScore: plan.strategyScore,
+								totalViolations: plan.totalViolations,
+								releasedCabs: plans.releasedCabs || [],
+								isolatedEmployees: plans.isolatedEmployees || [],
+							}
+						}
+					});
+				}
+			}
+			invalidateMetricsCache();
+
 			return NextResponse.json({
 				preview: plans,
 				constraints,
@@ -690,6 +700,8 @@ export async function POST(req: NextRequest) {
 				isPickup ?? true,
 				selectedStrategy,
 			);
+			invalidateRoutesCache();
+			invalidateMetricsCache();
 			return NextResponse.json({ success: true, ...result });
 		}
 
@@ -735,6 +747,8 @@ export async function POST(req: NextRequest) {
 			mode,
 			cabTripSequenceMap,
 		);
+		invalidateRoutesCache();
+		invalidateMetricsCache();
 
 		await audit({
 			userId: auth.session.userId,

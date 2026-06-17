@@ -5,6 +5,7 @@ import { getSessionCache, setSessionCache } from "@/lib/sessionCache";
 import { computeOsrmRouteMatrix } from "@/lib/maps/osrm";
 import { assignZone, driverZoneMatchScore, haversineKm } from "@/lib/zones";
 import { classifyShift } from "@/lib/shiftUtils";
+import { prisma } from "@/lib/db";
 
 export interface Point {
 	x: number;
@@ -1165,6 +1166,17 @@ export function enforceSafetyRules(
  * 5. Full Route Generation Pipeline
  * Pairs clustered employees with cabs, optimizes routes, checks & enforces safety rules
  */
+export function normalizePickupPointName(name: string): string {
+	const lower = name.toLowerCase().trim();
+	if (lower.includes("narendra nagar")) {
+		return "Narendra Nagar";
+	}
+	if (lower.includes("manish nagar")) {
+		return "Manish Nagar";
+	}
+	return name;
+}
+
 export async function optimizeRoutes(
 	employees: OptimizeEmployee[],
 	cabs: OptimizeCab[],
@@ -1173,6 +1185,7 @@ export async function optimizeRoutes(
 	mode: string = "FASTEST_TRAVEL",
 	depot: Point = DEPOT,
 	constraints: RouteConstraints = defaultConstraints(),
+	disableZoneGrouping: boolean = false,
 ): Promise<{
 	routes: OptimizedRoute[];
 	usingFallback: boolean;
@@ -1181,20 +1194,116 @@ export async function optimizeRoutes(
 	if (employees.length === 0 || cabs.length === 0)
 		return { routes: [], usingFallback: false, warnings: [] };
 
+	// Normalize pickup point names for all employees
+	const normalizedEmployees = employees.map(emp => {
+		if (emp.pickupPoint) {
+			return {
+				...emp,
+				pickupPoint: {
+					...emp.pickupPoint,
+					name: normalizePickupPointName(emp.pickupPoint.name),
+				}
+			};
+		}
+		return emp;
+	});
+
+	if (!disableZoneGrouping) {
+		console.info(`[ZONE_OPTIMIZATION] Starting zone-based optimization for ${normalizedEmployees.length} employees, ${cabs.length} cabs`);
+		
+		// 1. Group employees by zone
+		const employeesByZone: Record<string, OptimizeEmployee[]> = {};
+		for (const emp of normalizedEmployees) {
+			const z = emp.zone || assignZone(emp.x, emp.y).zone || "N";
+			if (!employeesByZone[z]) employeesByZone[z] = [];
+			employeesByZone[z].push(emp);
+		}
+		
+		const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
+		const zoneCabAllocation: Record<string, OptimizeCab[]> = {};
+		let availableCabs = [...sortedCabs];
+		
+		const sortedZones = Object.keys(employeesByZone).sort(
+			(a, b) => employeesByZone[b].length - employeesByZone[a].length
+		);
+		
+		for (const z of sortedZones) {
+			const zoneEmps = employeesByZone[z];
+			const allocated: OptimizeCab[] = [];
+			let capacitySum = 0;
+			
+			while (capacitySum < zoneEmps.length && availableCabs.length > 0) {
+				const cab = availableCabs.shift()!;
+				allocated.push(cab);
+				capacitySum += cab.capacity;
+			}
+			
+			if (availableCabs.length > 0 && zoneEmps.length > 0) {
+				allocated.push(availableCabs.shift()!);
+			}
+			
+			zoneCabAllocation[z] = allocated;
+		}
+		
+		while (availableCabs.length > 0) {
+			for (const z of sortedZones) {
+				if (availableCabs.length === 0) break;
+				zoneCabAllocation[z].push(availableCabs.shift()!);
+			}
+		}
+
+		// Optimize each zone independently
+		const mergedRoutes: OptimizedRoute[] = [];
+		let combinedUsingFallback = false;
+		const combinedWarnings: OptimizationWarning[] = [];
+		
+		for (const z of sortedZones) {
+			const zoneEmps = employeesByZone[z];
+			const zoneCabs = zoneCabAllocation[z] || [];
+			
+			if (zoneEmps.length === 0 || zoneCabs.length === 0) continue;
+			
+			console.info(`[ZONE_OPTIMIZATION] Optimizing zone ${z}: ${zoneEmps.length} employees, ${zoneCabs.length} cabs`);
+			
+			const zoneResult = await optimizeRoutes(
+				zoneEmps,
+				zoneCabs,
+				isPickup,
+				apiKey,
+				mode,
+				depot,
+				constraints,
+				true, // disableZoneGrouping
+			);
+			
+			mergedRoutes.push(...zoneResult.routes);
+			if (zoneResult.usingFallback) combinedUsingFallback = true;
+			combinedWarnings.push(...zoneResult.warnings);
+		}
+		
+		console.info(`[ZONE_OPTIMIZATION] Zone optimization completed. Merged into ${mergedRoutes.length} routes.`);
+		return {
+			routes: mergedRoutes,
+			usingFallback: combinedUsingFallback,
+			warnings: combinedWarnings,
+		};
+	}
+
+
 	// Sort cabs by capacity descending to maximize employee transport
 	const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
 
 	// Build global road matrix once: [cab_0_start, ..., cab_{M-1}_start, emp_0, ..., emp_{N-1}, depot]
 	const globalPoints: Point[] = [
 		...sortedCabs.map((c) => c.startPoint || depot),
-		...employees.map((e) => ({ x: e.x, y: e.y })),
+		...normalizedEmployees.map((e) => ({ x: e.x, y: e.y })),
 		depot,
 	];
 	const cabCount = sortedCabs.length;
 	const empOffset = cabCount;
 	const depotGlobalIdx = globalPoints.length - 1;
 	const empToGlobalIdx = new Map<string, number>();
-	employees.forEach((e, i) => empToGlobalIdx.set(e.id, empOffset + i));
+	normalizedEmployees.forEach((e, i) => empToGlobalIdx.set(e.id, empOffset + i));
 
 	const {
 		distanceMatrix: globalDist,
@@ -1210,7 +1319,7 @@ export async function optimizeRoutes(
 		depotGlobalIdx,
 	};
 
-	let remainingEmployees = [...employees];
+	let remainingEmployees = [...normalizedEmployees];
 	const optimizedRoutes: OptimizedRoute[] = [];
 	const warnings: OptimizationWarning[] = [];
 
@@ -2435,46 +2544,132 @@ export async function fetchGoogleMapsMatrix(
 		};
 	}
 
-	const providerConfig = (process.env.ROUTING_PROVIDER || "auto").toLowerCase();
-	const useOsrm = providerConfig === "auto" || providerConfig === "osrm";
+	// Helper to round coordinates to 5 decimal places
+	const rx = (val: number) => Math.round(val * 100000) / 100000;
 
-	if (useOsrm) {
-		const osrmResult = await computeOsrmRouteMatrix(points);
-		if (osrmResult) {
-			setSessionCache(
-				cacheKey,
-				{ dist: osrmResult.distanceMatrix, dur: osrmResult.durationMatrix },
-				30 * 60 * 1000,
-			);
-			return { ...osrmResult };
-		}
+	// Build coordinates arrays for database querying
+	const xCoords = points.map(p => rx(p.x));
+	const yCoords = points.map(p => rx(p.y));
+
+	// Query DB Cache
+	let cachedPairs: any[] = [];
+	try {
+		cachedPairs = await prisma.routeDistanceCache.findMany({
+			where: {
+				originX: { in: xCoords },
+				originY: { in: yCoords },
+				destX: { in: xCoords },
+				destY: { in: yCoords }
+			}
+		});
+	} catch (dbErr) {
+		console.warn("[matrix] DB Cache Read Error:", dbErr);
 	}
 
-	console.info(
-		`[matrix] PROVIDER=haversine POINTS=${n} REASON=${useOsrm ? "osrm_failed" : "config_direct"}`,
-	);
-	const distanceMatrix: number[][] = Array.from({ length: n }, () =>
-		Array(n).fill(0),
-	);
-	const durationMatrix: number[][] = Array.from({ length: n }, () =>
-		Array(n).fill(0),
-	);
+	const dbLookup = new Map<string, { dist: number; dur: number }>();
+	for (const pair of cachedPairs) {
+		const key = `${pair.originX.toFixed(5)},${pair.originY.toFixed(5)}->${pair.destX.toFixed(5)},${pair.destY.toFixed(5)}`;
+		dbLookup.set(key, { dist: pair.distanceKm, dur: pair.durationMin });
+	}
+
+	// Check if all pairs are cached
+	let hasAllCached = true;
+	const distanceMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
+	const durationMatrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
 
 	for (let i = 0; i < n; i++) {
 		for (let j = 0; j < n; j++) {
 			if (i === j) continue;
-			const d = getDistance(points[i], points[j]);
-			distanceMatrix[i][j] = Math.round(d * 10) / 10;
-			durationMatrix[i][j] = mapsProvider.computeETA(d, AVG_SPEED);
+			const key = `${rx(points[i].x).toFixed(5)},${rx(points[i].y).toFixed(5)}->${rx(points[j].x).toFixed(5)},${rx(points[j].y).toFixed(5)}`;
+			const match = dbLookup.get(key);
+			if (match) {
+				distanceMatrix[i][j] = match.dist;
+				durationMatrix[i][j] = match.dur;
+			} else {
+				hasAllCached = false;
+			}
 		}
 	}
+
+	if (hasAllCached) {
+		console.info(`[matrix] DB_CACHE_HIT POINTS=${n}`);
+		setSessionCache(
+			cacheKey,
+			{ dist: distanceMatrix, dur: durationMatrix },
+			30 * 60 * 1000,
+		);
+		return { distanceMatrix, durationMatrix, usingFallback: false };
+	}
+
+	// DB Cache Miss - Fetch matrix externally
+	console.info(`[matrix] DB_CACHE_MISS POINTS=${n} - Fetching matrix externally`);
+	const providerConfig = (process.env.ROUTING_PROVIDER || "auto").toLowerCase();
+	const useOsrm = providerConfig === "auto" || providerConfig === "osrm";
+	let calculated = false;
+
+	if (useOsrm) {
+		const osrmResult = await computeOsrmRouteMatrix(points);
+		if (osrmResult) {
+			for (let i = 0; i < n; i++) {
+				for (let j = 0; j < n; j++) {
+					distanceMatrix[i][j] = osrmResult.distanceMatrix[i][j];
+					durationMatrix[i][j] = osrmResult.durationMatrix[i][j];
+				}
+			}
+			calculated = true;
+		}
+	}
+
+	if (!calculated) {
+		console.info(
+			`[matrix] PROVIDER=haversine POINTS=${n} REASON=${useOsrm ? "osrm_failed" : "config_direct"}`,
+		);
+		for (let i = 0; i < n; i++) {
+			for (let j = 0; j < n; j++) {
+				if (i === j) continue;
+				const d = getDistance(points[i], points[j]);
+				distanceMatrix[i][j] = Math.round(d * 10) / 10;
+				durationMatrix[i][j] = mapsProvider.computeETA(d, AVG_SPEED);
+			}
+		}
+	}
+
+	// Save calculated distances/durations to DB Cache
+	const pairsToCache: any[] = [];
+	for (let i = 0; i < n; i++) {
+		for (let j = 0; j < n; j++) {
+			if (i === j) continue;
+			pairsToCache.push({
+				originX: rx(points[i].x),
+				originY: rx(points[i].y),
+				destX: rx(points[j].x),
+				destY: rx(points[j].y),
+				distanceKm: distanceMatrix[i][j],
+				durationMin: durationMatrix[i][j],
+			});
+		}
+	}
+
+	if (pairsToCache.length > 0) {
+		try {
+			await prisma.routeDistanceCache.createMany({
+				data: pairsToCache,
+				skipDuplicates: true,
+			});
+			console.info(`[matrix] Stored ${pairsToCache.length} pairs in DB Cache`);
+		} catch (dbWriteErr) {
+			console.warn("[matrix] DB Cache Write Error:", dbWriteErr);
+		}
+	}
+
 	setSessionCache(
 		cacheKey,
 		{ dist: distanceMatrix, dur: durationMatrix },
 		30 * 60 * 1000,
 	);
-	return { distanceMatrix, durationMatrix, usingFallback: true };
+	return { distanceMatrix, durationMatrix, usingFallback: !calculated };
 }
+
 
 /**
  * Creates a distance function backed by a pre-computed matrix.
@@ -4256,11 +4451,132 @@ export async function optimizeAllStrategies(
 	depot: Point = DEPOT,
 	constraints: RouteConstraints = defaultConstraints(),
 	shiftStartTime?: string,
+	disableZoneGrouping: boolean = false,
 ): Promise<AllStrategyPlans> {
 	const totalCabCapacity = cabs.reduce((sum, c) => sum + c.capacity, 0);
 	const capacityShortfall = Math.max(0, employees.length - totalCabCapacity);
 
-	const zoneDistribution = employees.reduce(
+	// Normalize pickup point names for all employees
+	const normalizedEmployees = employees.map(emp => {
+		if (emp.pickupPoint) {
+			return {
+				...emp,
+				pickupPoint: {
+					...emp.pickupPoint,
+					name: normalizePickupPointName(emp.pickupPoint.name),
+				}
+			};
+		}
+		return emp;
+	});
+
+	if (!disableZoneGrouping) {
+		console.info(`[ZONE_OPTIMIZATION] Starting zone-based strategy optimization for ${normalizedEmployees.length} employees, ${cabs.length} cabs`);
+		
+		// 1. Group employees by zone
+		const employeesByZone: Record<string, OptimizeEmployee[]> = {};
+		for (const emp of normalizedEmployees) {
+			const z = emp.zone || assignZone(emp.x, emp.y).zone || "N";
+			if (!employeesByZone[z]) employeesByZone[z] = [];
+			employeesByZone[z].push(emp);
+		}
+		
+		const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
+		const zoneCabAllocation: Record<string, OptimizeCab[]> = {};
+		let availableCabs = [...sortedCabs];
+		
+		const sortedZones = Object.keys(employeesByZone).sort(
+			(a, b) => employeesByZone[b].length - employeesByZone[a].length
+		);
+		
+		for (const z of sortedZones) {
+			const zoneEmps = employeesByZone[z];
+			const allocated: OptimizeCab[] = [];
+			let capacitySum = 0;
+			
+			while (capacitySum < zoneEmps.length && availableCabs.length > 0) {
+				const cab = availableCabs.shift()!;
+				allocated.push(cab);
+				capacitySum += cab.capacity;
+			}
+			
+			if (availableCabs.length > 0 && zoneEmps.length > 0) {
+				allocated.push(availableCabs.shift()!);
+			}
+			
+			zoneCabAllocation[z] = allocated;
+		}
+		
+		while (availableCabs.length > 0) {
+			for (const z of sortedZones) {
+				if (availableCabs.length === 0) break;
+				zoneCabAllocation[z].push(availableCabs.shift()!);
+			}
+		}
+
+		// Run strategies for each zone independently
+		const zoneResults: AllStrategyPlans[] = [];
+		for (const z of sortedZones) {
+			const zoneEmps = employeesByZone[z];
+			const zoneCabs = zoneCabAllocation[z] || [];
+			if (zoneEmps.length === 0 || zoneCabs.length === 0) continue;
+			
+			const zoneResult = await optimizeAllStrategies(
+				zoneEmps,
+				zoneCabs,
+				isPickup,
+				apiKey,
+				depot,
+				constraints,
+				shiftStartTime,
+				true, // disableZoneGrouping
+			);
+			zoneResults.push(zoneResult);
+		}
+
+		// Merge zone results
+		const mergedMaxRoutes: OptimizedRoute[] = [];
+		const mergedMinRoutes: OptimizedRoute[] = [];
+		const mergedBalRoutes: OptimizedRoute[] = [];
+		let mergedCapacityShortfall = 0;
+		let mergedTotalCabCapacity = 0;
+		let mergedUsingFallback = false;
+		const mergedIsolatedEmployees: IsolatedEmployeeFlag[] = [];
+		const mergedReleasedCabs: any[] = [];
+		
+		for (const zr of zoneResults) {
+			mergedMaxRoutes.push(...(zr.MAXIMIZE_UTILIZATION?.routes || []));
+			mergedMinRoutes.push(...(zr.MINIMIZE_TIME?.routes || []));
+			mergedBalRoutes.push(...(zr.BALANCED?.routes || []));
+			mergedCapacityShortfall += zr.capacityShortfall || 0;
+			mergedTotalCabCapacity += zr.totalCabCapacity || 0;
+			if (zr.usingFallback) mergedUsingFallback = true;
+			if (zr.isolatedEmployees) mergedIsolatedEmployees.push(...zr.isolatedEmployees);
+			if (zr.releasedCabs) mergedReleasedCabs.push(...zr.releasedCabs);
+		}
+
+		// Re-summarise plans with the merged routes
+		return {
+			MAXIMIZE_UTILIZATION: summarisePlan(mergedMaxRoutes),
+			MINIMIZE_TIME: summarisePlan(mergedMinRoutes),
+			BALANCED: summarisePlan(mergedBalRoutes),
+			capacityShortfall: mergedCapacityShortfall,
+			totalCabCapacity: mergedTotalCabCapacity,
+			totalEmployees: employees.length,
+			usingFallback: mergedUsingFallback,
+			isolatedEmployees: mergedIsolatedEmployees,
+			releasedCabs: mergedReleasedCabs,
+			zoneSummary: buildZoneSummary(normalizedEmployees, mergedBalRoutes.map(r => ({
+				cab: r.cab,
+				cluster: r.stops.map(s => s.employee as OptimizeEmployee),
+				zone: r.zone || undefined,
+				subZone: r.subZone || undefined,
+			}))),
+		};
+	}
+
+
+	const zoneDistribution = normalizedEmployees.reduce(
 		(acc, emp) => {
 			const z = emp.zone || assignZone(emp.x, emp.y).zone;
 			acc[z] = (acc[z] || 0) + 1;
@@ -4276,14 +4592,14 @@ export async function optimizeAllStrategies(
 	const sortedCabs = [...cabs].sort((a, b) => b.capacity - a.capacity);
 	const globalPoints: Point[] = [
 		...sortedCabs.map((c) => c.startPoint || depot),
-		...employees.map((e) => ({ x: e.x, y: e.y })),
+		...normalizedEmployees.map((e) => ({ x: e.x, y: e.y })),
 		depot,
 	];
 	const cabCount = sortedCabs.length;
 	const empOffset = cabCount;
 	const depotGlobalIdx = globalPoints.length - 1;
 	const empToGlobalIdx = new Map<string, number>();
-	employees.forEach((e, i) => empToGlobalIdx.set(e.id, empOffset + i));
+	normalizedEmployees.forEach((e, i) => empToGlobalIdx.set(e.id, empOffset + i));
 	const cabToGlobalIdx = new Map<string, number>();
 	sortedCabs.forEach((c, i) => cabToGlobalIdx.set(c.id, i));
 
@@ -4311,7 +4627,7 @@ export async function optimizeAllStrategies(
 	const corridorThresholdKm = constraints.maxEmployeeDetourKm ?? 5.0;
 
 	const maxCluster = clusterMaxUtilization(
-		employees,
+		normalizedEmployees,
 		sortedCabs,
 		depot,
 		Infinity,
@@ -4319,7 +4635,7 @@ export async function optimizeAllStrategies(
 		corridorThresholdKm,
 	);
 	const minCluster = clusterMinTime(
-		employees,
+		normalizedEmployees,
 		sortedCabs,
 		depot,
 		20,
@@ -4328,7 +4644,7 @@ export async function optimizeAllStrategies(
 		corridorThresholdKm,
 	);
 	const balCluster = clusterBalanced(
-		employees,
+		normalizedEmployees,
 		sortedCabs,
 		depot,
 		constraints.maxClusterRadiusKm,
@@ -4355,7 +4671,7 @@ export async function optimizeAllStrategies(
 	const [maxRoutes, minRoutes, balRoutes] = await Promise.all([
 		buildRoutesFromAssignments(
 			maxCluster.assignments,
-			employees,
+			normalizedEmployees,
 			isPickup,
 			apiKey,
 			depot,
@@ -4365,7 +4681,7 @@ export async function optimizeAllStrategies(
 		),
 		buildRoutesFromAssignments(
 			minCluster.assignments,
-			employees,
+			normalizedEmployees,
 			isPickup,
 			apiKey,
 			depot,
@@ -4375,7 +4691,7 @@ export async function optimizeAllStrategies(
 		),
 		buildRoutesFromAssignments(
 			balCluster.assignments,
-			employees,
+			normalizedEmployees,
 			isPickup,
 			apiKey,
 			depot,
@@ -4391,10 +4707,10 @@ export async function optimizeAllStrategies(
 		BALANCED: summarisePlan(balRoutes),
 		capacityShortfall,
 		totalCabCapacity,
-		totalEmployees: employees.length,
+		totalEmployees: normalizedEmployees.length,
 		usingFallback,
 		isolatedEmployees,
 		releasedCabs,
-		zoneSummary: buildZoneSummary(employees, balCluster.assignments),
+		zoneSummary: buildZoneSummary(normalizedEmployees, balCluster.assignments),
 	};
 }

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import fs from "fs";
 import path from "path";
 import { parseGtlpWorkbookSheet, shiftIdFromTime } from "@/lib/gtplParser";
+import { invalidateRoutesCache, invalidateMetricsCache } from "@/lib/cache";
 
 export async function POST(req: NextRequest) {
 	try {
@@ -154,6 +155,9 @@ export async function POST(req: NextRequest) {
 				statistics: JSON.stringify(finalSummary),
 			},
 		});
+
+		invalidateRoutesCache();
+		invalidateMetricsCache();
 
 		return NextResponse.json({
 			success: true,

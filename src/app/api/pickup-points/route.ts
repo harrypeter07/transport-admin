@@ -5,10 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 
 import prisma from "@/lib/db";
-
 import { assignZone, haversineKm } from "@/lib/zones";
-
 import { audit } from "@/lib/audit";
+import { getCachedPickupPoints, invalidatePickupPointsCache } from "@/lib/cache";
 
 
 
@@ -49,23 +48,7 @@ export async function GET(req: NextRequest) {
     const nearY = searchParams.get("nearY");
     const radiusKm = Number(searchParams.get("radiusKm") || "3");
 
-    const pickupPoints = await prisma.pickupPoint.findMany({
-
-      include: {
-
-        employees: {
-
-          where: { status: "ACTIVE" },
-
-          select: { id: true, name: true, zone: true, subZone: true },
-
-        },
-
-      },
-
-      orderBy: { name: "asc" },
-
-    });
+    const pickupPoints = await getCachedPickupPoints();
 
 
 
@@ -192,6 +175,8 @@ export async function POST(req: NextRequest) {
     console.info("[api] ✅ POST /api/pickup-points — OK", { id: pickupPoint.id, userId: session.userId, ip });
 
 
+
+    invalidatePickupPointsCache();
 
     return NextResponse.json(pickupPoint);
 

@@ -6,6 +6,8 @@ import fs from "fs";
 import path from "path";
 import { listGtlpSheets } from "@/lib/gtplParser";
 
+import { getCachedOptimizationMetrics } from "@/lib/cache";
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireApiRole(["ADMIN"]);
@@ -57,6 +59,8 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    const optimizationRuns = await getCachedOptimizationMetrics(date);
+
     return NextResponse.json({
       routes: parsedRoutes,
       optimizedRoutes: parsedOptimized,
@@ -65,6 +69,7 @@ export async function GET(req: NextRequest) {
       createdAt: baseline.createdAt,
       summary: statistics,
       dbLeaveCount,
+      optimizationRuns,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);

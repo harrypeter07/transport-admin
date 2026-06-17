@@ -4,6 +4,7 @@ import { verifySession } from "@/lib/dal";
 import prisma from "@/lib/db";
 import { mapsProvider } from "@/lib/maps";
 import { audit } from "@/lib/audit";
+import { invalidateCabsCache, invalidateRoutesCache } from "@/lib/cache";
 
 function reqIp(req: NextRequest | Request): string {
   return (req as any).headers?.get?.("x-forwarded-for") || (req as any).headers?.get?.("x-real-ip") || "unknown";
@@ -85,6 +86,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     await audit({ userId: session.userId, role: session.role, action: "UPDATE", entity: "Cab", entityId: id, before, after: { vehicleNumber: updated.vehicleNumber }, ip });
     console.info("[api] ✅ PUT /api/cabs/[id] — OK", { vehicleNumber: updated.vehicleNumber, id, userId: session.userId, ip });
+    invalidateCabsCache();
+    invalidateRoutesCache();
     return NextResponse.json(updated);
   } catch (error: any) {
     console.error("[api] ❌ PUT /api/cabs/[id] — Failed", { ip }, error);
@@ -132,6 +135,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     await audit({ userId: session.userId, role: session.role, action: "DELETE", entity: "Cab", entityId: id, before, ip });
     console.info("[api] ✅ DELETE /api/cabs/[id] — Hard deleted", { id, userId: session.userId, ip });
+    invalidateCabsCache();
+    invalidateRoutesCache();
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("[api] ❌ DELETE /api/cabs/[id] — Failed", { ip }, error);

@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { geocodePlace, makeDepot } from "@/lib/optimization";
 import { mapsProvider } from "@/lib/maps";
+import { getCachedActiveEmployees, invalidateEmployeesCache } from "@/lib/cache";
+
 
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
@@ -48,8 +50,11 @@ function prismaEmployeeWriteResponse(error: unknown) {
 }
 
 // GET all employees
-function reqIp(req: NextRequest): string {
-  return req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+function reqIp(req: NextRequest | Request): string {
+  if (req instanceof NextRequest) {
+    return req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  }
+  return (req as any).headers?.get?.("x-forwarded-for") || (req as any).headers?.get?.("x-real-ip") || "unknown";
 }
 
 export async function GET(req: NextRequest) {
@@ -90,15 +95,21 @@ export async function GET(req: NextRequest) {
       whereClause.managerId = managerEmployee.id;
     }
 
-    const employees = await prisma.employee.findMany({
-      where: whereClause,
-      include: {
-        shift: true,
-        manager: { select: { id: true, name: true } },
-        pickupPoint: true,
-      },
-      orderBy: { name: "asc" },
-    });
+    let employees;
+    const isDefaultQuery = !search && !shiftId && session.role !== "MANAGER";
+    if (isDefaultQuery) {
+      employees = await getCachedActiveEmployees();
+    } else {
+      employees = await prisma.employee.findMany({
+        where: whereClause,
+        include: {
+          shift: true,
+          manager: { select: { id: true, name: true } },
+          pickupPoint: true,
+        },
+        orderBy: { name: "asc" },
+      });
+    }
     return NextResponse.json(employees);
   } catch (e) {
     console.error("[api] ❌ GET /api/employees — Failed to fetch", { ip, search: search || undefined }, e);
@@ -174,6 +185,7 @@ export async function DELETE(req: NextRequest) {
     await audit({ userId: auth.session.userId, role: auth.session.role, action: "DELETE", entity: "Employee", entityId: id, before, after: { status: "INACTIVE" }, ip });
     console.info("[api] ✅ DELETE /api/employees — OK", { employeeCode: before.employeeCode, id, userId: auth.session.userId, ip });
 
+    invalidateEmployeesCache();
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error("[api] ❌ DELETE /api/employees — Failed", { ip }, e);
@@ -277,8 +289,30 @@ export async function POST(req: NextRequest) {
         userId = user.id;
       }
 
-      return await tx.employee.create({
-        data: {
+      return await tx.employee.upsert({
+        where: { employeeCode },
+        update: {
+          name,
+          gender,
+          phone,
+          email: employeeEmail,
+          address: address || "Sadar, Nagpur",
+          formattedAddress,
+          x: coords.x,
+          y: coords.y,
+          placeId: coords.placeId || null,
+          zone: zoneData.zone,
+          subZone: zoneData.subZone,
+          distanceRing: zoneData.distanceRing,
+          distanceFromDepotKm: zoneData.distanceFromDepotKm,
+          department,
+          designation,
+          managerId,
+          shiftId,
+          status: "ACTIVE",
+          userId,
+        },
+        create: {
           employeeCode,
           name,
           gender,
@@ -306,6 +340,7 @@ export async function POST(req: NextRequest) {
     await audit({ userId: auth.session.userId, role: auth.session.role, action: "CREATE", entity: "Employee", entityId: employee.id, after: { employeeCode: employee.employeeCode, name: employee.name }, ip });
     console.info("[api] ✅ POST /api/employees — OK", { employeeCode: employee.employeeCode, id: employee.id, userId: auth.session.userId, ip });
 
+    invalidateEmployeesCache();
     return NextResponse.json(employee);
   } catch (e) {
     console.error("[api] ❌ POST /api/employees — Failed", { ip }, e);
@@ -463,6 +498,7 @@ export async function PATCH(req: NextRequest) {
     await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Employee", entityId: id, before: beforeSnapshot, after: employee, ip });
     console.info("[api] ✅ PATCH /api/employees — OK", { employeeCode: employee.employeeCode, id, userId: auth.session.userId, ip });
 
+    invalidateEmployeesCache();
     return NextResponse.json(employee);
   } catch (e) {
     console.error("[api] ❌ PATCH /api/employees — Failed", { ip }, e);

@@ -360,3 +360,33 @@ model OptimizedRouteSnapshot {
 
   @@map("optimized_routes")
 }
+
+model RouteDistanceCache {
+  id          String   @id @default(uuid())
+  originX     Float
+  originY     Float
+  destX       Float
+  destY       Float
+  distanceKm  Float
+  durationMin Float
+  createdAt   DateTime @default(now())
+
+  @@unique([originX, originY, destX, destY])
+  @@index([originX, originY])
+  @@index([destX, destY])
+}
+
+model OptimizationRun {
+  id            String   @id @default(uuid())
+  date          String   // YYYY-MM-DD
+  strategy      String   // e.g. "BALANCED", "MAXIMIZE_UTILIZATION", "MINIMIZE_TIME"
+  employeeCount Int
+  cabCount      Int
+  distance      Float
+  duration      Float
+  metrics       Json     // Store JSON metrics (underfilled, violations, etc.)
+  createdAt     DateTime @default(now())
+
+  @@index([date])
+}
+

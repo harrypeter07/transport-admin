@@ -1,0 +1,301 @@
+====================================================================================================
+DATABASE VERIFICATION REPORT: SHIFTS, EMPLOYEES & DRIVERS
+====================================================================================================
+
+1. SHIFTS SUMMARY
+--------------------------------------------------
+Shift ID                                 | Name                 | Start    | End      | Assigned Employees
+----------------------------------------------------------------------------------------------------
+shift-0500                               | APAC 05:00           | 05:00    | 14:00    | 19
+1b66fec0-f7d3-473e-8665-2721ba2c7f72     | Shift 07:00          | 07:00    | 16:00    | 1
+shift-0800                               | 08:00 Shift          | 08:00    | 08:00    | 0
+1be10596-ddbe-4867-951f-3826040ec683     | Shift 09:00          | 09:00    | 18:00    | 26
+shift-1000                               | IST 10:00            | 10:00    | 19:00    | 2
+shift-1100                               | 11:00 Shift          | 11:00    | 11:00    | 0
+shift-1130                               | 11:30 Shift          | 11:30    | 11:30    | 0
+shift-1300                               | IST 13:00            | 13:00    | 22:00    | 18
+
+
+2. ACTIVE DRIVERS & CABS DETAILS
+--------------------------------------------------
+Vehicle Num     | Driver Name               | Driver Phone    | Cap   | Vendor | Status     | Zone/SubZone
+----------------------------------------------------------------------------------------------------
+MH31FC8407      | MH31FC8407                | 0000000000      | 4     | FT     | AVAILABLE  | N/A/N/A
+MH31FC8592      | MH31FC8592                | 0000000000      | 4     | FT     | AVAILABLE  | N/A/N/A
+MH40CT4542      | MH40CT4542                | 0000000000      | 4     | FT     | AVAILABLE  | N/A/N/A
+MH40DC0486      | MH40DC0486                | 0000000000      | 4     | FT     | AVAILABLE  | N/A/N/A
+MH49CW0078      | MH49CW0078                | 0000000000      | 4     | FT     | AVAILABLE  | N/A/N/A
+MH49CW0139      | MH49CW0139                | 0000000000      | 4     | FT     | AVAILABLE  | N/A/N/A
+MH49CW0218      | MH49CW0218                | 0000000000      | 4     | FT     | AVAILABLE  | N/A/N/A
+MH49CW0876      | MH49CW0876                | 0000000000      | 4     | FT     | AVAILABLE  | N/A/N/A
+MH49CW1305      | MH49CW1305                | 0000000000      | 4     | FT     | AVAILABLE  | N/A/N/A
+
+
+3. EMPLOYEE DETAILS (66 Total)
+--------------------------------------------------
+#   | Employee Name                  | Code            | Gender  | Shift Time | Pickup Point                             | Zone/Sub
+------------------------------------------------------------------------------------------------------------------------
+1   | Abhay Marwade                  | 2574323         | MALE    | 05:00      | SOMWARI QUARTER                          | S/SE
+    * Phone: 9175576069 | Email: abhay.marwade@globallogic.com
+    * Address: PITRU CHHAYA NIWAS , QUARTER NUMBER 68/1 SOMWARI QUARTER,  NEAR JUNA KAMGAR KALYAN KENDRA NAGPUR 440024
+------------------------------------------------------------------------------------------------------------------------
+2   | Akansha Khode                  | 2571613         | FEMALE  | 05:00      | Vijaya Nagar Main Gate                   | S/SW
+    * Phone: 7773902239 | Email: akansha.khode@globallogic.com
+    * Address: Plot No 22, Vijaya Nagar, opposite to VNIT main gate,   south ambazari road, IT park Nagpur - 440022
+------------------------------------------------------------------------------------------------------------------------
+3   | Aniket Anand                   | EXCEL-ANIKET-ANAND | MALE    | 05:00      | Highway Glory Restaurant                 | N/NW
+    * Phone: 7089023911 | Email: aniket.anand@globallogic.com
+    * Address: B-403, Swapnil Enclave, Amravati Road, Kachimet, Nagpur - 440023
+------------------------------------------------------------------------------------------------------------------------
+4   | Anima Dixit                    | EXCEL-ANIMA-DIXIT | FEMALE  | 05:00      | Shiv Kailasa                             | S/SW
+    * Phone: 9717123008 | Email: anima.dixit@globallogic.com
+    * Address: Shiv Kailasa, MIHAN, Nagpur, Sondapar
+------------------------------------------------------------------------------------------------------------------------
+5   | Anshul Tyagi                   | 2524080         | FEMALE  | 05:00      | Majestic Manor                           | S/SW
+    * Phone: 7387683567 | Email: anshul.tyagi@globallogic.com
+    * Address: Majestic Manor
+------------------------------------------------------------------------------------------------------------------------
+6   | Anushri Bhise                  | 2572955         | FEMALE  | 05:00      | Soham and Aluminium                      | N/NW
+    * Phone: 9075483466 | Email: anushri.bhise@globallogic.com
+    * Address: Plot No 33, Balaji Jewellers Lane, Ayodhya Nagar, Nagpur - 440024
+------------------------------------------------------------------------------------------------------------------------
+7   | Aparna Khadatkar               | 2573662         | FEMALE  | 05:00      | Behind Rahul Daily Needs                 | S/SE
+    * Phone: 7498457590 | Email: aparna.khadatkar@globallogic.com
+    * Address: 30/D, Ekta Housing Society  Near Himalaya Empire, Opposite Ramteke Nagar  Beltarodi Road
+------------------------------------------------------------------------------------------------------------------------
+8   | B Prashanth                    | 2575313         | MALE    | 05:00      | Apollo Pharmacy                          | N/NW
+    * Phone: 8359938339 | Email: b.p.kumar2@globallogic.com
+    * Address: Plot No. 57, Samaj Bhushan Society, Somalwada, Wardha Road,
+------------------------------------------------------------------------------------------------------------------------
+9   | Cheparthi Vasanthi             | 2575077         | FEMALE  | 05:00      | Moraj Apartments                         | S/SW
+    * Phone: 7386270468 | Email: cheparthi.vasanthi@globallogic.com
+    * Address: Moraj Apartments
+------------------------------------------------------------------------------------------------------------------------
+10  | Devalla Sudheer Kumar          | 2563927         | MALE    | 05:00      | St. Vincent Pallotti School              | N/NW
+    * Phone: 9963809283 | Email: devalla.kumar@globallogic.com
+    * Address: Golden Vista Apartment,Flat No: 207,   Besa, Nagpur:
+------------------------------------------------------------------------------------------------------------------------
+11  | Dipali Sharma                  | 2574375         | FEMALE  | 05:00      | Nirvana Residency, Kalamna Market ...    | N/NE
+    * Phone: 9130920752 | Email: dipali.sharma@globallogic.com
+    * Address: Lane-5, 315c Bharat Nagar behind Satya hotel, Kalmna Market Road Nagpur
+------------------------------------------------------------------------------------------------------------------------
+12  | Kashmeni Sanjana               | 2573885         | FEMALE  | 05:00      | Behind Rahul Daily Needs                 | S/SE
+    * Phone: 7670995675 | Email: kashameni.sanjana@globallogic.com
+    * Address: Behind Rahul Daily Needs , Beltarodi Road
+------------------------------------------------------------------------------------------------------------------------
+13  | Minal Ninawe                   | 2572249         | FEMALE  | 05:00      | Puma showroom Manish Nagar               | S/SW
+    * Phone: 7887610598 | Email: minal.ninawe@globallogic.com
+    * Address: Plot No 42, Near Puma showroom Manish Nagar, T-point Besa Road Nagpur- 440037
+------------------------------------------------------------------------------------------------------------------------
+14  | Mohammed Farshad Chenganakkattil | 2571735         | MALE    | 05:00      | NARENDRA NAGAR                           | S/SW
+    * Phone: 9846412647 | Email: m.f.k@globallogic.com
+    * Address: 335, Nagar Vikas Housing Society, Narendra Nagar,Nagpur, Maharashtra-440015"
+------------------------------------------------------------------------------------------------------------------------
+15  | Pavani                         | 2574857         | FEMALE  | 05:00      | Shilpa Nagpur society, Manish Nagar,     | S/SW
+    * Phone: 9059284958 | Email: 2574857@globallogic.com
+    * Address: waraj Palace, Shilpa Nagpur-440015. society, Manish Nagar,
+------------------------------------------------------------------------------------------------------------------------
+16  | Ritesh Kothawade               | 2573850         | MALE    | 05:00      | Bloomdale                                | S/SW
+    * Phone: 9970609200 | Email: ritesh.kothawade@globallogic.com
+    * Address: 504, 7A, Mahindra Bloomdale, Mihan Sez, Khapri, Nagpur.
+------------------------------------------------------------------------------------------------------------------------
+17  | Siddheshwar Raghunath Raut     | 2572827         | MALE    | 05:00      | Maitree Nagar, Beltarodi                 | S/SW
+    * Phone: 9067067716 | Email: raut.raghunath@globallogic.com
+    * Address: Flat no. 204, 2nd floor, Gruhalaxmi appartment 3, Maitree Nagar, Beltarodi, Nagpur
+------------------------------------------------------------------------------------------------------------------------
+18  | sohit mishra                   | 2575102         | MALE    | 05:00      | Saiba towers Gorewada                    | N/NW
+    * Phone: 9096408407 | Email: sohit.mishra@globallogic.com
+    * Address: Near Saiba towers Beside Sky Blue Farmhouse Gorewada Nagpur 441123
+------------------------------------------------------------------------------------------------------------------------
+19  | Soma Lohitha                   | 2574997         | FEMALE  | 05:00      | Behind Rahul Daily Needs                 | S/SE
+    * Phone: 6300844626 | Email: soma.lohitha@globallogic.com
+    * Address: Behind Rahul Daily Needs , Beltarodi Road
+------------------------------------------------------------------------------------------------------------------------
+20  | Anand Ram Kumar                | 2563946         | MALE    | 07:00      | Landmar: Jagannath Mandir                | S/SE
+    * Phone: 9494240460 | Email: pulavarthy.kumar@globallogic.com
+    * Address: Plot no 95, Shrikrushna negar, manewada, bese road, Nagpur Landmar: Jagannath Mandir
+------------------------------------------------------------------------------------------------------------------------
+21  | Aryan Shende                   | 2577886         | MALE    | 09:00      | Santra Market                            | N/NE
+    * Phone: 7057117995 | Email: aryan.shende@globallogic.com
+    * Address: Santra Market, Kumbharpura Road, Near Rameshwari Dharmashala, Nagpur 440018
+------------------------------------------------------------------------------------------------------------------------
+22  | Ayush Thakre                   | 2577959         | MALE    | 09:00      | Cafe Junglee Kt nagar                    | N/NW
+    * Phone: 7507841006 | Email: ayush.thakre@globallogic.com
+    * Address: C04/204 Pioneer Regency Kt nagar Katol Road Nagpur 440013
+------------------------------------------------------------------------------------------------------------------------
+23  | Azad Bhasme                    | 2576692         | MALE    | 09:00      | Madhuban colony, wanadongri              | S/SW
+    * Phone: 8530465461 | Email: 2576692@globallogic.com
+    * Address: Madhuban colony,Maharashtra chowk ,wanadongri,Hingna road,Nagpur- 441110
+------------------------------------------------------------------------------------------------------------------------
+24  | Deepak singh kushwah           | 2576584         | MALE    | 09:00      | Baidyashakti Lifecare Pvt. Ltd Ram...    | S/SW
+    * Phone: 7249582964 | Email: 2576584@globallogic.com
+    * Address: D4, Kanchan Kiran housing, Ramdaspeth, Nagpur - 440012
+------------------------------------------------------------------------------------------------------------------------
+25  | Ethel Delphine Collins         | EXCEL-ETHEL-DELPHINE-COLLINS | FEMALE  | 09:00      | Parate Nagar, Khamla                     | S/SW
+    * Phone: 9985802277 | Email: ethel.delphine.collins@globallogic.com
+    * Address: 54, Utkarsh Building, near Sonegoan, Parate Nagar, Khamla, Nagpur, Maharashtra,
+------------------------------------------------------------------------------------------------------------------------
+26  | Geeta Rajput                   | 2577311         | FEMALE  | 09:00      | Amma pg Karve nagar Somalvada            | S/SW
+    * Phone: 9545517502 | Email: geeta.rajput@globallogic.com
+    * Address: #34 Amma pg Karve nagar Somalvada Wardha road Nagpur - 440025
+------------------------------------------------------------------------------------------------------------------------
+27  | Girivardhan                    | 2577282         | MALE    | 09:00      | New Amarnagar                            | S/SE
+    * Phone: 9502542885 | Email: 2577282@globallogic.com
+    * Address: New Amarnagar, Near Manewada
+------------------------------------------------------------------------------------------------------------------------
+28  | Krunal Wath                    | EXCEL-KRUNAL-WATH | MALE    | 09:00      | friends Colony                           | N/NW
+    * Phone: 9356684307 | Email: krunal.wath@globallogic.com
+    * Address: 213, friends Colony katol Road Nagpur
+------------------------------------------------------------------------------------------------------------------------
+29  | Likesh Barve                   | 2576887         | MALE    | 09:00      | Om nagar koradi road                     | N/NW
+    * Phone: 9763879173 | Email: likesh.barve@globallogic.com
+    * Address: Om sai nagar koradi road, plot no. 101 dhoke layout near sai mandir, Nagpur 440030
+------------------------------------------------------------------------------------------------------------------------
+30  | Mahesh Upadhyay                | EXCEL-MAHESH-UPADHYAY | MALE    | 09:00      | NARENDRA NAGAR                           | S/SW
+    * Phone: 7385021801 | Email: mahesh.upadhyay@globallogic.com
+    * Address: NARENDRA NAGAR
+------------------------------------------------------------------------------------------------------------------------
+31  | Manjiri Dombale                | 2576690         | FEMALE  | 09:00      | Mauli Apartment                          | S/SW
+    * Phone: 7888281289 | Email: 2576690@globallogic.com
+    * Address: 65, Shri Sant Gajanan Nagar, New Narasala Road,   Opposite Mauli Apartment, Nagpur - 440034
+------------------------------------------------------------------------------------------------------------------------
+32  | Monika Jeswani                 | EXCEL-MONIKA-JESWANI | FEMALE  | 09:00      | Gandhi automation Pvt Ltd gest hou...    | S/SW
+    * Phone: 7218617533 | Email: monika.jeswani@globallogic.com
+    * Address: Cove Girls PG, Plot no 1, Shyam Sudha, Santaji society, Matakanya layout,  Manish Nagar, Somalwada, Nagpur, Maharashtra, 440015
+------------------------------------------------------------------------------------------------------------------------
+33  | Prachi jain                    | EXCEL-PRACHI-JAIN | FEMALE  | 09:00      | New Manishnagar, Near Jayanti Mans...    | S/SW
+    * Phone: 8700451673 | Email: prachi.jain@globallogic.com
+    * Address: Plot no 45, Bhartiya Society, Prabhu nagar, New Manishnagar, Near Jayanti Mansion 9, Nagpur
+------------------------------------------------------------------------------------------------------------------------
+34  | Pranav Nachankar               | EXCEL-PRANAV-NACHANKAR | MALE    | 09:00      | Chinchbhuvan                             | S/SW
+    * Phone: 9623958699 | Email: pranav.nachankar@globallogic.com
+    * Address: Girikunj PG, chinch bhavan, Nagpur
+------------------------------------------------------------------------------------------------------------------------
+35  | Prashant Pathlavat             | 2574190         | MALE    | 09:00      | Telecom Nagar                            | S/SW
+    * Phone: 9700451452 | Email: prashanth.pathlavath@globallogic.com
+    * Address: Sindhu residency 57 DRAP, Telecom Nagar, Nagpur
+------------------------------------------------------------------------------------------------------------------------
+36  | Pulipati Krishna               | 2563939         | MALE    | 09:00      | Shubhash Nagar                           | S/SW
+    * Phone: 9440400155 /8341598148 | Email: pulipati.krishna@globallogic.com
+    * Address: Near Drivven IT solutions LLP, near Shambhaji Square,   Bandu Soni Layout, Subhash Nagar, Trimurthi Nagar,
+------------------------------------------------------------------------------------------------------------------------
+37  | Pushpak Sakhare                | EXCEL-PUSHPAK-SAKHARE | MALE    | 09:00      | Sugat Nagar                              | N/NE
+    * Phone: 9545635896 | Email: pushpak.sakhare@globallogic.com
+    * Address: Plot No. 78, 2nd floor, Arya Nagar near Sugat Nagar,Samta Nagar Road,   Near Manmeete Bar and Lounge Restaurant
+------------------------------------------------------------------------------------------------------------------------
+38  | Sagar                          | EXCEL-SAGAR     | MALE    | 09:00      | Apollo Pharmacy                          | N/NW
+    * Phone: 6206701306 | Email: sagar@globallogic.com
+    * Address: Samaj Bhushan Society, Somalwada,Wardha road, Nagpur.
+------------------------------------------------------------------------------------------------------------------------
+39  | sakshi                         | EXCEL-SAKSHI    | FEMALE  | 09:00      | The I-school by edumeta besa             | S/SE
+    * Phone: 8999187443 | Email: sakshi@globallogic.com
+    * Address: Subhangi Ghruh, Plot no 112, Besa-Manish Nagar Rd, besa, Nagpur, Besa Pipla, Maharashtra 440037
+------------------------------------------------------------------------------------------------------------------------
+40  | Sayata Chakraborty             | EXCEL-SAYATA-CHAKRABORTY | FEMALE  | 09:00      | Creative Minds Art Academ NIT Garden     | S/SW
+    * Phone: 9774766950 | Email: sayata.chakraborty@globallogic.com
+    * Address: Chintaman Apartment, behind NIT Garden, Bhujbal Layout, Bhamti,Sainath Nagar, Trimurti Nagar, Nagpur, Maharashtra 440022
+------------------------------------------------------------------------------------------------------------------------
+41  | Sejal Shahare                  | 2576808         | FEMALE  | 09:00      | Zade child clinic Chinchbhawan           | S/SW
+    * Phone: 7517972498 | Email: sejal.shahare@globallogic.com
+    * Address: D-201, Chimurkar Appartment, Chinchbhawan, wardha road, Nagpur, maharashtra
+------------------------------------------------------------------------------------------------------------------------
+42  | Shravan Meshram                | 2517958         | MALE    | 09:00      | Grampanchayat school Bhilgaon Kamptee    | N/NE
+    * Phone: 8888938203 | Email: shravan.meshram@globallogic.com
+    * Address: H10,Rishikesh Town phase 2 ,near Grampanchayat school Bhilgaon Kamptee rd ,Nagpur 440029
+------------------------------------------------------------------------------------------------------------------------
+43  | Shreya karale                  | 2576563         | FEMALE  | 09:00      | Vedanshi Embroidery Hingna               | S/SW
+    * Phone: 8767758699 | Email: 2576563@globallogic.com
+    * Address: hingna city society,hingna nagpur
+------------------------------------------------------------------------------------------------------------------------
+44  | Tanuja                         | EXCEL-TANUJA    | FEMALE  | 09:00      | OYO Hotel Olive Stay Inn                 | S/SW
+    * Phone: 8217018607 | Email: tanuja@globallogic.com
+    * Address: 32, jaiprabhu society, Olive hotel inn, Manish Nagar, Shri Nagar, Nagpur
+------------------------------------------------------------------------------------------------------------------------
+45  | Vansh Rewaskar                 | 2576558         | MALE    | 09:00      | Ajni Electric Loco Shed                  | S/SW
+    * Phone: 9325990464 | Email: 2576558@globallogic.com
+    * Address: Elite homes pt no57, east samarth nagar, old, Wardha Rd,   behind FCI Godown Road, Ajni, Nagpur, Maharashtra 440015
+------------------------------------------------------------------------------------------------------------------------
+46  | yash karambe                   | 2576584-1       | MALE    | 09:00      | NOTARY & ADV. SHILA GHAGRE Lokmany...    | S/SW
+    * Phone: 9767612622 | Email: 25765841@globallogic.com
+    * Address: 141 17b, Ram Mandir Road, Lokmanya Nagar, Nagpur, 17b,Ram Mandir Road, Lokmanya Nagar, Nagpur, NAGPUR,
+------------------------------------------------------------------------------------------------------------------------
+47  | Brej Kishore                   | EXCEL-BREJ-KISHORE | FEMALE  | 10:00      | airport center hotel                     | S/SW
+    * Phone: 9096028331 | Email: brej.kishore@globallogic.com
+    * Address: Plot no 23, laxmi vihar, Near hotel royal centre point hotel heritage, behind airport center Nagpur
+------------------------------------------------------------------------------------------------------------------------
+48  | Uday Tiwari                    | 2563945         | FEMALE  | 10:00      | Besa - Manish Nagar                      | S/SW
+    * Phone: 9052594917 | Email: 2563945@globallogic.com
+    * Address: Besa - Manish Nagar
+------------------------------------------------------------------------------------------------------------------------
+49  | Abhijit Zade                   | 2575523         | MALE    | 13:00      | Krishna Super Mart 2                     | N/NW
+    * Phone: 9730462485 | Email: 2575523@globallogic.com
+    * Address: Radhakrishna Apartment Behind Krishna Super Mart 2 Manish Nagar, Nagpur
+------------------------------------------------------------------------------------------------------------------------
+50  | Atharva Deo                    | 2573901         | MALE    | 13:00      | day 2 day                                | N/NE
+    * Phone: 9881103408 | Email: atharva.deo@globallogic.com
+    * Address: P.N. 678, Deshpande layout, Bhandara road,   Wardhaman Nagar, Near Haldiram's building, Nagpur-440008
+------------------------------------------------------------------------------------------------------------------------
+51  | Kartik Ukhalkar                | 2572738         | MALE    | 13:00      | Hotel Manomay                            | S/SW
+    * Phone: 7588787601 | Email: kartik.ukhalkar@globallogic.com
+    * Address: Ground floor, Orchid landmark, Behind Manomay Homes hotel, New Manish Naga
+------------------------------------------------------------------------------------------------------------------------
+52  | Kumar Adarsh                   | 2564448         | MALE    | 13:00      | Neelkamal Homes                          | S/SW
+    * Phone: 7903567319 | Email: 2564448@globallogic.com
+    * Address: 52 Jai Durga Society, Narendra Nagar, Nagpur pin -440015,
+------------------------------------------------------------------------------------------------------------------------
+53  | Lavakumar Khanapur             | 2532274         | MALE    | 13:00      | Green Relocation                         | S/SW
+    * Phone: 6363087687 | Email: lavakumar.khanapur@globallogic.com
+    * Address: shilpa society,uco Bank behind somalwada branch manish Nagar
+------------------------------------------------------------------------------------------------------------------------
+54  | Meghana B U                    | 2573848         | FEMALE  | 13:00      | Kanak Car center                         | S/SW
+    * Phone: 7899130650 | Email: meghana.u@globallogic.com
+    * Address: #34 Amma pg Karve nagar Somalvada Wardha road Nagpur - 440025
+------------------------------------------------------------------------------------------------------------------------
+55  | Nikhil Ambule                  | 2572172         | MALE    | 13:00      | Sheshrao Kohale Vidhyalaya & jr co...    | S/SW
+    * Phone: 7218518122 | Email: nikhil.ambule@globallogic.com
+    * Address: Sadguru kirana and general store,Sai nagar near puliya, 1, Jaitala Rd, near dattey layout,  Wadeskar Layout, Jaitala, string:Nagpur, Nagpur, Maharashtra 440036
+------------------------------------------------------------------------------------------------------------------------
+56  | Nisha Shyamsukha               | 2573568         | FEMALE  | 13:00      | Axis Bank, Manish Nagar                  | S/SW
+    * Phone: 9093931909 | Email: nisha.shyamsukha@globallogic.com
+    * Address: Harihar Gokul Park 2, near Axis Bank, Manish Nagar,
+------------------------------------------------------------------------------------------------------------------------
+57  | Poorvi                         | EXCEL-POORVI    | FEMALE  | 13:00      | OYO Hotel Olive Stay Inn                 | S/SW
+    * Phone: 8458948881 | Email: poorvi.shrivas@globallogic.com
+    * Address: 32, jaiprabhu society, Olive hotel   inn, Manish Nagar, Shri Nagar, Nagpur
+------------------------------------------------------------------------------------------------------------------------
+58  | Prabhat Priydarshi             | 2573661         | MALE    | 13:00      | CCD IT park                              | S/SW
+    * Phone: 7903956186 | Email: prabhat.priydarshi@globallogic.com
+    * Address: Near Sidhant Sakhsam Tower, Lokhande layout, Lokhande nagar,   Parsodi, Subhash Nagar, Trimurti Nagar,Nagpur, Maharashtra - 440022
+------------------------------------------------------------------------------------------------------------------------
+59  | Pranay Haste                   | 2564924         | MALE    | 13:00      | REVOLVE FITNESS GYM                      | S/SW
+    * Phone: 9860582460 | Email: pranay.haste@globallogic.com
+    * Address: SPDL Aashray Apartment, Beltarodi, Besa Pipla, Nagpur.
+------------------------------------------------------------------------------------------------------------------------
+60  | Pranay Wekhande                | #######         | MALE    | 13:00      | Saibaba Temple, Ayodhya Nagar            | S/SW
+    * Phone: 8149299596 / 8208670107 | Email: pranay.wekhande@globallogic.com
+    * Address: Plot No.11/A, 3rd Lane, Behind Saibaba Temple, Ayodhya Nagar,Mahavir Kirana Stores
+------------------------------------------------------------------------------------------------------------------------
+61  | Ravindra Farkade               | 2572338         | MALE    | 13:00      | Front of Rajesh Saoji Bhojnalaya         | S/SE
+    * Phone: 7888182312 | Email: ravindra.farkade@globallogic.com
+    * Address: Rajat Gawre House, Gurukunj Nagar, Near Vigyan nagar,   Manewada Nagpur,440034
+------------------------------------------------------------------------------------------------------------------------
+62  | Rushabh Bhagate                | EXCEL-RUSHABH-BHAGATE | MALE    | 13:00      | Near Neeri School , Towards Ajni S...    | S/SW
+    * Phone: 9022023129 | Email: rushabh.bhagate@globallogic.com
+    * Address: lot no. 115, Geeta, RPTS road, Surendra Nagar, Near Jerry Lawns,
+------------------------------------------------------------------------------------------------------------------------
+63  | Sayali Padole                  | 2574809         | FEMALE  | 13:00      | Adarsh Lawn & Hall                       | S/SE
+    * Phone: 82372 63979 | Email: sayali.padole@globallogic.com
+    * Address: Plot No 86, C/O Sanjay Chaudhari,Behind Kidzee   Hudkeshwar,Shivangi Nagar, Hudkeshwar
+------------------------------------------------------------------------------------------------------------------------
+64  | Shubhankar Das                 | EXCEL-SHUBHANKAR-DAS | MALE    | 13:00      | Green Relocation                         | S/SW
+    * Phone: 7001818737 | Email: shubhankar.das@globallogic.com
+    * Address: Plot no 57,Shilpa co.op.society, Narendra Nagar.nagpur 440015
+------------------------------------------------------------------------------------------------------------------------
+65  | Vajja Bhanu Prakash            | 2560101         | FEMALE  | 13:00      | Shubhash Nagar                           | S/SW
+    * Phone: 9381031939 | Email: vajja.prakash@globallogic.com
+    * Address: Near Drivven IT solutions LLP,near shambhaji square,Bandu soni layout,  subhash nagar,trimurthi nagar,nagpur,maharashtra 440022
+------------------------------------------------------------------------------------------------------------------------
+66  | Yash Dubey                     | 2573846         | MALE    | 13:00      | Roshan Mini Transport                    | S/SW
+    * Phone: 8815498610 | Email: yash.dubey@globallogic.com
+    * Address: Jaywant co operative housing society, behind Ramteke nagar,   Omkar Nagar, Nagpur, Maharashtra 440027
+------------------------------------------------------------------------------------------------------------------------

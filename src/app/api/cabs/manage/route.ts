@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { mapsProvider } from "@/lib/maps";
 import { requireApiRole } from "@/lib/apiAuth";
 import { audit } from "@/lib/audit";
+import { invalidateCabsCache, invalidateRoutesCache } from "@/lib/cache";
 
 function reqIp(req: NextRequest): string {
   return req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
@@ -43,28 +44,45 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const cab = await prisma.cab.create({
-  data: {
-  vehicleNumber,
-  capacity: parseInt(capacity),
-  vendor: vendor || "Manual Registry",
-  status: "AVAILABLE",
-  driverName: driverName,
-  driverPhone: driverPhone || "+91 99000 00000",
-  licenseNumber: licenseNumber || `DL-MANUAL-${Math.floor(1000 + Math.random() * 9000)}`,
-  driverAddress: driverAddress || null,
-  formattedAddress,
-  driverX,
-  driverY,
-  placeId: driverPlaceId,
-  shifts: Array.isArray(shiftIds) && shiftIds.length > 0
-    ? { connect: shiftIds.map((id: string) => ({ id })) }
-    : undefined,
-  },
+  const cab = await prisma.cab.upsert({
+    where: { vehicleNumber },
+    update: {
+      capacity: parseInt(capacity),
+      vendor: vendor || "Manual Registry",
+      driverName: driverName,
+      driverPhone: driverPhone || "+91 99000 00000",
+      licenseNumber: licenseNumber || `DL-MANUAL-${Math.floor(1000 + Math.random() * 9000)}`,
+      driverAddress: driverAddress || null,
+      formattedAddress,
+      driverX,
+      driverY,
+      placeId: driverPlaceId,
+      shifts: Array.isArray(shiftIds) && shiftIds.length > 0
+        ? { set: shiftIds.map((id: string) => ({ id })) }
+        : undefined,
+    },
+    create: {
+      vehicleNumber,
+      capacity: parseInt(capacity),
+      vendor: vendor || "Manual Registry",
+      status: "AVAILABLE",
+      driverName: driverName,
+      driverPhone: driverPhone || "+91 99000 00000",
+      licenseNumber: licenseNumber || `DL-MANUAL-${Math.floor(1000 + Math.random() * 9000)}`,
+      driverAddress: driverAddress || null,
+      formattedAddress,
+      driverX,
+      driverY,
+      placeId: driverPlaceId,
+      shifts: Array.isArray(shiftIds) && shiftIds.length > 0
+        ? { connect: shiftIds.map((id: string) => ({ id })) }
+        : undefined,
+    },
   });
 
   await audit({ userId: auth.session.userId, role: auth.session.role, action: "CREATE", entity: "Cab", entityId: cab.id, after: { vehicleNumber: cab.vehicleNumber }, ip });
   console.info("[api] ✅ POST /api/cabs/manage — OK", { vehicleNumber: cab.vehicleNumber, id: cab.id, userId: auth.session.userId, ip });
+  invalidateCabsCache();
   return NextResponse.json(cab);
   } catch (e) {
   console.error("[api] ❌ POST /api/cabs/manage — Failed", { ip }, e);
@@ -123,6 +141,8 @@ export async function DELETE(req: NextRequest) {
 
   await audit({ userId: auth.session.userId, role: auth.session.role, action: "DELETE", entity: "Cab", entityId: id, ip });
   console.info("[api] ✅ DELETE /api/cabs/manage — OK", { id, userId: auth.session.userId, ip });
+  invalidateCabsCache();
+  invalidateRoutesCache();
   return NextResponse.json({ success: true });
   } catch (e) {
   console.error("[api] ❌ DELETE /api/cabs/manage — Failed", { ip }, e);
@@ -219,6 +239,8 @@ export async function PATCH(req: NextRequest) {
 
   await audit({ userId: auth.session.userId, role: auth.session.role, action: "UPDATE", entity: "Cab", entityId: id, before: cabBefore, after: { vehicleNumber: updatedCab.vehicleNumber, driverName: updatedCab.driverName }, ip });
   console.info("[api] ✅ PATCH /api/cabs/manage — OK", { vehicleNumber: updatedCab.vehicleNumber, id, userId: auth.session.userId, ip });
+  invalidateCabsCache();
+  invalidateRoutesCache();
   return NextResponse.json(updatedCab);
   } catch (e) {
   console.error("[api] ❌ PATCH /api/cabs/manage — Failed", { ip }, e);

@@ -284,53 +284,60 @@ async function main() {
     const zoneInfo = assignZone(finalY, finalX);
     const pickupPointId = emp.pickupPoint ? pickupPoints.get(emp.pickupPoint) : undefined;
 
-    if (existing) {
-      await prisma.employee.update({
-        where: { id: existing.id },
-        data: {
-          employeeCode: emp.employeeCode,
-          name: emp.name,
-          gender: emp.gender,
-          address: finalAddress,
-          x: finalX,
-          y: finalY,
-          shiftId,
-          status: "ACTIVE",
-          zone: zoneInfo.zone,
-          subZone: zoneInfo.subZone,
-          distanceRing: zoneInfo.distanceRing,
-          distanceFromDepotKm: zoneInfo.distanceFromDepotKm,
-          pickupPointId,
-        },
-      });
+    const codeVal = emp.employeeCode;
+    const isNew = !existingByCode.has(codeVal.toLowerCase());
+
+    const dbEmp = await prisma.employee.upsert({
+      where: { employeeCode: codeVal },
+      update: {
+        name: emp.name,
+        gender: emp.gender,
+        address: finalAddress,
+        x: finalX,
+        y: finalY,
+        shiftId,
+        status: "ACTIVE",
+        zone: zoneInfo.zone,
+        subZone: zoneInfo.subZone,
+        distanceRing: zoneInfo.distanceRing,
+        distanceFromDepotKm: zoneInfo.distanceFromDepotKm,
+        pickupPointId,
+      },
+      create: {
+        employeeCode: codeVal,
+        name: emp.name,
+        gender: emp.gender,
+        phone: emp.phone,
+        email: emp.email,
+        address: finalAddress,
+        x: finalX,
+        y: finalY,
+        department: "Engineering",
+        shiftId,
+        status: "ACTIVE",
+        zone: zoneInfo.zone,
+        subZone: zoneInfo.subZone,
+        distanceRing: zoneInfo.distanceRing,
+        distanceFromDepotKm: zoneInfo.distanceFromDepotKm,
+        pickupPointId,
+      },
+    });
+
+    if (isNew) {
+      console.log(`[SYNC] Employee Created: ${dbEmp.name} (${dbEmp.employeeCode})`);
     } else {
-      await prisma.employee.create({
-        data: {
-          employeeCode: emp.employeeCode,
-          name: emp.name,
-          gender: emp.gender,
-          phone: emp.phone,
-          email: emp.email,
-          address: finalAddress,
-          x: finalX,
-          y: finalY,
-          department: "Engineering",
-          shiftId,
-          status: "ACTIVE",
-          zone: zoneInfo.zone,
-          subZone: zoneInfo.subZone,
-          distanceRing: zoneInfo.distanceRing,
-          distanceFromDepotKm: zoneInfo.distanceFromDepotKm,
-          pickupPointId,
-        },
-      });
+      console.log(`[SYNC] Employee Updated: ${dbEmp.name} (${dbEmp.employeeCode})`);
     }
     upserted++;
   }
 
+  const dbCabs = await prisma.cab.findMany({ select: { vehicleNumber: true } });
+  const dbCabNumbers = new Set(dbCabs.map(c => c.vehicleNumber.toUpperCase()));
+
   for (const cab of cabs) {
     const shiftId = shiftCache.get(cab.shiftStartTime) || (await upsertShift(cab.shiftStartTime)).id;
-    await prisma.cab.upsert({
+    const isNewCab = !dbCabNumbers.has(cab.vehicleNumber.toUpperCase());
+    const dbCab = await prisma.cab.upsert({
       where: { vehicleNumber: cab.vehicleNumber },
       update: {
         capacity: cab.capacity,
@@ -351,6 +358,12 @@ async function main() {
         shifts: { connect: { id: shiftId } },
       },
     });
+
+    if (isNewCab) {
+      console.log(`[SYNC] Cab Created: ${dbCab.vehicleNumber}`);
+    } else {
+      console.log(`[SYNC] Cab Updated: ${dbCab.vehicleNumber}`);
+    }
   }
 
   console.log(`\nDone. Upserted ${upserted} employees, ${cabs.length} cabs.`);

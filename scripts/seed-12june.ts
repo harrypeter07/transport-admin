@@ -136,11 +136,17 @@ async function main() {
       distanceFromDepotKm: zoneInfo.distanceFromDepotKm,
     };
 
-    let record;
-    if (existing) {
-      record = await prisma.employee.update({ where: { id: existing.id }, data: empData });
+    const isNew = !existing;
+    const record = await prisma.employee.upsert({
+      where: { employeeCode: empCode },
+      update: empData,
+      create: empData,
+    });
+
+    if (isNew) {
+      console.log(`[SYNC] Employee Created: ${record.name} (${record.employeeCode})`);
     } else {
-      record = await prisma.employee.create({ data: empData });
+      console.log(`[SYNC] Employee Updated: ${record.name} (${record.employeeCode})`);
     }
 
     activeEmployeeIds.add(record.id);
@@ -190,6 +196,9 @@ async function main() {
 
   await dedupeEmployeesByName(activeEmployeeIds);
 
+  const dbCabs = await prisma.cab.findMany({ select: { vehicleNumber: true } });
+  const dbCabNumbers = new Set(dbCabs.map(c => c.vehicleNumber.toUpperCase()));
+
   const cabSeen = new Set<string>();
   for (const route of parsed.routes) {
     const vehicleNumber = route.vehicleNumber.startsWith("MH")
@@ -202,7 +211,8 @@ async function main() {
     const shiftTime = route.employees.find((e) => e.status === "YES")?.shiftTime || "05:00";
     const shiftId = shiftIdFromTime(shiftTime);
 
-    await prisma.cab.upsert({
+    const isNewCab = !dbCabNumbers.has(vehicleNumber.toUpperCase());
+    const dbCab = await prisma.cab.upsert({
       where: { vehicleNumber },
       update: {
         capacity: 6,
@@ -223,12 +233,19 @@ async function main() {
         shifts: { connect: { id: shiftId } },
       },
     });
+
+    if (isNewCab) {
+      console.log(`[SYNC] Cab Created: ${dbCab.vehicleNumber}`);
+    } else {
+      console.log(`[SYNC] Cab Updated: ${dbCab.vehicleNumber}`);
+    }
   }
 
   for (const v of parsed.vehicles) {
     if (cabSeen.has(v)) continue;
     cabSeen.add(v);
-    await prisma.cab.upsert({
+    const isNewCab = !dbCabNumbers.has(v.toUpperCase());
+    const dbCab = await prisma.cab.upsert({
       where: { vehicleNumber: v },
       update: { capacity: 6, vendor: "FT", status: "AVAILABLE" },
       create: {
@@ -242,6 +259,12 @@ async function main() {
         shifts: { connect: SHIFTS_CONFIG.map((s) => ({ id: s.id })) },
       },
     });
+
+    if (isNewCab) {
+      console.log(`[SYNC] Cab Created: ${dbCab.vehicleNumber}`);
+    } else {
+      console.log(`[SYNC] Cab Updated: ${dbCab.vehicleNumber}`);
+    }
   }
 
   const active = await prisma.employee.count({ where: { status: "ACTIVE" } });

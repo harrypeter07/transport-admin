@@ -458,12 +458,19 @@ async function main() {
 		);
 		for (const emp of employeesToCreate) {
 			try {
-				const newEmp = await prisma.employee.create({
-					data: {
-						employeeCode:
-							emp.code === "NA"
-								? `EXCEL-${emp.name.replace(/\s+/g, "-").toUpperCase()}`
-								: emp.code,
+				const codeVal = emp.code === "NA"
+					? `EXCEL-${emp.name.replace(/\s+/g, "-").toUpperCase()}`
+					: emp.code;
+				const isNew = !dbByCode.has(codeVal);
+
+				const newEmp = await prisma.employee.upsert({
+					where: { employeeCode: codeVal },
+					update: {
+						name: emp.name,
+						status: "ACTIVE",
+					},
+					create: {
+						employeeCode: codeVal,
 						name: emp.name,
 						gender: "MALE",
 						phone: "",
@@ -475,10 +482,14 @@ async function main() {
 						status: "ACTIVE",
 					},
 				});
-				console.log(`   ✅ Created: ${newEmp.name} (${newEmp.employeeCode})`);
+				if (isNew) {
+					console.log(`[SYNC] Employee Created: ${newEmp.name} (${newEmp.employeeCode})`);
+				} else {
+					console.log(`[SYNC] Employee Updated: ${newEmp.name} (${newEmp.employeeCode})`);
+				}
 			} catch (err) {
 				console.error(
-					`   ❌ Failed to create ${emp.name}: ${(err as any).message}`,
+					`   ❌ Failed to create/update ${emp.name}: ${(err as any).message}`,
 				);
 			}
 		}
@@ -543,6 +554,7 @@ async function main() {
           ON CONFLICT ("employeeId", date) DO UPDATE
           SET "transportRosterStatus" = 'PRESENT', "sourceSheet" = '16-6-26', "updatedAt" = now()
         `;
+				console.log(`[SYNC] Roster Upserted: ${dbEmp.name} (PRESENT)`);
 				updateCount++;
 			} catch (err) {
 				console.error(
@@ -570,6 +582,7 @@ async function main() {
           ON CONFLICT ("employeeId", date) DO UPDATE
           SET "transportRosterStatus" = 'NO_SHOW', "sourceSheet" = '16-6-26', "updatedAt" = now()
         `;
+				console.log(`[SYNC] Roster Upserted: ${dbEmp.name} (NO_SHOW)`);
 				noShowCount++;
 			} catch (err) {
 				console.error(
@@ -617,12 +630,13 @@ async function main() {
 			(c) => c.vehicleNumber.toUpperCase() === vehicleNum.toUpperCase(),
 		);
 		if (dbCab) {
-			await prisma.cab.update({
+			const updatedCab = await prisma.cab.update({
 				where: { id: dbCab.id },
 				data: {
 					driverName: driverName,
 				},
 			});
+			console.log(`[SYNC] Cab Updated: ${updatedCab.vehicleNumber} (Driver: ${driverName})`);
 			driverUpdateCount++;
 		}
 	}

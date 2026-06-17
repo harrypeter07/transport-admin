@@ -4,6 +4,7 @@ import { verifySession } from "@/lib/dal";
 import prisma from "@/lib/db";
 import { mapsProvider } from "@/lib/maps";
 import { audit } from "@/lib/audit";
+import { getCachedCabs, invalidateCabsCache } from "@/lib/cache";
 
 function reqIp(req: NextRequest | Request): string {
   if (req instanceof NextRequest) {
@@ -25,22 +26,28 @@ export async function GET(req: NextRequest) {
   const shiftId = searchParams.get("shiftId");
 
   try {
-    const cabs = await prisma.cab.findMany({
-      where: {
-        status: { not: "INACTIVE" },
-        ...(search && {
-          OR: [
-            { vehicleNumber: { contains: search, mode: "insensitive" } },
-            { vendor: { contains: search, mode: "insensitive" } },
-          ],
-        }),
-        ...(shiftId && { shifts: { some: { id: shiftId } } }),
-      },
-      include: {
-        shifts: true,
-      },
-      orderBy: { vehicleNumber: "asc" },
-    });
+    let cabs;
+    const isDefaultQuery = !search && !shiftId;
+    if (isDefaultQuery) {
+      cabs = await getCachedCabs();
+    } else {
+      cabs = await prisma.cab.findMany({
+        where: {
+          status: { not: "INACTIVE" },
+          ...(search && {
+            OR: [
+              { vehicleNumber: { contains: search, mode: "insensitive" } },
+              { vendor: { contains: search, mode: "insensitive" } },
+            ],
+          }),
+          ...(shiftId && { shifts: { some: { id: shiftId } } }),
+        },
+        include: {
+          shifts: true,
+        },
+        orderBy: { vehicleNumber: "asc" },
+      });
+    }
     return NextResponse.json(cabs);
   } catch (e) {
     console.error("[api] ❌ GET /api/cabs — Failed to fetch", { ip, search: search || undefined }, e);
@@ -81,37 +88,62 @@ export async function POST(req: NextRequest) {
     }
 
     const newCab = await prisma.$transaction(async (tx) => {
-      let userId: string | null = null;
-      
-      const finalDriverName = driverName && driverName !== "Unassigned" ? driverName : `Driver ${vehicleNumber}`;
-      const sanitizedName = finalDriverName.toLowerCase().replace(/[^a-z0-9]/g, "");
-      let generatedEmail = `${sanitizedName}@transitadmin.com`;
-      
-      let existingUser = await tx.user.findUnique({ where: { email: generatedEmail } });
-      if (existingUser) {
-          generatedEmail = `${sanitizedName}_${vehicleNumber.toLowerCase().replace(/[^a-z0-9]/g, "")}@transitadmin.com`;
-      }
-      
-      // We must dynamically import bcrypt in API route, or better, we can assume it's imported at the top.
-      // Wait, bcrypt is not imported at the top of cabs/route.ts! I should add the import!
-      // I will do that in a separate replacement or modify this.
-      // Actually I should just use `require("bcryptjs")` inline or import it.
-      const bcrypt = require("bcryptjs");
-      const defaultPassword = await bcrypt.hash("Welcome@123", 10);
-
-      const user = await tx.user.create({
-        data: {
-          email: generatedEmail,
-          password: defaultPassword,
-          name: finalDriverName,
-          role: "DRIVER",
-          requiresPasswordChange: true,
-        },
+      const existingCab = await tx.cab.findUnique({
+        where: { vehicleNumber },
+        include: { user: true }
       });
-      userId = user.id;
 
-      return await tx.cab.create({
-        data: {
+      let userId: string | null = existingCab?.userId || null;
+      const finalDriverName = driverName && driverName !== "Unassigned" ? driverName : `Driver ${vehicleNumber}`;
+      
+      if (!userId) {
+        const sanitizedName = finalDriverName.toLowerCase().replace(/[^a-z0-9]/g, "");
+        let generatedEmail = `${sanitizedName}@transitadmin.com`;
+        
+        let existingUser = await tx.user.findUnique({ where: { email: generatedEmail } });
+        if (existingUser) {
+            generatedEmail = `${sanitizedName}_${vehicleNumber.toLowerCase().replace(/[^a-z0-9]/g, "")}@transitadmin.com`;
+        }
+        
+        const bcrypt = require("bcryptjs");
+        const defaultPassword = await bcrypt.hash("Welcome@123", 10);
+
+        const user = await tx.user.create({
+          data: {
+            email: generatedEmail,
+            password: defaultPassword,
+            name: finalDriverName,
+            role: "DRIVER",
+            requiresPasswordChange: true,
+          },
+        });
+        userId = user.id;
+      } else {
+        await tx.user.update({
+          where: { id: userId },
+          data: { name: finalDriverName }
+        });
+      }
+
+      return await tx.cab.upsert({
+        where: { vehicleNumber },
+        update: {
+          capacity: parseInt(capacity),
+          vendor,
+          status,
+          driverName: finalDriverName,
+          driverPhone: driverPhone || "",
+          licenseNumber: licenseNumber || "",
+          driverAddress: driverAddress || null,
+          formattedAddress,
+          driverX: finalDriverX,
+          driverY: finalDriverY,
+          placeId: finalDriverPlaceId,
+          shifts: shiftIds && shiftIds.length > 0 ? {
+            set: shiftIds.map((id: string) => ({ id }))
+          } : undefined
+        },
+        create: {
           vehicleNumber,
           capacity: parseInt(capacity),
           vendor,
@@ -135,6 +167,8 @@ export async function POST(req: NextRequest) {
 
     await audit({ userId: session.userId, role: session.role, action: "CREATE", entity: "Cab", entityId: newCab.id, after: { vehicleNumber: newCab.vehicleNumber }, ip });
     console.info("[api] ✅ POST /api/cabs — OK", { vehicleNumber: newCab.vehicleNumber, id: newCab.id, userId: session.userId, ip });
+
+    invalidateCabsCache();
     return NextResponse.json(newCab);
   } catch (error: any) {
     console.error("[api] ❌ POST /api/cabs — Failed", { ip }, error);

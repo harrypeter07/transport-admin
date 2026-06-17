@@ -83,6 +83,17 @@ function cleanCoords(latVal: any, lngVal: any): { lat: number; lng: number } {
 	return { lat, lng };
 }
 
+function normalizePickupPointName(name: string): string {
+	const lower = name.toLowerCase().trim();
+	if (lower.includes("narendra nagar")) {
+		return "Narendra Nagar";
+	}
+	if (lower.includes("manish nagar")) {
+		return "Manish Nagar";
+	}
+	return name;
+}
+
 function normalizeRoute(route: any, dbEmployees: any[] = []): Route {
 	if (!route) return route;
 	const stops = (route.stops || []).map((stop: any, stopIdx: number) => {
@@ -106,9 +117,13 @@ function normalizeRoute(route: any, dbEmployees: any[] = []): Route {
 		// Clean and correct coordinate swap if any (y is latitude, x is longitude)
 		const cleaned = cleanCoords(rawY, rawX);
 
+		const rawPpName = stop.pickupPoint || (stop.employee as any)?.pickupPoint?.name || matchedEmp?.pickupPoint?.name || "";
+		const ppName = rawPpName ? normalizePickupPointName(rawPpName) : "";
+
 		return {
 			...stop,
 			id: stop.id || stop.employeeId || `${route.id || "route"}-stop-${stopIdx}`,
+			pickupPoint: ppName,
 			employee: {
 				id: stop.employeeId || stop.employee?.id || matchedEmp?.id,
 				name: matchedEmp?.name || stop.employeeName || stop.employee?.name || "Unknown",
@@ -120,12 +135,23 @@ function normalizeRoute(route: any, dbEmployees: any[] = []): Route {
 		};
 	});
 
-	let totalDistance = 0;
-	let totalDuration = 0;
-	if (stops.length > 0) {
-		totalDistance = Math.round(computeRouteDistance(stops) * 10) / 10;
-		totalDuration = Math.round(totalDistance * 2.4);
+	let totalDistance = route.totalDistance || 0;
+	let distanceSource = "STORED";
+	if (totalDistance > 1000) {
+		totalDistance = totalDistance / 1000;
+		distanceSource = "STORED_METERS_CONVERTED";
 	}
+
+	if (totalDistance === 0 && stops.length > 0) {
+		totalDistance = Math.round(computeRouteDistance(stops) * 10) / 10;
+		distanceSource = "HAVERSINE_FALLBACK";
+	}
+
+	totalDistance = Math.round(totalDistance * 10) / 10;
+	const totalDuration = Math.round(totalDistance * 2.4);
+
+	console.log(`[DISTANCE_AUDIT] Route ${route.id || 'unknown'} (${route.cab?.vehicleNumber || route.vehicleNumber || 'no-cab'}): raw=${route.totalDistance}, final=${totalDistance}, source=${distanceSource}`);
+
 	return {
 		...route,
 		stops,
@@ -225,6 +251,7 @@ export default function CompareModal({
 	const [activeMapType, setActiveMapType] = useState<"BASELINE" | "OPTIMIZED">(
 		"OPTIMIZED",
 	);
+	const [optimizationRuns, setOptimizationRuns] = useState<any[]>([]);
 
 	const loadComparison = React.useCallback((skipBaselineUpdate = false) => {
 		setLoading(true);
@@ -253,13 +280,14 @@ export default function CompareModal({
 					// Use normalizations directly on initial load
 					if (!skipBaselineUpdate) {
 						setCurrentRoutes(normalizeRoutes(routesData.routes || [], dbEmployees));
-						setBaselineSummary(null);
-						setHasUploadedInSession(false);
+						setBaselineSummary(routesData.summary || null);
+						setHasUploadedInSession(!!routesData.summary);
 					}
 					setFrozenOptimizedRoutes(
 						normalizeRoutes(routesData.optimizedRoutes || [], dbEmployees),
 					);
 					setDbLeaveCount(routesData.dbLeaveCount ?? 0);
+					setOptimizationRuns(routesData.optimizationRuns || []);
 					if (
 						routesData.summary?.absentEmployeeCodes?.length &&
 						onAbsentCodesChange
@@ -592,35 +620,27 @@ export default function CompareModal({
 		};
 	}, [filteredCurrentRoutes, filteredOptimizedRoutes]);
 
-	const commonEmployeeIds = employeeComparison.commonEmployees;
+	const commonCurrentRoutes = filteredCurrentRoutes;
+	const commonOptimizedRoutes = filteredOptimizedRoutes;
 
-	const commonCurrentRoutes = useMemo(() => {
-		// AUDIT FIX #2: Use backend totalDistance only, never recompute
-		if (commonEmployeeIds.size === 0) return filteredCurrentRoutes;
-		return filteredCurrentRoutes
-			.map((r) => {
-				const stops = r.stops.filter((s) =>
-					commonEmployeeIds.has(s.employeeId),
-				);
-				if (stops.length === 0) return null;
-				return { ...r, stops }; // Keep backend distances unchanged
-			})
-			.filter(Boolean) as Route[];
-	}, [filteredCurrentRoutes, commonEmployeeIds]);
+	const matchedRun = useMemo(() => {
+		return optimizationRuns.find(
+			(run) => run.strategy === selectedStrategy
+		);
+	}, [optimizationRuns, selectedStrategy]);
 
-	const commonOptimizedRoutes = useMemo(() => {
-		// AUDIT FIX #2: Use backend totalDistance only, never recompute
-		if (commonEmployeeIds.size === 0) return filteredOptimizedRoutes;
-		return filteredOptimizedRoutes
-			.map((r) => {
-				const stops = r.stops.filter((s) =>
-					commonEmployeeIds.has(s.employeeId),
-				);
-				if (stops.length === 0) return null;
-				return { ...r, stops }; // Keep backend distances unchanged
-			})
-			.filter(Boolean) as Route[];
-	}, [filteredOptimizedRoutes, commonEmployeeIds]);
+	useEffect(() => {
+		console.log("[ROUTE_AUDIT] Route counts comparison", {
+			totalCurrentRoutes: currentRoutes.length,
+			filteredCurrentRoutes: filteredCurrentRoutes.length,
+			totalOptimizedRoutes: frozenOptimizedRoutes.length,
+			filteredOptimizedRoutes: filteredOptimizedRoutes.length,
+			commonCurrentRoutesCount: commonCurrentRoutes.length,
+			commonOptimizedRoutesCount: commonOptimizedRoutes.length,
+			excludedCurrentRoutesCount: currentRoutes.length - filteredCurrentRoutes.length,
+			excludedOptimizedRoutesCount: frozenOptimizedRoutes.length - filteredOptimizedRoutes.length,
+		});
+	}, [currentRoutes, filteredCurrentRoutes, frozenOptimizedRoutes, filteredOptimizedRoutes, commonCurrentRoutes, commonOptimizedRoutes]);
 
 	// AUDIT FIX #5: Route count consistency check (logged in computeSideMetrics)
 
@@ -793,10 +813,22 @@ export default function CompareModal({
 		}
 		return m;
 	}, [commonCurrentRoutes, computeSideMetrics, baselineSummary]);
-	const optimizedMetrics = useMemo(
-		() => computeSideMetrics(commonOptimizedRoutes),
-		[commonOptimizedRoutes, computeSideMetrics],
-	);
+	const optimizedMetrics = useMemo(() => {
+		const m = computeSideMetrics(commonOptimizedRoutes);
+		if (matchedRun) {
+			m.cabCount = matchedRun.cabCount;
+			m.totalEmp = matchedRun.employeeCount;
+			m.totalDist = Math.round(matchedRun.distance * 10) / 10;
+			if (matchedRun.metrics && typeof matchedRun.metrics === "object") {
+				const metricsObj = matchedRun.metrics as any;
+				if (metricsObj.totalViolations !== undefined) {
+					m.violations = metricsObj.totalViolations;
+				}
+			}
+			m.avgPaxPerCab = m.cabCount > 0 ? Math.round((m.totalEmp / m.cabCount) * 10) / 10 : 0;
+		}
+		return m;
+	}, [commonOptimizedRoutes, computeSideMetrics, matchedRun]);
 
 	// AUDIT PHASE 2: Detailed cab count investigation
 	useEffect(() => {

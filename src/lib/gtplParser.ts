@@ -127,32 +127,85 @@ function extractVehicle(driverCol: string): string {
 }
 
 export function parseGtlpSheetRows(rows: unknown[][], sheetName: string): GtplSheetParseResult {
+  // Find header row (usually the first row that starts with 'rout' or contains 'emp id')
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const row = rows[i];
+    if (row && row.some(cell => {
+      const s = String(cell || "").toLowerCase();
+      return s.includes("rout") || s.includes("emp id");
+    })) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  const header = (rows[headerIdx] || []).map(cell => String(cell || "").trim().toLowerCase());
+
+  // Helper to find column index by matching clean keywords
+  const findCol = (keywords: string[]) => {
+    return header.findIndex(title => keywords.some(kw => title.includes(kw)));
+  };
+
+  const routeCol = findCol(["rout no", "route"]);
+  const vendorCol = findCol(["vendor"]);
+  const dateCol = findCol(["date"]);
+  const empIdCol = findCol(["emp id", "employee id", "employee code", "code"]);
+  const nameCol = findCol(["name", "employee name", "emp name"]);
+  const phoneCol = findCol(["contact", "phone", "mobile", "number"]);
+  const emailCol = findCol(["email", "e mail", "mail id"]);
+  const addressCol = findCol(["address"]);
+  const shiftTimeCol = findCol(["shift time", "shift"]);
+  const pickupPointCol = findCol(["pickup point", "pick up point", "pickup", "point"]);
+  const statusCol = findCol(["status", "present", "absent", "no show"]);
+  const driverCol = findCol(["driver"]);
+  const genderCol = findCol(["m/f", "gender", "sex"]);
+
+  // Fallback defaults if columns not found
+  const colIdx = {
+    route: routeCol !== -1 ? routeCol : 0,
+    date: dateCol !== -1 ? dateCol : 2,
+    empId: empIdCol !== -1 ? empIdCol : 3,
+    name: nameCol !== -1 ? nameCol : 4,
+    phone: phoneCol !== -1 ? phoneCol : 5,
+    email: emailCol !== -1 ? emailCol : 6,
+    address: addressCol !== -1 ? addressCol : 7,
+    shiftTime: shiftTimeCol !== -1 ? shiftTimeCol : 8,
+    pickupPoint: pickupPointCol !== -1 ? pickupPointCol : 9,
+    status: statusCol !== -1 ? statusCol : 11,
+    driver: driverCol !== -1 ? driverCol : 12,
+    gender: genderCol !== -1 ? genderCol : 13,
+  };
+
   let date = "";
   const parsedRows: GtplEmployeeRow[] = [];
 
-  for (const row of rows) {
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
     if (!row || row.length === 0) continue;
-    const route = row[0] ? String(row[0]).trim() : "";
-    const empId = row[3] ? String(row[3]).trim() : "";
-    const name = row[4] ? String(row[4]).trim() : "";
+
+    const route = row[colIdx.route] ? String(row[colIdx.route]).trim() : "";
+    const empId = row[colIdx.empId] ? String(row[colIdx.empId]).trim() : "";
+    const name = row[colIdx.name] ? String(row[colIdx.name]).trim() : "";
+
     if (isSkipRow(route, empId, name)) continue;
 
-    if (!date && row[2]) {
-      date = excelSerialToDate(row[2]) || "";
+    if (!date && colIdx.date !== -1 && row[colIdx.date]) {
+      date = excelSerialToDate(row[colIdx.date]) || "";
     }
 
     parsedRows.push({
       route,
       empId: empId === "NA" ? "" : empId,
       name,
-      phone: row[5] ? String(row[5]).trim() : "",
-      email: row[6] ? String(row[6]).trim().toLowerCase() : "",
-      address: row[7] ? String(row[7]).trim().replace(/\n/g, " ") : "",
-      shiftTime: excelFractionToHHMM(row[8]),
-      pickupPoint: row[9] ? String(row[9]).trim() : "",
-      status: normalizeStatus(row[11] ? String(row[11]) : "YES"),
-      driverDetails: row[12] ? String(row[12]).trim() : "",
-      gender: row[13] === "F" ? "FEMALE" : "MALE",
+      phone: row[colIdx.phone] ? String(row[colIdx.phone]).trim() : "",
+      email: row[colIdx.email] ? String(row[colIdx.email]).trim().toLowerCase() : "",
+      address: row[colIdx.address] ? String(row[colIdx.address]).trim().replace(/\n/g, " ") : "",
+      shiftTime: excelFractionToHHMM(row[colIdx.shiftTime]),
+      pickupPoint: row[colIdx.pickupPoint] ? String(row[colIdx.pickupPoint]).trim() : "",
+      status: normalizeStatus(colIdx.status !== -1 && row[colIdx.status] ? String(row[colIdx.status]) : "YES"),
+      driverDetails: colIdx.driver !== -1 && row[colIdx.driver] ? String(row[colIdx.driver]).trim() : "",
+      gender: colIdx.gender !== -1 && row[colIdx.gender] && String(row[colIdx.gender]).toUpperCase().startsWith("F") ? "FEMALE" : "MALE",
       isPickup: /^P/i.test(route),
     });
   }

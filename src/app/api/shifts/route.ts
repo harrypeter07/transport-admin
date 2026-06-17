@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { verifySession } from "@/lib/dal";
 import prisma from "@/lib/db";
+import { getCachedShifts, invalidateShiftsCache } from "@/lib/cache";
 
 export async function GET() {
  const session = await verifySession();
@@ -9,25 +10,12 @@ export async function GET() {
  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
  }
 
- try {
-  const shifts = await prisma.shift.findMany({
-  include: {
-  _count: {
-  select: {
-  employees: { where: { status: "ACTIVE" } },
-  cabs: { where: { status: { not: "INACTIVE" } } },
-  },
-  },
-  cabs: {
-  where: { status: { not: "INACTIVE" } },
-  },
-  },
-  orderBy: { startTime: "asc" },
-  });
- return NextResponse.json(shifts);
- } catch (error: any) {
- return NextResponse.json({ error: error.message }, { status: 500 });
- }
+  try {
+    const shifts = await getCachedShifts();
+    return NextResponse.json(shifts);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -36,15 +24,16 @@ export async function POST(req: Request) {
  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
  }
 
- try {
- const body = await req.json();
- const { name, startTime, endTime } = body;
+  try {
+    const body = await req.json();
+    const { name, startTime, endTime } = body;
 
- const newShift = await prisma.shift.create({
- data: { name, startTime, endTime },
- });
- return NextResponse.json(newShift);
- } catch (error: any) {
- return NextResponse.json({ error: error.message }, { status: 500 });
- }
+    const newShift = await prisma.shift.create({
+      data: { name, startTime, endTime },
+    });
+    invalidateShiftsCache();
+    return NextResponse.json(newShift);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

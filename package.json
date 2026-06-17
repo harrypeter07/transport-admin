@@ -9,7 +9,7 @@
 		"lint": "eslint",
 		"postinstall": "prisma generate",
 		"db:seed": "npx ts-node prisma/seed.ts",
-		"db:seed:test": "npx ts-node scripts/seedTestData.ts",
+		"db:seed:test": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/seedTestData.ts",
 		"verify": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/verify-all.ts",
 		"test:scenarios": "ts-node -r tsconfig-paths/register --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/test-optimization-scenarios.ts",
 		"seed:excel": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/seed-from-excel.ts",
@@ -22,7 +22,8 @@
 		"audit:gtpl": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/audit-gtpl-16june.ts",
 		"audit:gtpl-corrected": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/audit-gtpl-corrected-16june.ts",
 		"sync:gtpl": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/sync-gtpl-16june.ts",
-		"sync:gtpl-fixed": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/sync-gtpl-fixed.ts"
+		"sync:gtpl-fixed": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/sync-gtpl-fixed.ts",
+		"migrate:shifts": "ts-node --transpile-only --skip-project --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/migrate-shifts.ts"
 	},
 	"dependencies": {
 		"@dnd-kit/core": "^6.3.1",
