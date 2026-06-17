@@ -8,6 +8,13 @@ import ConfirmModal from "@/components/ConfirmModal";
 
 type Shift = { id: string; name: string };
 type CabShift = { id: string; name: string };
+type DriverDocument = {
+  id: string;
+  type: string;
+  fileUrl: string;
+  expiryDate: string;
+  auditDate: string;
+};
 type Cab = {
   id: string;
   vehicleNumber: string;
@@ -20,6 +27,7 @@ type Cab = {
   driverAddress: string | null;
   formattedAddress: string | null;
   shifts: CabShift[];
+  documents?: DriverDocument[];
 };
 
 export default function CabsPage() {
@@ -254,6 +262,33 @@ export default function CabsPage() {
                             <div className="text-[#1c1b1f]">{cab.driverName}</div>
                             <div className="text-[10px] text-[#6b6b6b] font-mono">{cab.driverPhone}</div>
                             {cab.driverAddress && <div className="text-[10px] text-[#9a9a9a] font-normal truncate max-w-[120px]" title={cab.formattedAddress || cab.driverAddress}>{cab.formattedAddress || cab.driverAddress}</div>}
+                            {/* Compliance / Expiry Section */}
+                            {cab.documents && cab.documents.length > 0 ? (
+                              <div className="mt-2 space-y-1 border-t border-slate-100 pt-1">
+                                <div className="text-[9px] uppercase font-black tracking-wider text-[#9a9a9a]">Driver Compliance</div>
+                                {cab.documents.map(doc => {
+                                  const isExpired = new Date(doc.expiryDate) < new Date();
+                                  const warningDate = new Date(doc.expiryDate);
+                                  warningDate.setDate(warningDate.getDate() - 14); // 2 weeks warning
+                                  const isExpiringSoon = !isExpired && new Date() >= warningDate;
+
+                                  return (
+                                    <div key={doc.id} className="flex items-center gap-1 text-[10px]">
+                                      <span className={`w-1.5 h-1.5 rounded-full ${isExpired ? 'bg-red-500 animate-pulse' : isExpiringSoon ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                                      <span className="font-semibold text-[#4a4a4a] text-[9px]">{doc.type}:</span>
+                                      <span className={isExpired ? 'text-red-600 font-bold' : isExpiringSoon ? 'text-amber-600 font-bold' : 'text-[#6b6b6b]'}>
+                                        {new Date(doc.expiryDate).toLocaleDateString()}
+                                      </span>
+                                      <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[#ff4f00] font-black hover:underline ml-1 uppercase">
+                                        [View]
+                                      </a>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="mt-2 text-[9px] text-amber-600 font-bold uppercase tracking-wider">⚠ No documents uploaded</div>
+                            )}
                           </>
                         ) : <span className="font-normal text-[#9a9a9a] text-[11px]">Unassigned</span>}
                       </td>

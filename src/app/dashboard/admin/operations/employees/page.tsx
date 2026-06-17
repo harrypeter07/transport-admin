@@ -348,23 +348,34 @@ export default function EmployeesPage() {
  </td>
  <td className="px-5 py-3.5 text-right">
  <div className="flex items-center justify-end gap-1.5">
- <button 
-  onClick={() => {
-  setEditingEmployee(emp);
-  setShowModal(true);
-  setFormError(null);
-  setAutoAddress(null);
-  }}
- className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"
- >
- <Edit className="w-3.5 h-3.5" />
- </button>
- <button
- onClick={() => setEmpToDelete({ id: emp.id, name: emp.name })}
- className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"
- >
- <Trash2 className="w-3.5 h-3.5" />
- </button>
+ {emp.designation === "Driver" ? (
+   <Link
+     href="/dashboard/admin/operations/cabs"
+     className="text-xs text-[#ff4f00] hover:underline font-bold"
+   >
+     Manage Cab & Docs
+   </Link>
+ ) : (
+   <>
+     <button 
+      onClick={() => {
+      setEditingEmployee(emp);
+      setShowModal(true);
+      setFormError(null);
+      setAutoAddress(null);
+      }}
+     className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"
+     >
+     <Edit className="w-3.5 h-3.5" />
+     </button>
+     <button
+     onClick={() => setEmpToDelete({ id: emp.id, name: emp.name })}
+     className="p-1.5 text-[#9a9a9a] hover:text-[#1c1b1f] hover:bg-[#f7f7f7] rounded transition"
+     >
+     <Trash2 className="w-3.5 h-3.5" />
+     </button>
+   </>
+ )}
  </div>
  </td>
  </tr>

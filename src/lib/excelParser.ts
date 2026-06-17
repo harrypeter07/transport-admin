@@ -120,7 +120,7 @@ function excelFractionToHHMM(value: unknown): string | null {
     return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
   }
   const str = String(value).trim();
-  if (/^\d{1,2}:\d{2}$/.test(str)) return str;
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(str)) return str.slice(0, 5);
   return null;
 }
 
@@ -136,7 +136,7 @@ export function haversineKm(a: { x: number; y: number }, b: { x: number; y: numb
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)) * CIRCUITY;
 }
 
-function extractDriverFromRows(rows: unknown[][]): {
+function extractDriverFromRows(rows: unknown[][], idx: any): {
   vehicleNumber: string;
   driverName: string;
   driverPhone: string;
@@ -146,12 +146,20 @@ function extractDriverFromRows(rows: unknown[][]): {
   let driverPhone = "N/A";
 
   for (const row of rows) {
-    const d = row[12] ? String(row[12]).trim() : "";
+    const d = row[idx.driver] ? String(row[idx.driver]).trim() : "";
     if (!d) continue;
-    if (/^MH/i.test(d)) vehicleNumber = d;
-    else if (/^(MOB|mob|Mob)-?/.test(d)) driverPhone = d.replace(/^(MOB|mob|Mob)-?/i, "");
-    else if (/^\d{10}$/.test(d.replace(/[- ]/g, ""))) driverPhone = d.replace(/[- ]/g, "");
-    else driverName = d;
+    if (/^(MH|CG|TS|AP|KA|DL|HR|UP)\d{2}[A-Z]{2}\d{4}/i.test(d.replace(/\s+/g, ""))) {
+      vehicleNumber = d.replace(/\s+/g, "").toUpperCase();
+    } else if (/^(MOB|mob|Mob)-?/i.test(d)) {
+      driverPhone = d.replace(/^(MOB|mob|Mob)-?/i, "").trim();
+    } else if (/^\d{10}$/.test(d.replace(/[- ]/g, ""))) {
+      driverPhone = d.replace(/[- ]/g, "");
+    } else {
+      const cleaned = d.replace(/^(DRIVER|driver)[-=\s]?/i, "").trim();
+      if (cleaned && !cleaned.replace(/[- ]/g, "").match(/^\d+$/)) {
+        driverName = cleaned;
+      }
+    }
   }
 
   return { vehicleNumber, driverName, driverPhone };
@@ -160,11 +168,12 @@ function extractDriverFromRows(rows: unknown[][]): {
 function resolveShift(
   rows: unknown[][],
   dbShifts: Shift[],
-  createShift: (data: { name: string; startTime: string; endTime: string }) => Promise<Shift>
+  createShift: (data: { name: string; startTime: string; endTime: string }) => Promise<Shift>,
+  idx: any
 ): Promise<{ shiftId: string; shiftTime: string }> {
   let parsedStartTime = "05:00";
   for (const row of rows) {
-    const t = excelFractionToHHMM(row[8]);
+    const t = excelFractionToHHMM(row[idx.shiftTime]);
     if (t) parsedStartTime = t;
   }
 
@@ -185,11 +194,18 @@ function resolveShift(
 function matchEmployee(
   row: unknown[],
   byCode: Map<string, Employee>,
-  byName: Map<string, Employee>
+  byName: Map<string, Employee>,
+  idx: any
 ): Employee | null {
-  const code = row[3] ? String(row[3]).trim().toLowerCase() : "";
-  const name = row[4] ? String(row[4]).trim().toLowerCase() : "";
-  if (code && byCode.has(code)) return byCode.get(code)!;
+  const code = row[idx.empId] ? String(row[idx.empId]).trim().toLowerCase() : "";
+  const name = row[idx.name] ? String(row[idx.name]).trim().toLowerCase() : "";
+  if (code && byCode.has(code)) {
+    const matched = byCode.get(code)!;
+    const dbName = matched.name.toLowerCase();
+    if (dbName === name || dbName.includes(name) || name.includes(dbName)) {
+      return matched;
+    }
+  }
   if (name && byName.has(name)) return byName.get(name)!;
   return null;
 }
@@ -216,14 +232,70 @@ export async function parseExcelBufferToRoutes(
   }
   const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
 
+  // ── Find Header & Resolve Column Indices Dynamically ──
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const row = rows[i];
+    if (row && row.some(cell => {
+      const s = String(cell || "").toLowerCase();
+      return s.includes("rout") || s.includes("emp id");
+    })) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  const header = (rows[headerIdx] || []).map(cell => String(cell || "").trim().toLowerCase());
+
+  const findCol = (keywords: string[]) => {
+    return header.findIndex(title => keywords.some(kw => title.includes(kw)));
+  };
+
+  const colIdx = {
+    route: findCol(["rout no", "route"]),
+    vendor: findCol(["vendor"]),
+    empId: findCol(["emp id", "employee id", "employee code", "code"]),
+    name: findCol(["name", "employee name", "emp name"]),
+    phone: findCol(["contact", "phone", "mobile", "number"]),
+    email: findCol(["email", "e mail", "mail id"]),
+    address: findCol(["address"]),
+    shiftTime: findCol(["shift time", "shift"]),
+    pickupPoint: findCol(["pickup point", "pick up point", "pickup", "point"]),
+    pickupTime: findCol(["pickup time", "time"]),
+    status: findCol(["status", "present", "absent", "no show"]),
+    driver: findCol(["driver"]),
+    gender: findCol(["m/f", "gender", "sex"]),
+  };
+
+  const getIdx = (key: keyof typeof colIdx, fallback: number) => {
+    return colIdx[key] !== -1 ? colIdx[key] : fallback;
+  };
+
+  const idx = {
+    route: getIdx("route", 0),
+    vendor: getIdx("vendor", 1),
+    empId: getIdx("empId", 2),
+    name: getIdx("name", 3),
+    phone: getIdx("phone", 4),
+    email: getIdx("email", 5),
+    address: getIdx("address", 6),
+    shiftTime: getIdx("shiftTime", 7),
+    pickupPoint: getIdx("pickupPoint", 8),
+    pickupTime: getIdx("pickupTime", 10),
+    status: getIdx("status", 11),
+    driver: getIdx("driver", 9),
+    gender: getIdx("gender", 10),
+  };
+
   const byCode = new Map(employees.map((e) => [e.employeeCode.toLowerCase(), e]));
   const byName = new Map(employees.map((e) => [e.name.toLowerCase(), e]));
   const depot = makeDepot(depotLat, depotLng);
 
   const routeGroups = new Map<string, unknown[][]>();
-  for (const row of rows) {
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
     if (!row || row.length === 0) continue;
-    const col0 = row[0] ? String(row[0]).trim() : "";
+    const col0 = row[idx.route] ? String(row[idx.route]).trim() : "";
     if (!col0 || col0.toLowerCase() === "rout no") continue;
     if (!routeGroups.has(col0)) routeGroups.set(col0, []);
     routeGroups.get(col0)!.push(row);
@@ -239,11 +311,11 @@ export async function parseExcelBufferToRoutes(
   for (const [routeNo, rRows] of routeGroups) {
     const isPickup = /^P/i.test(routeNo);
     const isDrop = /^D/i.test(routeNo);
-    const { vehicleNumber, driverName, driverPhone } = extractDriverFromRows(rRows);
-    const { shiftId, shiftTime } = await resolveShift(rRows, dbShifts, createShift);
+    const { vehicleNumber, driverName, driverPhone } = extractDriverFromRows(rRows, idx);
+    const { shiftId, shiftTime } = await resolveShift(rRows, dbShifts, createShift, idx);
 
     const passengerRows = rRows.filter((row) => {
-      const name = row[4] ? String(row[4]).trim().toLowerCase() : "";
+      const name = row[idx.name] ? String(row[idx.name]).trim().toLowerCase() : "";
       if (!name || name === "employee name" || name === "name" || name === "escort") return false;
       return true;
     });
@@ -258,27 +330,27 @@ export async function parseExcelBufferToRoutes(
 
     const entries: StopEntry[] = [];
     for (const row of passengerRows) {
-      const status = row[11] ? String(row[11]).trim().toUpperCase() : "";
-      const code = row[3] ? String(row[3]).trim() : "";
+      const status = row[idx.status] ? String(row[idx.status]).trim().toUpperCase() : "";
+      const code = row[idx.empId] ? String(row[idx.empId]).trim() : "";
       if (isAbsentStatus(status)) {
         noShowCount++;
         if (code) absentEmployeeCodes.push(code);
         continue;
       }
-      const emp = matchEmployee(row, byCode, byName);
+      const emp = matchEmployee(row, byCode, byName, idx);
       if (!emp && code) unmatchedEmployeeCodes.add(code);
       entries.push({
         row,
         emp,
         isNoShow: false,
-        pickupPoint: row[9] ? String(row[9]).trim() : "",
-        pickupTime: excelFractionToHHMM(row[10]) || "",
+        pickupPoint: row[idx.pickupPoint] ? String(row[idx.pickupPoint]).trim() : "",
+        pickupTime: (idx.pickupTime !== -1 && excelFractionToHHMM(row[idx.pickupTime])) || "",
       });
     }
 
     entries.sort((a, b) => {
-      const ta = typeof a.row[10] === "number" ? (a.row[10] as number) : 0;
-      const tb = typeof b.row[10] === "number" ? (b.row[10] as number) : 0;
+      const ta = (idx.pickupTime !== -1 && typeof a.row[idx.pickupTime] === "number") ? (a.row[idx.pickupTime] as number) : 0;
+      const tb = (idx.pickupTime !== -1 && typeof b.row[idx.pickupTime] === "number") ? (b.row[idx.pickupTime] as number) : 0;
       return ta - tb;
     });
 
@@ -303,7 +375,7 @@ export async function parseExcelBufferToRoutes(
       stopOrder++;
       const rep = group[0];
       const emp = rep.emp;
-      const gender = rep.row[13] === "F" ? "FEMALE" : "MALE";
+      const gender = rep.row[idx.gender] === "F" ? "FEMALE" : "MALE";
       const x = emp?.x ?? 0;
       const y = emp?.y ?? 0;
       const pt = { x, y };
@@ -328,12 +400,12 @@ export async function parseExcelBufferToRoutes(
           sharedStopKey: group.length > 1 ? entry.pickupPoint || undefined : undefined,
           employee: {
             id: e?.id || `excel_${routeNo}_${stops.length}`,
-            name: e?.name || String(entry.row[4] || "Unknown"),
-            employeeCode: e?.employeeCode || String(entry.row[3] || ""),
+            name: e?.name || String(entry.row[idx.name] || "Unknown"),
+            employeeCode: e?.employeeCode || String(entry.row[idx.empId] || ""),
             gender: e?.gender || gender,
             x,
             y,
-            address: e?.address || String(entry.row[7] || "Unknown Address"),
+            address: e?.address || String(entry.row[idx.address] || "Unknown Address"),
           },
         });
       }
@@ -347,7 +419,7 @@ export async function parseExcelBufferToRoutes(
       cumDur += depotLeg / AVG_SPEED_KM_MIN;
     }
 
-    const hasEscort = rRows.some((r) => String(r[4] || "").trim().toLowerCase() === "escort");
+    const hasEscort = rRows.some((r) => String(r[idx.name] || "").trim().toLowerCase() === "escort");
 
     generatedRoutes.push({
       id: `baseline_route_${routeNo}`,

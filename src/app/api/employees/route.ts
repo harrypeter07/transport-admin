@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
       whereClause.managerId = managerEmployee.id;
     }
 
-    let employees;
+    let employees: any[];
     const isDefaultQuery = !search && !shiftId && session.role !== "MANAGER";
     if (isDefaultQuery) {
       employees = await getCachedActiveEmployees();
@@ -110,6 +110,54 @@ export async function GET(req: NextRequest) {
         orderBy: { name: "asc" },
       });
     }
+
+    if (session.role === "ADMIN") {
+      const cabWhere: any = {
+        status: { not: "INACTIVE" },
+        driverName: { not: "" },
+        ...(search && {
+          OR: [
+            { driverName: { contains: search, mode: "insensitive" } },
+            { vehicleNumber: { contains: search, mode: "insensitive" } },
+          ]
+        }),
+        ...(shiftId && { shifts: { some: { id: shiftId } } }),
+      };
+
+      const activeCabs = await prisma.cab.findMany({
+        where: cabWhere,
+        include: {
+          shifts: true,
+          documents: true,
+        }
+      });
+
+      const drivers = activeCabs.map(cab => ({
+        id: `driver-${cab.id}`,
+        employeeCode: cab.vehicleNumber,
+        name: cab.driverName,
+        gender: "MALE",
+        phone: cab.driverPhone,
+        email: `${cab.vehicleNumber.toLowerCase().replace(/[^a-z0-9]/g, "")}@transitadmin.com`,
+        address: cab.driverAddress || "Nagpur, India",
+        x: cab.driverX ?? 0.0,
+        y: cab.driverY ?? 0.0,
+        zone: cab.assignedZone || "S",
+        subZone: cab.assignedSubZone || "SW",
+        distanceRing: "NEAR",
+        department: "TRANSPORT",
+        designation: "Driver",
+        shiftId: cab.shifts[0]?.id || null,
+        shift: cab.shifts[0] || null,
+        status: "ACTIVE",
+        pickupPoint: null,
+        manager: null,
+        documents: cab.documents
+      }));
+
+      employees = [...employees, ...drivers];
+    }
+
     return NextResponse.json(employees);
   } catch (e) {
     console.error("[api] ❌ GET /api/employees — Failed to fetch", { ip, search: search || undefined }, e);

@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
         },
         include: {
           shifts: true,
+          documents: true,
         },
         orderBy: { vehicleNumber: "asc" },
       });

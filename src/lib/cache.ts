@@ -69,6 +69,7 @@ export const getCachedCabs = unstable_cache(
       include: {
         shifts: true,
         user: { select: { email: true, isActive: true } },
+        documents: true,
       },
       orderBy: { vehicleNumber: "asc" },
     });

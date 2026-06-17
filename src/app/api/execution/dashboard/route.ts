@@ -33,6 +33,10 @@ export async function GET(req: Request) {
     let delayedDriversCount = 0;
     let delayedEmployeesCount = 0;
 
+    let allRoutesToday: any[] = [];
+    let delayedEmployees: any[] = [];
+    let settings: any = null;
+
     if (session.role === "MANAGER") {
       const managerEmployee = await prisma.employee.findFirst({
         where: { userId: session.userId }
@@ -49,110 +53,178 @@ export async function GET(req: Request) {
       const subordinateUserIds = subordinates.filter(s => s.userId).map(s => s.userId as string);
 
       teamSize = subordinates.length;
-
       routesFilter.stops = {
         some: { employeeId: { in: subordinateIds } }
       };
 
-      const approvedLeavesToday = await prisma.leaveRequest.findMany({
-        where: {
-          applicantId: { in: subordinateUserIds },
-          status: "APPROVED",
-          startDate: { lte: today },
-          endDate: { gte: today }
-        },
-        include: { applicant: true }
-      });
+      const [
+        leavesData,
+        pendingTimings,
+        routesTodayData,
+        settingsData
+      ] = await Promise.all([
+        prisma.leaveRequest.findMany({
+          where: {
+            applicantId: { in: subordinateUserIds },
+            OR: [
+              { status: "PENDING" },
+              {
+                status: "APPROVED",
+                startDate: { lte: today },
+                endDate: { gte: today }
+              }
+            ]
+          },
+          include: { applicant: true }
+        }),
+        prisma.timingChangeRequest.count({
+          where: { employeeId: { in: subordinateIds }, status: "PENDING" }
+        }),
+        prisma.route.findMany({
+          where: routesFilter,
+          include: {
+            cab: true,
+            stops: {
+              include: { employee: true },
+              orderBy: { stopOrder: "asc" }
+            }
+          }
+        }),
+        prisma.systemSettings.findFirst({
+          where: { id: "default" }
+        })
+      ]);
+
+      const approvedLeavesToday = leavesData.filter(l => l.status === "APPROVED");
+      const pendingLeaves = leavesData.filter(l => l.status === "PENDING").length;
+
+      allRoutesToday = routesTodayData;
+      settings = settingsData;
+
       employeesOnLeaveToday = approvedLeavesToday.length;
       teamLeavesList = approvedLeavesToday.map(l => l.applicant?.name || "Unknown");
-
-      const pendingLeaves = await prisma.leaveRequest.count({
-        where: { applicantId: { in: subordinateUserIds }, status: "PENDING" }
-      });
-      const pendingTimings = await prisma.timingChangeRequest.count({
-        where: { employeeId: { in: subordinateIds }, status: "PENDING" }
-      });
       pendingApprovalsCount = pendingLeaves + pendingTimings;
+
+      // Construct delayedEmployees in memory
+      delayedEmployees = [];
+      for (const r of allRoutesToday) {
+        for (const s of r.stops) {
+          if (s.employeeDelayMins > 0 || s.driverDelayMins > 0) {
+            delayedEmployees.push({
+              ...s,
+              route: {
+                id: r.id,
+                cabId: r.cabId,
+                date: r.date,
+                shiftId: r.shiftId,
+                isPickup: r.isPickup,
+                totalDistance: r.totalDistance,
+                totalDuration: r.totalDuration,
+                status: r.status,
+                tripSequence: r.tripSequence,
+                routeNumber: r.routeNumber,
+                startedAt: r.startedAt,
+                completedAt: r.completedAt,
+                currentLat: r.currentLat,
+                currentLng: r.currentLng,
+                lastLocationAt: r.lastLocationAt,
+                optimizationScore: r.optimizationScore,
+                optimizationMode: r.optimizationMode,
+                zone: r.zone,
+                subZone: r.subZone,
+                updatedAt: r.updatedAt,
+                hasEscort: r.hasEscort,
+                cab: r.cab
+              }
+            });
+          }
+        }
+      }
     } else if (session.role === "ADMIN") {
-      totalEmployeesCount = await prisma.employee.count({ where: { status: "ACTIVE" } });
-      totalManagersCount = await prisma.employee.count({
-        where: {
-          designation: { in: ["Manager", "Senior Manager"] },
-          status: "ACTIVE",
-        },
-      });
+      const countsPromise = prisma.$queryRaw<Array<{ empCount: number; mgrCount: number; leavesTodayCount: number; pendingLeaves: number; pendingTimings: number }>>`
+        SELECT
+          (SELECT COUNT(*)::int FROM "Employee" WHERE "status" = 'ACTIVE') as "empCount",
+          (SELECT COUNT(*)::int FROM "Employee" WHERE "status" = 'ACTIVE' AND "designation" IN ('Manager', 'Senior Manager')) as "mgrCount",
+          (SELECT COUNT(*)::int FROM "LeaveRequest" WHERE "status" = 'APPROVED' AND "startDate" <= ${today} AND "endDate" >= ${today}) as "leavesTodayCount",
+          (SELECT COUNT(*)::int FROM "LeaveRequest" WHERE "status" = 'PENDING') as "pendingLeaves",
+          (SELECT COUNT(*)::int FROM "TimingChangeRequest" WHERE "status" = 'PENDING') as "pendingTimings"
+      `;
 
-      totalLeavesTodayCount = await prisma.leaveRequest.count({
-        where: {
-          status: "APPROVED",
-          startDate: { lte: today },
-          endDate: { gte: today }
+      const [countsResult, routesTodayData, settingsData] = await Promise.all([
+        countsPromise,
+        prisma.route.findMany({
+          where: routesFilter,
+          include: {
+            cab: true,
+            stops: {
+              include: { employee: true },
+              orderBy: { stopOrder: "asc" }
+            }
+          }
+        }),
+        prisma.systemSettings.findFirst({
+          where: { id: "default" }
+        })
+      ]);
+
+      const counts = countsResult[0] || {
+        empCount: 0,
+        mgrCount: 0,
+        leavesTodayCount: 0,
+        pendingLeaves: 0,
+        pendingTimings: 0
+      };
+
+      totalEmployeesCount = counts.empCount;
+      totalManagersCount = counts.mgrCount;
+      totalLeavesTodayCount = counts.leavesTodayCount;
+      totalPendingRequestsCount = counts.pendingLeaves + counts.pendingTimings;
+      allRoutesToday = routesTodayData;
+      settings = settingsData;
+
+      // Construct delayedEmployees and compute totalAbsencesCount in memory
+      delayedEmployees = [];
+      totalAbsencesCount = 0;
+      for (const r of allRoutesToday) {
+        for (const s of r.stops) {
+          if (s.status === "SKIPPED") {
+            totalAbsencesCount++;
+          }
+          if (s.employeeDelayMins > 0 || s.driverDelayMins > 0) {
+            delayedEmployees.push({
+              ...s,
+              route: {
+                id: r.id,
+                cabId: r.cabId,
+                date: r.date,
+                shiftId: r.shiftId,
+                isPickup: r.isPickup,
+                totalDistance: r.totalDistance,
+                totalDuration: r.totalDuration,
+                status: r.status,
+                tripSequence: r.tripSequence,
+                routeNumber: r.routeNumber,
+                startedAt: r.startedAt,
+                completedAt: r.completedAt,
+                currentLat: r.currentLat,
+                currentLng: r.currentLng,
+                lastLocationAt: r.lastLocationAt,
+                optimizationScore: r.optimizationScore,
+                optimizationMode: r.optimizationMode,
+                zone: r.zone,
+                subZone: r.subZone,
+                updatedAt: r.updatedAt,
+                hasEscort: r.hasEscort,
+                cab: r.cab
+              }
+            });
+          }
         }
-      });
-
-      // Absences: active employees not assigned to today's routes and not on leave
-      const assignedStopsToday = await prisma.routeStop.findMany({
-        where: { route: { date: today } },
-        select: { employeeId: true }
-      });
-      const assignedEmployeeIds = new Set(assignedStopsToday.map(s => s.employeeId));
-
-      const activeEmployees = await prisma.employee.findMany({
-        where: { status: "ACTIVE" },
-        select: { id: true, userId: true }
-      });
-
-      const usersOnLeaveToday = await prisma.leaveRequest.findMany({
-        where: {
-          status: "APPROVED",
-          startDate: { lte: today },
-          endDate: { gte: today }
-        },
-        select: { applicantId: true }
-      });
-      const leaveUserIds = new Set(usersOnLeaveToday.map(l => l.applicantId));
-
-      totalAbsencesCount = await prisma.routeStop.count({
-        where: {
-          route: { date: today },
-          status: "SKIPPED"
-        }
-      });
-
-      const pendingLeaves = await prisma.leaveRequest.count({ where: { status: "PENDING" } });
-      const pendingTimings = await prisma.timingChangeRequest.count({ where: { status: "PENDING" } });
-      totalPendingRequestsCount = pendingLeaves + pendingTimings;
+      }
     }
 
-    // ── Single consolidated query for all routes today ──────────────────
-    const allRoutesToday = await prisma.route.findMany({
-      where: routesFilter,
-      include: {
-        cab: true,
-        stops: {
-          include: { employee: true },
-          orderBy: { stopOrder: "asc" }
-        }
-      }
-    });
-
-    const activeRoutes = allRoutesToday.filter(r => r.status === "IN_PROGRESS");
-    const completedCount = allRoutesToday.filter(r => r.status === "COMPLETED").length;
-
-    // ── Delayed stops ──────────────────────────────────────────────────
-    const delayedEmployees = await prisma.routeStop.findMany({
-      where: {
-        route: routesFilter,
-        OR: [
-          { employeeDelayMins: { gt: 0 } },
-          { driverDelayMins: { gt: 0 } }
-        ]
-      },
-      include: {
-        employee: true,
-        route: { include: { cab: true } }
-      }
-    });
+    const activeRoutes = allRoutesToday.filter((r: any) => r.status === "IN_PROGRESS");
+    const completedCount = allRoutesToday.filter((r: any) => r.status === "COMPLETED").length;
 
     // ── Compute stats from allRoutesToday ──────────────────────────────
     const activeUniqueCabs = new Set<string>();
@@ -165,49 +237,29 @@ export async function GET(req: Request) {
         totalEmployeesTravelling += r.stops.length;
       }
 
-      if (r.stops.some(s => s.driverDelayMins > 0 || s.employeeDelayMins > 0)) {
+      if (r.stops.some((s: any) => s.driverDelayMins > 0 || s.employeeDelayMins > 0)) {
         delayedRoutesCount++;
       }
     }
 
     totalCabsActive = activeUniqueCabs.size;
     totalDriversActive = activeUniqueDrivers.size;
-    delayedEmployeesCount = delayedEmployees.filter(s => s.employeeDelayMins > 0).length;
-    delayedDriversCount = delayedEmployees.filter(s => s.driverDelayMins > 0).length;
+    delayedEmployeesCount = delayedEmployees.filter((s: any) => s.employeeDelayMins > 0).length;
+    delayedDriversCount = delayedEmployees.filter((s: any) => s.driverDelayMins > 0).length;
 
     // ── ROI savings ────────────────────────────────────────────────────
-    const settings = await prisma.systemSettings.findFirst({
-      where: { id: "default" }
-    }) || { defaultDepotLat: 21.0625, defaultDepotLng: 79.0526 };
-
-    const depot = makeDepot(settings.defaultDepotLat, settings.defaultDepotLng);
+    const depot = makeDepot(
+      settings?.defaultDepotLat ?? 21.0625,
+      settings?.defaultDepotLng ?? 79.0526
+    );
     let totalOptimizedDistance = 0;
     let totalUnoptimizedDistance = 0;
-
-    // Batch-fetch all employee coordinates for naive distance calculation
-    const allStopEmployeeIds = Array.from(
-      new Set(allRoutesToday.flatMap(r => r.stops.map(s => s.employeeId)))
-    );
-    const employeeCoordMap = new Map<string, { x: number; y: number }>();
-
-    if (allStopEmployeeIds.length > 0) {
-      const employees = await prisma.employee.findMany({
-        where: { id: { in: allStopEmployeeIds } },
-        select: { id: true, x: true, y: true }
-      });
-      for (const emp of employees) {
-        if (emp.x && emp.y) {
-          employeeCoordMap.set(emp.id, { x: emp.x, y: emp.y });
-        }
-      }
-    }
 
     for (const r of allRoutesToday) {
       totalOptimizedDistance += r.totalDistance;
       for (const s of r.stops) {
-        const coord = employeeCoordMap.get(s.employeeId);
-        if (coord) {
-          totalUnoptimizedDistance += getDistance(depot, coord) * 2;
+        if (s.employee && s.employee.x && s.employee.y) {
+          totalUnoptimizedDistance += getDistance(depot, s.employee) * 2;
         }
       }
     }
