@@ -142,40 +142,40 @@ export const getCachedOptimizationMetrics = (date: string) => {
 // Cache Invalidators
 export function invalidateEmployeesCache() {
   console.log("[CACHE] Invalidated Employees Cache");
-  revalidateTag(CACHE_TAGS.EMPLOYEES);
+  revalidateTag(CACHE_TAGS.EMPLOYEES, "max");
 }
 
 export function invalidatePickupPointsCache() {
   console.log("[CACHE] Invalidated Pickup Points Cache");
-  revalidateTag(CACHE_TAGS.PICKUP_POINTS);
+  revalidateTag(CACHE_TAGS.PICKUP_POINTS, "max");
 }
 
 export function invalidateCabsCache() {
   console.log("[CACHE] Invalidated Cabs Cache");
-  revalidateTag(CACHE_TAGS.CABS);
+  revalidateTag(CACHE_TAGS.CABS, "max");
 }
 
 export function invalidateShiftsCache() {
   console.log("[CACHE] Invalidated Shifts Cache");
-  revalidateTag(CACHE_TAGS.SHIFTS);
+  revalidateTag(CACHE_TAGS.SHIFTS, "max");
 }
 
 export function invalidateRoutesCache() {
   console.log("[CACHE] Invalidated Routes Cache");
-  revalidateTag(CACHE_TAGS.ROUTES);
+  revalidateTag(CACHE_TAGS.ROUTES, "max");
 }
 
 export function invalidateMetricsCache() {
   console.log("[CACHE] Invalidated Metrics Cache");
-  revalidateTag(CACHE_TAGS.METRICS);
+  revalidateTag(CACHE_TAGS.METRICS, "max");
 }
 
 export function invalidateAllCache() {
   console.log("[CACHE] Invalidated All Caches");
-  revalidateTag(CACHE_TAGS.EMPLOYEES);
-  revalidateTag(CACHE_TAGS.PICKUP_POINTS);
-  revalidateTag(CACHE_TAGS.CABS);
-  revalidateTag(CACHE_TAGS.SHIFTS);
-  revalidateTag(CACHE_TAGS.ROUTES);
-  revalidateTag(CACHE_TAGS.METRICS);
+  revalidateTag(CACHE_TAGS.EMPLOYEES, "max");
+  revalidateTag(CACHE_TAGS.PICKUP_POINTS, "max");
+  revalidateTag(CACHE_TAGS.CABS, "max");
+  revalidateTag(CACHE_TAGS.SHIFTS, "max");
+  revalidateTag(CACHE_TAGS.ROUTES, "max");
+  revalidateTag(CACHE_TAGS.METRICS, "max");
 }

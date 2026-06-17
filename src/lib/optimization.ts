@@ -4566,12 +4566,35 @@ export async function optimizeAllStrategies(
 			usingFallback: mergedUsingFallback,
 			isolatedEmployees: mergedIsolatedEmployees,
 			releasedCabs: mergedReleasedCabs,
-			zoneSummary: buildZoneSummary(normalizedEmployees, mergedBalRoutes.map(r => ({
-				cab: r.cab,
-				cluster: r.stops.map(s => s.employee as OptimizeEmployee),
-				zone: r.zone || undefined,
-				subZone: r.subZone || undefined,
-			}))),
+			zoneSummary: buildZoneSummary(normalizedEmployees, mergedBalRoutes.map(r => {
+				const cab: OptimizeCab = {
+					id: r.cabId,
+					vehicleNumber: r.vehicleNumber,
+					capacity: r.capacity,
+					driverName: r.driverName,
+					driverPhone: r.driverPhone,
+					vendor: "",
+				};
+				const cluster = r.stops.map(s => {
+					const emp = normalizedEmployees.find(e => e.id === s.employeeId);
+					return emp || ({
+						id: s.employeeId,
+						name: s.employeeName,
+						gender: s.gender,
+						x: s.x,
+						y: s.y,
+						address: s.address,
+						department: "",
+						phone: "",
+					} as OptimizeEmployee);
+				});
+				return {
+					cab,
+					cluster,
+					zone: r.zone || undefined,
+					subZone: r.subZone || undefined,
+				};
+			})),
 		};
 	}
 
