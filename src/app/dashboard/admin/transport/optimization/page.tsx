@@ -172,6 +172,47 @@ function checkSafetyPreviewLocal(
 	return violations;
 }
 
+function getWhatsAppShareLink(route: any, date: string): string {
+	const driverPhone = route.cab?.driverPhone || route.driverPhone || "";
+	let cleanPhone = driverPhone.replace(/\D/g, "");
+	if (cleanPhone.length === 10) {
+		cleanPhone = "91" + cleanPhone;
+	}
+
+	const routeNo = route.routeNumber || route.routeNo || "";
+	const driverName = route.cab?.driverName || route.driverName || "Driver";
+	const vehicleNumber = route.cab?.vehicleNumber || route.vehicleNumber || "Unknown";
+	const shiftName = route.shift?.name || route.shiftTime || "N/A";
+	const typeStr = route.isPickup ? "PICKUP" : "DROP";
+
+	let text = `*GlobalLogic Transit - Route Assignment*\n`;
+	text += `--------------------------------------\n`;
+	text += `*Route:* R${routeNo} (${typeStr})\n`;
+	text += `*Date:* ${date}\n`;
+	text += `*Shift:* ${shiftName}\n`;
+	text += `*Cab No:* ${vehicleNumber}\n`;
+	text += `*Driver:* ${driverName}\n`;
+	text += `--------------------------------------\n`;
+	text += `*Stops / Passengers:*\n`;
+
+	(route.stops || []).forEach((stop: any, idx: number) => {
+		const name = stop.employee?.name || stop.employeeName || "Unknown";
+		const phone = stop.employee?.phone || stop.phone || "N/A";
+		const pp = stop.pickupPoint || stop.employee?.address || "Address N/A";
+		const eta = stop.etaMinutes !== undefined ? `${stop.etaMinutes} mins` : "N/A";
+		text += `${idx + 1}. [${eta}] *${name}*\n`;
+		text += `   Point: ${pp}\n`;
+		if (phone && phone !== "N/A" && phone !== "9999999999") {
+			text += `   Phone: ${phone}\n`;
+		}
+	});
+
+	text += `--------------------------------------\n`;
+	text += `Please reach the pickup points on time. Drive safely!`;
+
+	return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+}
+
 export default function TransitAdminSPA() {
 	const {
 		employees,
@@ -2744,6 +2785,21 @@ export default function TransitAdminSPA() {
 																									</span>
 																								)}
 																							</span>
+																							{route.cab?.driverPhone && (
+																								<a
+																									href={getWhatsAppShareLink(route, selectedDate)}
+																									target="_blank"
+																									rel="noopener noreferrer"
+																									onClick={(e) => e.stopPropagation()}
+																									className="inline-flex items-center gap-1 text-[9px] font-bold text-green-600 hover:text-green-800 ml-3 cursor-pointer"
+																									title="Share Route Details on WhatsApp"
+																								>
+																									<svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+																										<path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984a9.96 9.96 0 0 0 1.333 4.982L2 22l5.233-1.371a9.92 9.92 0 0 0 4.775 1.21h.005c5.505 0 9.986-4.477 9.988-9.984a9.98 9.98 0 0 0-9.989-9.855zm6.05 13.918c-.328.922-1.637 1.802-2.253 1.932-.556.117-1.282.209-3.993-.913-3.238-1.34-5.328-4.636-5.49-4.85-.16-.215-1.306-1.734-1.306-3.31 0-1.575.824-2.35 1.118-2.652.295-.302.648-.378.864-.378.216 0 .432.002.62.01.196.008.463-.074.723.559.266.65.912 2.223.99 2.383.079.16.131.346.026.556-.104.21-.157.34-.312.522-.156.182-.328.406-.468.544-.157.155-.32.324-.138.636.182.312.809 1.332 1.737 2.158.932.83 1.716 1.087 2.028 1.242.312.156.495.13.677-.078.182-.21 0-.912.435-1.503.26-.33.585-.285.986-.135.4.15 2.548 1.202 2.99 1.423.44.22.735.33.844.518a2.15 2.15 0 0 1-.137 1.157z"/>
+																									</svg>
+																									Share Route
+																								</a>
+																							)}
 																						</div>
 																					</td>
 																				</tr>
@@ -2907,6 +2963,21 @@ export default function TransitAdminSPA() {
 																						<span className="text-[10px] text-[#9a9a9a] font-mono font-medium">
 																							{route.cab?.driverPhone || "N/A"}
 																						</span>
+																						{route.cab?.driverPhone && (
+																							<a
+																								href={getWhatsAppShareLink(route, selectedDate)}
+																								target="_blank"
+																								rel="noopener noreferrer"
+																								onClick={(e) => e.stopPropagation()}
+																								className="inline-flex items-center gap-1 text-[9px] font-bold text-green-600 hover:text-green-800 ml-3 cursor-pointer"
+																								title="Share Route Details on WhatsApp"
+																							>
+																								<svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+																									<path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984a9.96 9.96 0 0 0 1.333 4.982L2 22l5.233-1.371a9.92 9.92 0 0 0 4.775 1.21h.005c5.505 0 9.986-4.477 9.988-9.984a9.98 9.98 0 0 0-9.989-9.855zm6.05 13.918c-.328.922-1.637 1.802-2.253 1.932-.556.117-1.282.209-3.993-.913-3.238-1.34-5.328-4.636-5.49-4.85-.16-.215-1.306-1.734-1.306-3.31 0-1.575.824-2.35 1.118-2.652.295-.302.648-.378.864-.378.216 0 .432.002.62.01.196.008.463-.074.723.559.266.65.912 2.223.99 2.383.079.16.131.346.026.556-.104.21-.157.34-.312.522-.156.182-.328.406-.468.544-.157.155-.32.324-.138.636.182.312.809 1.332 1.737 2.158.932.83 1.716 1.087 2.028 1.242.312.156.495.13.677-.078.182-.21 0-.912.435-1.503.26-.33.585-.285.986-.135.4.15 2.548 1.202 2.99 1.423.44.22.735.33.844.518a2.15 2.15 0 0 1-.137 1.157z"/>
+																								</svg>
+																								Share
+																							</a>
+																						)}
 																					</div>
 
 																					<div className="flex items-center gap-2 mt-2">

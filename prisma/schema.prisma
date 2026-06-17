@@ -59,6 +59,7 @@ model Cab {
   shifts        Shift[]
   rosterStatus  CabRosterStatus[]
   driverAssignments DriverAssignment[]
+  documents     DriverDocument[]
 }
 
 model PickupPoint {
@@ -388,5 +389,19 @@ model OptimizationRun {
   createdAt     DateTime @default(now())
 
   @@index([date])
+}
+
+model DriverDocument {
+  id          String   @id @default(uuid())
+  cabId       String
+  cab         Cab      @relation(fields: [cabId], references: [id], onDelete: Cascade)
+  type        String   // e.g. "LICENSE", "INSURANCE", "RC", "POLICE_VERIFICATION"
+  fileUrl     String   // Supabase bucket url or local public folder path
+  expiryDate  DateTime // Date picker input
+  auditDate   DateTime // calculated next audit date (3 months from upload/last check)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([cabId, type])
 }
 

@@ -10,6 +10,9 @@ import {
 	BarChart3,
 	Settings,
 	ShieldAlert as AlertTriangle,
+	Clock,
+	Network,
+	MapPin,
 } from "lucide-react";
 import { useTransportStore } from "@/store/useTransportStore";
 import { useEffect } from "react";
@@ -34,6 +37,7 @@ export default function AdminSidebar() {
 	const menuItems = [
 		{ name: "Overview", href: "/admin/dashboard", icon: LayoutDashboard },
 		{ name: "Employees Desk", href: "/admin/employees", icon: Users },
+		{ name: "Pickup Points", href: "/admin/pickup-points", icon: MapPin },
 		{ name: "Route Optimization", href: "/admin/optimization", icon: Compass },
 		{
 			name: "Compliance Logs",
@@ -41,9 +45,8 @@ export default function AdminSidebar() {
 			icon: ShieldAlert,
 			badge: totalViolations > 0 ? totalViolations : undefined,
 		},
-		// TODO: Commented out - Shifts and Hierarchy modules
-		// { name: "Shifts", href: "/admin/shifts", icon: Clock },
-		// { name: "Hierarchy", href: "/admin/hierarchy", icon: Network },
+		{ name: "Shifts", href: "/admin/shifts", icon: Clock },
+		{ name: "Hierarchy", href: "/admin/hierarchy", icon: Network },
 	];
 
 	return (

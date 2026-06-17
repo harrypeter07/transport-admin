@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Map, Clock, PlayCircle, CheckCircle, Calendar, Users, ChevronRight } from "lucide-react";
+import { Map, Clock, PlayCircle, CheckCircle, Calendar, Users, ChevronRight, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formatDate } from "@/lib/dateFormat";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -16,6 +16,43 @@ export default function DriverDashboardPage() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
   const [tripToEnd, setTripToEnd] = useState<string | null>(null);
+  const [docWarnings, setDocWarnings] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/driver/documents")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const warnings: any[] = [];
+          const now = new Date();
+          data.forEach((doc: any) => {
+            if (!doc.expiryDate) return;
+            const expiry = new Date(doc.expiryDate);
+            const diffTime = expiry.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const docName = 
+              doc.type === "LICENSE" ? "Driving License" : 
+              doc.type === "INSURANCE" ? "Vehicle Insurance" :
+              doc.type === "RC" ? "Registration Certificate (RC Book)" : 
+              "Police Verification";
+
+            if (diffDays <= 0) {
+              warnings.push({ 
+                type: "EXPIRED", 
+                message: `Your compliance document "${docName}" has EXPIRED. Please renew and upload it immediately.` 
+              });
+            } else if (diffDays <= 14) {
+              warnings.push({ 
+                type: "WARNING", 
+                message: `Your compliance document "${docName}" is expiring in ${diffDays} day${diffDays !== 1 ? "s" : ""}. Please renew and upload it soon.` 
+              });
+            }
+          });
+          setDocWarnings(warnings);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchRoutes();
@@ -114,6 +151,35 @@ export default function DriverDashboardPage() {
 
  return (
  <div className="space-y-6">
+    {docWarnings.length > 0 && (
+      <div className="space-y-2.5">
+        {docWarnings.map((w, idx) => (
+          <div
+            key={idx}
+            className={`p-4 border rounded-none text-xs font-semibold flex items-center gap-3 text-left ${
+              w.type === "EXPIRED"
+                ? "bg-rose-50 text-rose-800 border-rose-200"
+                : "bg-orange-50 text-orange-800 border-orange-200"
+            }`}
+          >
+            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+            <div className="flex-1">
+              <span>{w.message}</span>
+            </div>
+            <a
+              href="/dashboard/driver/profile"
+              className={`px-3 py-1 text-[10px] font-bold uppercase border rounded-none transition-colors ${
+                w.type === "EXPIRED"
+                  ? "bg-rose-600 border-rose-600 hover:bg-rose-700 text-white hover:text-white"
+                  : "bg-orange-600 border-orange-600 hover:bg-orange-700 text-white hover:text-white"
+              }`}
+            >
+              Upload Renewed
+            </a>
+          </div>
+        ))}
+      </div>
+    )}
  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
  <div>
  <h1 className="text-2xl font-bold text-[#1c1b1f]">Driver Portal</h1>

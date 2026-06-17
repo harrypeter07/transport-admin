@@ -66,20 +66,13 @@ function computeRouteDistance(stops: any[]): number {
 	return total;
 }
 
-function cleanCoords(latVal: any, lngVal: any): { lat: number; lng: number } {
-	let lat = typeof latVal === "number" ? latVal : parseFloat(latVal);
-	let lng = typeof lngVal === "number" ? lngVal : parseFloat(lngVal);
-
-	if (isNaN(lat) || isNaN(lng)) {
-		return { lat: 21.1278, lng: 79.0068 }; // Default Nagpur coordinates
+function extractLatLng(empData: any): { lat: number; lng: number } {
+	// Convention: y = latitude (~21), x = longitude (~79)
+	const lat = typeof empData?.y === "number" ? empData.y : parseFloat(empData?.y ?? "0");
+	const lng = typeof empData?.x === "number" ? empData.x : parseFloat(empData?.x ?? "0");
+	if (!isFinite(lat) || !isFinite(lng)) {
+		return { lat: 21.0625, lng: 79.0526 };
 	}
-
-	// Nagpur coordinates range: Latitude is around 21, Longitude is around 79.
-	// If lat is around 79 and lng is around 21, they are swapped!
-	if (lat > 70 && lat < 85 && lng > 15 && lng < 30) {
-		return { lat: lng, lng: lat };
-	}
-
 	return { lat, lng };
 }
 
@@ -110,12 +103,20 @@ function normalizeRoute(route: any, dbEmployees: any[] = []): Route {
 			);
 		});
 
-		// Extract raw coordinate values from any possible source
-		const rawY = matchedEmp?.y ?? stop.employee?.y ?? stop.y ?? 21.1278;
-		const rawX = matchedEmp?.x ?? stop.employee?.x ?? stop.x ?? 79.0068;
+		// Coords priority:
+		// 1. stop.employee coords (from server — already geocoded)
+		// 2. Fall back to the matched DB employee if stop.employee.x/y are missing or zero
+		// 3. Final fallback is depot { y: 21.0625, x: 79.0526 }
+		let wonSource = null;
+		if (stop.employee && stop.employee.x !== 0 && stop.employee.y !== 0) {
+			wonSource = stop.employee;
+		} else if (matchedEmp && matchedEmp.x !== 0 && matchedEmp.y !== 0) {
+			wonSource = matchedEmp;
+		} else {
+			wonSource = { y: 21.0625, x: 79.0526 };
+		}
 
-		// Clean and correct coordinate swap if any (y is latitude, x is longitude)
-		const cleaned = cleanCoords(rawY, rawX);
+		const cleaned = extractLatLng(wonSource);
 
 		const rawPpName = stop.pickupPoint || (stop.employee as any)?.pickupPoint?.name || matchedEmp?.pickupPoint?.name || "";
 		const ppName = rawPpName ? normalizePickupPointName(rawPpName) : "";
@@ -279,9 +280,10 @@ export default function CompareModal({
 				} else {
 					// Use normalizations directly on initial load
 					if (!skipBaselineUpdate) {
-						setCurrentRoutes(normalizeRoutes(routesData.routes || [], dbEmployees));
-						setBaselineSummary(routesData.summary || null);
-						setHasUploadedInSession(!!routesData.summary);
+						const normalized = normalizeRoutes(routesData.routes || [], dbEmployees);
+						setCurrentRoutes(normalized);
+						setHasUploadedInSession(normalized.length > 0);
+						setBaselineSummary(routesData.summary ?? null);
 					}
 					setFrozenOptimizedRoutes(
 						normalizeRoutes(routesData.optimizedRoutes || [], dbEmployees),
@@ -501,7 +503,7 @@ export default function CompareModal({
 	}, [currentRoutes, dbEmployees]);
 
 	const filteredCurrentRoutes = useMemo(() => {
-		if (!hasUploadedInSession || normalizedCurrent.length === 0) return [];
+		if (normalizedCurrent.length === 0) return [];
 		return normalizedCurrent.filter(
 			(r) =>
 				r.isPickup === true &&
@@ -509,7 +511,7 @@ export default function CompareModal({
 					r.shiftId === selectedShift ||
 					r.shift?.id === selectedShift),
 		);
-	}, [normalizedCurrent, selectedShift, hasUploadedInSession]);
+	}, [normalizedCurrent, selectedShift]);
 
 	const filteredOptimizedRoutes = useMemo(() => {
 		if (optimizedRoutes.length === 0) return [];

@@ -23,6 +23,7 @@ import {
   User,
   Bell,
   CalendarClock,
+  MapPin,
 } from "lucide-react";
 
 const adminNavGroups = [
@@ -36,6 +37,7 @@ const adminNavGroups = [
     label: "Operations",
     items: [
       { name: "Employees", href: "/dashboard/admin/operations/employees", icon: Users },
+      { name: "Pickup Points", href: "/dashboard/admin/operations/pickup-points", icon: MapPin },
       { name: "Cabs", href: "/dashboard/admin/operations/cabs", icon: CarFront },
       { name: "Shifts", href: "/dashboard/admin/operations/shifts", icon: Clock },
       { name: "Leaves & Approvals", href: "/dashboard/admin/operations/leaves", icon: FileSpreadsheet },

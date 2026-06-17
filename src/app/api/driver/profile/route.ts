@@ -12,6 +12,7 @@ export async function GET() {
 
     const cab = await prisma.cab.findUnique({
       where: { userId: session.userId },
+      include: { documents: true },
     });
 
     if (!cab) {
