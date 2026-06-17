@@ -37,7 +37,7 @@ export default function AdminSidebar() {
 	const menuItems = [
 		{ name: "Overview", href: "/admin/dashboard", icon: LayoutDashboard },
 		{ name: "Employees Desk", href: "/admin/employees", icon: Users },
-		{ name: "Pickup Points", href: "/admin/pickup-points", icon: MapPin },
+		// { name: "Pickup Points", href: "/admin/pickup-points", icon: MapPin },
 		{ name: "Route Optimization", href: "/admin/optimization", icon: Compass },
 		{
 			name: "Compliance Logs",
@@ -46,7 +46,7 @@ export default function AdminSidebar() {
 			badge: totalViolations > 0 ? totalViolations : undefined,
 		},
 		{ name: "Shifts", href: "/admin/shifts", icon: Clock },
-		{ name: "Hierarchy", href: "/admin/hierarchy", icon: Network },
+		// { name: "Hierarchy", href: "/admin/hierarchy", icon: Network },
 	];
 
 	return (

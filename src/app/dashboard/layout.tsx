@@ -37,11 +37,11 @@ const adminNavGroups = [
     label: "Operations",
     items: [
       { name: "Employees", href: "/dashboard/admin/operations/employees", icon: Users },
-      { name: "Pickup Points", href: "/dashboard/admin/operations/pickup-points", icon: MapPin },
+      // { name: "Pickup Points", href: "/dashboard/admin/operations/pickup-points", icon: MapPin },
       { name: "Cabs", href: "/dashboard/admin/operations/cabs", icon: CarFront },
       { name: "Shifts", href: "/dashboard/admin/operations/shifts", icon: Clock },
       { name: "Leaves & Approvals", href: "/dashboard/admin/operations/leaves", icon: FileSpreadsheet },
-      { name: "Hierarchy", href: "/dashboard/admin/operations/hierarchy", icon: Network },
+      // { name: "Hierarchy", href: "/dashboard/admin/operations/hierarchy", icon: Network },
       { name: "Calendar & Holidays", href: "/dashboard/admin/operations/calendar", icon: Clock },
       { name: "User Accounts", href: "/dashboard/admin/operations/users", icon: UserCog },
     ],
