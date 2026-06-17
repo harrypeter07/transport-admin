@@ -661,7 +661,7 @@ export async function POST(req: NextRequest) {
 								totalViolations: plan.totalViolations,
 								releasedCabs: plans.releasedCabs || [],
 								isolatedEmployees: plans.isolatedEmployees || [],
-							}
+							} as any
 						}
 					});
 				}
