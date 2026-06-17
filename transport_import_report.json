@@ -1,4 +1,8 @@
 {
+  "timestamp": "2026-06-17T07:48:15.164Z",
+  "source_file": "data/transport_routes_16jun26.json",
+  "target_date": "2026-06-16",
+  "duration_seconds": 86,
   "routes_processed": 18,
   "routes_created": 18,
   "routes_updated": 0,
@@ -6,32 +10,295 @@
   "drivers_updated": 9,
   "vehicles_created": 0,
   "assignments_created": 67,
+  "roster_entries": 67,
+  "unmatched_employees": [
+    {
+      "route": "P12",
+      "name": "Vishal Singh",
+      "id": null
+    },
+    {
+      "route": "P14",
+      "name": "Naga Praveen Matta",
+      "id": "2563944"
+    }
+  ],
   "validation_errors": [],
+  "capacity_violations": [
+    {
+      "routeId": "P1",
+      "employees": 5,
+      "capacity": 4,
+      "overflow": 1
+    },
+    {
+      "routeId": "P4",
+      "employees": 5,
+      "capacity": 4,
+      "overflow": 1
+    },
+    {
+      "routeId": "P5",
+      "employees": 5,
+      "capacity": 4,
+      "overflow": 1
+    },
+    {
+      "routeId": "P7",
+      "employees": 6,
+      "capacity": 4,
+      "overflow": 2
+    },
+    {
+      "routeId": "P8",
+      "employees": 5,
+      "capacity": 4,
+      "overflow": 1
+    },
+    {
+      "routeId": "P9",
+      "employees": 5,
+      "capacity": 4,
+      "overflow": 1
+    },
+    {
+      "routeId": "P12",
+      "employees": 6,
+      "capacity": 4,
+      "overflow": 2
+    },
+    {
+      "routeId": "P17",
+      "employees": 6,
+      "capacity": 4,
+      "overflow": 2
+    },
+    {
+      "routeId": "P18",
+      "employees": 5,
+      "capacity": 4,
+      "overflow": 1
+    }
+  ],
+  "import_successful": true,
   "frontend_verification_results": {
     "success": true,
     "details": {
       "deepak_singh_kushwah": {
         "passed": true,
         "details": {
+          "employee": "Deepak singh kushwah",
           "routeId": "P11",
           "shift": "09:00",
-          "pickupPoint": "Baidyashakti Lifecare Pvt. Ltd Ramdaspeth",
           "driver": "Prashant",
           "vehicle": "MH31FC8407",
-          "status": "YES"
+          "pickupPoint": "Baidyashakti Lifecare Pvt. Ltd Ramdaspeth"
+        },
+        "expected": {
+          "route": "P11",
+          "shift": "09:00",
+          "driver": "Prashant",
+          "vehicle": "MH31FC8407"
         }
       },
       "yash_karambe": {
         "passed": true,
         "details": {
+          "employee": "yash karambe",
           "routeId": "P12",
           "shift": "09:00",
-          "pickupPoint": "NOTARY & ADV. SHILA GHAGRE Lokmanya Nagar",
           "driver": "Shreekant",
           "vehicle": "MH49CW0876",
-          "status": "YES"
+          "pickupPoint": "NOTARY & ADV. SHILA GHAGRE Lokmanya Nagar"
+        },
+        "expected": {
+          "route": "P12",
+          "shift": "09:00",
+          "driver": "Shreekant",
+          "vehicle": "MH49CW0876"
+        }
+      },
+      "anand_ram_kumar": {
+        "passed": true,
+        "details": {
+          "employee": "Anand Ram Kumar",
+          "routeId": "P6",
+          "shift": "07:00",
+          "driver": "Nikhil",
+          "vehicle": "MH49CW0139",
+          "pickupPoint": "Landmar: Jagannath Mandir"
+        },
+        "expected": {
+          "route": "P6",
+          "shift": "07:00",
+          "driver": "Nikhil",
+          "vehicle": "MH49CW0139"
         }
       }
     }
-  }
+  },
+  "route_summaries": [
+    {
+      "routeId": "P1",
+      "shift": "05:00",
+      "vehicle": "MH49CW0078",
+      "driver": "SURAJ",
+      "employees_matched": 5,
+      "employees_total": 5,
+      "distance_km": 27.7
+    },
+    {
+      "routeId": "P2",
+      "shift": "05:00",
+      "vehicle": "MH40CT4542",
+      "driver": "Tapan",
+      "employees_matched": 2,
+      "employees_total": 2,
+      "distance_km": 26
+    },
+    {
+      "routeId": "P3",
+      "shift": "05:00",
+      "vehicle": "MH31FC8592",
+      "driver": "Sandeep",
+      "employees_matched": 2,
+      "employees_total": 2,
+      "distance_km": 45.8
+    },
+    {
+      "routeId": "P4",
+      "shift": "05:00",
+      "vehicle": "MH49CW0218",
+      "driver": "ANIKET",
+      "employees_matched": 5,
+      "employees_total": 5,
+      "distance_km": 54.1
+    },
+    {
+      "routeId": "P5",
+      "shift": "05:00",
+      "vehicle": "MH40DC0486",
+      "driver": "SHAFIQUE",
+      "employees_matched": 5,
+      "employees_total": 5,
+      "distance_km": 25.5
+    },
+    {
+      "routeId": "P6",
+      "shift": "07:00",
+      "vehicle": "MH49CW0139",
+      "driver": "Nikhil",
+      "employees_matched": 1,
+      "employees_total": 1,
+      "distance_km": 16.2
+    },
+    {
+      "routeId": "P7",
+      "shift": "09:00",
+      "vehicle": "MH49CW0078",
+      "driver": "SURAJ",
+      "employees_matched": 6,
+      "employees_total": 6,
+      "distance_km": 36.6
+    },
+    {
+      "routeId": "P8",
+      "shift": "09:00",
+      "vehicle": "MH49CW1305",
+      "driver": "Shantanu",
+      "employees_matched": 5,
+      "employees_total": 5,
+      "distance_km": 18354.3
+    },
+    {
+      "routeId": "P9",
+      "shift": "09:00",
+      "vehicle": "MH49CW0218",
+      "driver": "ANIKET",
+      "employees_matched": 5,
+      "employees_total": 5,
+      "distance_km": 51.3
+    },
+    {
+      "routeId": "P10",
+      "shift": "09:00",
+      "vehicle": "MH40CT4542",
+      "driver": "Tapan",
+      "employees_matched": 3,
+      "employees_total": 3,
+      "distance_km": 13.8
+    },
+    {
+      "routeId": "P11",
+      "shift": "09:00",
+      "vehicle": "MH31FC8407",
+      "driver": "Prashant",
+      "employees_matched": 3,
+      "employees_total": 3,
+      "distance_km": 28.7
+    },
+    {
+      "routeId": "P12",
+      "shift": "09:00",
+      "vehicle": "MH49CW0876",
+      "driver": "Shreekant",
+      "employees_matched": 5,
+      "employees_total": 6,
+      "distance_km": 34.9
+    },
+    {
+      "routeId": "P13",
+      "shift": "10:00",
+      "vehicle": "MH49CW0139",
+      "driver": "Nikhil",
+      "employees_matched": 2,
+      "employees_total": 2,
+      "distance_km": 22.3
+    },
+    {
+      "routeId": "P14",
+      "shift": "11:00",
+      "vehicle": "MH31FC8407",
+      "driver": "Prashant",
+      "employees_matched": 0,
+      "employees_total": 1,
+      "distance_km": 0
+    },
+    {
+      "routeId": "P15",
+      "shift": "13:00",
+      "vehicle": "MH49CW0218",
+      "driver": "ANIKET",
+      "employees_matched": 3,
+      "employees_total": 3,
+      "distance_km": 27.5
+    },
+    {
+      "routeId": "P16",
+      "shift": "13:00",
+      "vehicle": "MH31FC8407",
+      "driver": "Prashant",
+      "employees_matched": 4,
+      "employees_total": 4,
+      "distance_km": 21.6
+    },
+    {
+      "routeId": "P17",
+      "shift": "13:00",
+      "vehicle": "MH49CW0876",
+      "driver": "Shreekant",
+      "employees_matched": 6,
+      "employees_total": 6,
+      "distance_km": 41.2
+    },
+    {
+      "routeId": "P18",
+      "shift": "13:00",
+      "vehicle": "MH49CW0078",
+      "driver": "SURAJ",
+      "employees_matched": 5,
+      "employees_total": 5,
+      "distance_km": 35.9
+    }
+  ]
 }
