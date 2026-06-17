@@ -952,8 +952,14 @@ export default function TransitAdminSPA() {
 			mapShiftFilter === "ALL"
 				? activeRoutes
 				: activeRoutes.filter((r) => (r as any).shiftId === mapShiftFilter);
+		if (selectedRouteId) {
+			const selectedRoute = activeRoutes.find((r) => r.id === selectedRouteId);
+			if (selectedRoute && !shiftFiltered.some((r) => r.id === selectedRouteId)) {
+				return [...shiftFiltered, selectedRoute];
+			}
+		}
 		return shiftFiltered;
-	}, [activeRoutes, mapShiftFilter]);
+	}, [activeRoutes, mapShiftFilter, selectedRouteId]);
 
 	// Build pickup point markers from employee pickup points in visible routes
 	const pickupPointMarkers = useMemo(() => {
@@ -1215,9 +1221,9 @@ export default function TransitAdminSPA() {
 									{/* Re-Optimize: always available even when plans exist */}
 									<button
 										onClick={handleGeneratePlans}
-										disabled={optimizing || previewing || loading || isCanonicalDate}
+										disabled={optimizing || previewing || loading}
 										className="flex items-center gap-1.5 bg-slate-700 text-white px-3 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
-										title={isCanonicalDate ? "Optimization is disabled because canonical routes are active. To override, use the forceOverride API option or clear the current routes." : "Run a fresh optimization — replaces the current preview"}
+										title="Run a fresh optimization — replaces the current preview"
 									>
 										<RotateCw
 											className={`w-3.5 h-3.5 ${optimizing || previewing ? "animate-spin-fast" : ""}`}
@@ -1254,9 +1260,9 @@ export default function TransitAdminSPA() {
 								<div className="flex items-center gap-2">
 									<button
 										onClick={handleGeneratePlans}
-										disabled={optimizing || previewing || loading || isCanonicalDate}
+										disabled={optimizing || previewing || loading}
 										className="flex items-center gap-1.5 bg-slate-800 text-white px-4 py-1.5 rounded-none text-xs font-bold hover:bg-[#1c1b1f] transition disabled:opacity-50 shadow-2xs cursor-pointer"
-										title={isCanonicalDate ? "Optimization is disabled because canonical routes are active." : undefined}
+										title="Run route optimization preview for this date"
 									>
 										<RotateCw
 											className={`w-3.5 h-3.5 ${optimizing || previewing ? "animate-spin-fast" : ""}`}
@@ -2992,7 +2998,7 @@ export default function TransitAdminSPA() {
 																					<div className="flex items-center gap-2 mt-0.5 flex-wrap">
 																						<span className="text-xs font-semibold text-[#6b6b6b] flex items-center gap-1">
 																							<User className="w-3.5 h-3.5 text-[#9a9a9a]" />
-																							Driver: {route.cab?.driverName && route.cab.driverName !== route.cab.vehicleNumber ? route.cab.driverName : "N/A"}
+																							Driver: {route.cab?.driverName || "N/A"}
 																						</span>
 																						<span className="text-[10px] text-[#9a9a9a] font-mono font-medium">
 																							{route.cab?.driverPhone && route.cab.driverPhone !== "0000000000" ? route.cab.driverPhone : "No Phone"}

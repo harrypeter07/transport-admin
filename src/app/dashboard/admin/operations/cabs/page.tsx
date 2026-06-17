@@ -308,7 +308,7 @@ export default function CabsPage() {
                                       <span className={isExpired ? 'text-red-600 font-bold' : isExpiringSoon ? 'text-amber-600 font-bold' : 'text-[#6b6b6b]'}>
                                         {new Date(doc.expiryDate).toLocaleDateString()}
                                       </span>
-                                      <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[#ff4f00] font-black hover:underline ml-1 uppercase">
+                                      <a href={`/api/driver/documents/view?id=${doc.id}`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[#ff4f00] font-black hover:underline ml-1 uppercase">
                                         [View]
                                       </a>
                                     </div>

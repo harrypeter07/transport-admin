@@ -162,13 +162,13 @@ export default function DriverProfilePage() {
   };
 
   const handlePreview = (doc: DriverDocument) => {
-    setPreviewUrl(doc.fileUrl);
-    const ext = doc.fileUrl.split(".").pop()?.toLowerCase();
-    if (ext && ["png", "jpg", "jpeg", "webp"].includes(ext)) {
-      setPreviewType("image");
-    } else {
-      setPreviewType("pdf");
-    }
+    const isBase64 = doc.fileUrl.startsWith("data:");
+    const isImg = isBase64
+      ? doc.fileUrl.startsWith("data:image/")
+      : ["png", "jpg", "jpeg", "webp"].includes(doc.fileUrl.split(".").pop()?.toLowerCase() || "");
+
+    setPreviewUrl(`/api/driver/documents/view?id=${doc.id}`);
+    setPreviewType(isImg ? "image" : "pdf");
   };
 
   return (

@@ -87,21 +87,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fallback to local storage only if it wasn't successfully uploaded to Supabase
+    // Fallback to database base64 storage if Supabase upload failed/not configured
     if (!uploadedToSupabase) {
       try {
-        const uploadDir = path.join(process.cwd(), "public", "uploads", "driver-documents");
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        const filepath = path.join(uploadDir, filename);
-        fs.writeFileSync(filepath, buffer);
-        fileUrl = `/uploads/driver-documents/${filename}`;
-        console.log(`[LOCAL_UPLOAD] Successfully saved ${filename} locally.`);
-      } catch (localErr) {
-        console.error("[LOCAL_UPLOAD] Failed to save locally:", localErr);
+        const base64Data = buffer.toString("base64");
+        const mimeType = file.type || "application/octet-stream";
+        fileUrl = `data:${mimeType};base64,${base64Data}`;
+        console.log(`[DATABASE_UPLOAD] Successfully generated base64 Data URL for ${filename}.`);
+      } catch (dbErr) {
+        console.error("[DATABASE_UPLOAD] Failed to generate base64:", dbErr);
         return NextResponse.json({
-          error: "Failed to upload document. Supabase upload failed and local filesystem is read-only."
+          error: "Failed to upload document. Base64 encoding failed."
         }, { status: 500 });
       }
     }

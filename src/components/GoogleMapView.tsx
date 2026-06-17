@@ -735,14 +735,14 @@ export default function GoogleMapView({
 		// ── Selected route: detailed markers + bold polyline ──────────────────────
 		if (selectedRouteId) {
 			const selectedRoute = routes.find((r) => r.id === selectedRouteId);
-			if (selectedRoute && selectedRoute.stops.length > 0) {
+			if (selectedRoute && (selectedRoute.stops || []).length > 0) {
 				const selectedRouteIdx = routes.findIndex(
 					(r) => r.id === selectedRouteId,
 				);
 				const selectedRouteColor =
 					shiftColorMap.get(selectedRoute.shiftId) ??
 					SHIFT_PALETTE[selectedRouteIdx % SHIFT_PALETTE.length];
-				const stopsList = [...selectedRoute.stops].sort(
+				const stopsList = [...(selectedRoute.stops || [])].sort(
 					(a, b) => a.stopOrder - b.stopOrder,
 				);
 				const effectiveIsPickup = routeViewModes?.[selectedRoute.id]
@@ -761,7 +761,7 @@ export default function GoogleMapView({
 					routeStart.lat,
 					routeStart.lng,
 				);
-				const hasValidAddress = !!selectedRoute.cab.driverAddress?.trim();
+				const hasValidAddress = !!selectedRoute.cab?.driverAddress?.trim();
 				const driverConfidence = getDriverLocationConfidence(
 					hasPrecise,
 					isNearAirport,
@@ -781,14 +781,14 @@ export default function GoogleMapView({
 						anchor: new google.maps.Point(24, 24),
 					},
 					zIndex: 35,
-					title: selectedRoute.cab.driverName || "Driver",
+					title: selectedRoute.cab?.driverName || "Driver",
 				});
 				overlays.push(startMarker);
 				markerCount++;
 
 				const startAddress = hasPrecise
-					? selectedRoute.cab.formattedAddress ||
-						selectedRoute.cab.driverAddress ||
+					? selectedRoute.cab?.formattedAddress ||
+						selectedRoute.cab?.driverAddress ||
 						"Driver Location"
 					: "Depot (Starting Point)";
 
@@ -803,11 +803,11 @@ export default function GoogleMapView({
 					content: [
 						`<div style="padding:6px 10px;border-left:4px solid ${selectedRouteColor};min-width:160px;">`,
 						`<div style="font-size:13px;font-weight:700;color:#1c1b1f;">`,
-						selectedRoute.cab.driverName || "Driver",
+						selectedRoute.cab?.driverName || "Driver",
 						confidenceBadge,
 						`</div>`,
-						`<div style="font-size:11px;color:#6b6b6b;margin-top:2px;">${selectedRoute.cab.vehicleNumber || ""}</div>`,
-						selectedRoute.cab.driverPhone
+						`<div style="font-size:11px;color:#6b6b6b;margin-top:2px;">${selectedRoute.cab?.vehicleNumber || ""}</div>`,
+						selectedRoute.cab?.driverPhone
 							? `<div style="font-size:11px;color:#4a4a4a;margin-top:4px;">📞 ${selectedRoute.cab.driverPhone}</div>`
 							: "",
 						`<div style="font-size:11px;color:#6b6b6b;margin-top:4px;">📍 ${startAddress}</div>`,
@@ -823,12 +823,12 @@ export default function GoogleMapView({
 				startInfo.open({ map, anchor: startMarker });
 
 				orderedStops.forEach((stop, displayIdx) => {
-					const isViolation = selectedRoute.violations.some(
+					const isViolation = (selectedRoute.violations || []).some(
 						(v) =>
 							!v.resolved &&
 							((v.type === "FEMALE_FIRST_PICKUP" && stop.stopOrder === 1) ||
 								(v.type === "FEMALE_LAST_DROP" &&
-									stop.stopOrder === selectedRoute.stops.length)),
+									stop.stopOrder === (selectedRoute.stops || []).length)),
 					);
 
 					const pos = getStopLatLng(stop);

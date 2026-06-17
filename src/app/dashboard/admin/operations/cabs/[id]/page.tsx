@@ -261,7 +261,7 @@ export default function CabDetailPage({ params }: { params: Promise<{ id: string
                     <div className="flex items-center gap-2 self-start sm:self-center">
                       {doc && (
                         <>
-                          <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1.5 border border-[#e8e8e8] text-xs font-bold text-[#1c1b1f] hover:bg-[#f7f7f7] transition uppercase">
+                          <a href={`/api/driver/documents/view?id=${doc.id}`} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1.5 border border-[#e8e8e8] text-xs font-bold text-[#1c1b1f] hover:bg-[#f7f7f7] transition uppercase">
                             View File
                           </a>
                           <button onClick={() => handleDeleteDoc(doc.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete Document">
